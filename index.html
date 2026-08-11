@@ -167,17 +167,13 @@
     </div>
 
     <div class="field" id="heygenFields">
-      <label>HeyGen avatar ID</label>
-      <input id="heygenAvatarId" placeholder="from labs.heygen.com" />
-    </div>
-    <div class="field" id="heygenVoiceField">
-      <label>HeyGen voice ID (optional)</label>
-      <input id="heygenVoiceId" placeholder="leave blank for avatar default" />
+      <label>HeyGen avatar</label>
+      <select id="heygenAvatarId"><option value="">Loading your avatars…</option></select>
     </div>
 
     <div class="field" id="tavusFields" style="display:none;">
-      <label>Tavus replica ID (leave blank if your account has a default)</label>
-      <input id="tavusReplicaId" placeholder="from your Tavus dashboard" />
+      <label>Tavus replica</label>
+      <select id="tavusReplicaId"><option value="">Loading your replicas…</option></select>
     </div>
   </div>
   <div class="footer">
@@ -202,10 +198,33 @@
 
   function applyStateToForm(){
     $('systemPrompt').value = state.systemPrompt;
-    $('heygenAvatarId').value = state.heygenAvatarId;
-    $('heygenVoiceId').value = state.heygenVoiceId;
-    $('tavusReplicaId').value = state.tavusReplicaId;
     setProviderUI(state.provider);
+    loadHeygenAvatars();
+    loadTavusReplicas();
+  }
+  async function loadHeygenAvatars(){
+    const sel = $('heygenAvatarId');
+    try {
+      const r = await fetch('/api/heygen-avatars');
+      const data = await r.json();
+      if (!r.ok) { sel.innerHTML = '<option value="">Could not load — check HEYGEN_API_KEY</option>'; return; }
+      const avatars = data.avatars || [];
+      if (!avatars.length) { sel.innerHTML = '<option value="">No avatars yet — create one at labs.heygen.com</option>'; return; }
+      sel.innerHTML = avatars.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+      if (state.heygenAvatarId) sel.value = state.heygenAvatarId;
+    } catch (e) { sel.innerHTML = '<option value="">Could not load avatars</option>'; }
+  }
+  async function loadTavusReplicas(){
+    const sel = $('tavusReplicaId');
+    try {
+      const r = await fetch('/api/tavus-replicas');
+      const data = await r.json();
+      if (!r.ok) { sel.innerHTML = '<option value="">Could not load — check TAVUS_API_KEY</option>'; return; }
+      const replicas = data.replicas || [];
+      if (!replicas.length) { sel.innerHTML = '<option value="">No replicas yet — create one at tavus.io</option>'; return; }
+      sel.innerHTML = '<option value="">Use account default</option>' + replicas.map(r => `<option value="${r.id}">${r.name}${r.status ? ' — ' + r.status : ''}</option>`).join('');
+      if (state.tavusReplicaId) sel.value = state.tavusReplicaId;
+    } catch (e) { sel.innerHTML = '<option value="">Could not load replicas</option>'; }
   }
   function setProviderUI(p){
     state.provider = p;
@@ -225,7 +244,6 @@
   $('saveSettings').addEventListener('click', () => {
     state.systemPrompt = $('systemPrompt').value;
     state.heygenAvatarId = $('heygenAvatarId').value;
-    state.heygenVoiceId = $('heygenVoiceId').value;
     state.tavusReplicaId = $('tavusReplicaId').value;
     Object.entries(state).forEach(([k, v]) => localStorage.setItem(k, v));
     settingsSheet.classList.remove('open');
