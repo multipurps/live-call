@@ -12,8 +12,9 @@
 <style>
   :root{
     --accent:#ff5a36;
-    --panel: rgba(20,20,22,0.86);
-    --line: rgba(255,255,255,0.14);
+    --panel:#141416;
+    --line: rgba(255,255,255,0.12);
+    --dim: rgba(255,255,255,0.5);
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; margin:0; padding:0;}
   html,body{height:100%; background:#000; overflow:hidden;}
@@ -22,32 +23,94 @@
     color:#fff;
     position:fixed; inset:0; width:100vw; height:100dvh;
   }
+  button{-webkit-appearance:none; appearance:none; border:0; cursor:pointer; font-family:inherit; color:#fff; background:none;}
 
-  /* full-bleed video layer — no padding, goes edge to edge including under the notch */
-  #stage{ position:fixed; inset:0; width:100vw; height:100dvh; background:#000; }
+  #app{position:fixed; inset:0; display:flex; flex-direction:column;}
+  #screens{flex:1; position:relative; min-height:0;}
+  .screen{
+    position:absolute; inset:0; overflow-y:auto;
+    padding-top:max(env(safe-area-inset-top), 16px);
+    padding-left:18px; padding-right:18px;
+    display:none;
+  }
+  .screen.active{display:block;}
+
+  #tabBar{
+    display:flex; border-top:1px solid var(--line); background:#000;
+    padding-bottom:max(env(safe-area-inset-bottom), 8px);
+  }
+  .tabBtn{
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;
+    padding:10px 0 6px; color:var(--dim); font-size:11px; font-weight:600;
+  }
+  .tabBtn.active{color:#fff;}
+  .tabBtn svg{stroke:var(--dim);}
+  .tabBtn.active svg{stroke:#fff;}
+
+  h1.pageTitle{font-size:22px; font-weight:700; letter-spacing:-0.01em; margin:6px 0 18px;}
+
+  .field{margin-bottom:18px;}
+  .field label{display:block; font-size:12px; font-weight:600; color:var(--dim); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.04em;}
+  .field textarea, .field select{
+    width:100%; background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    color:#fff; font-size:14.5px; padding:12px; font-family:inherit; -webkit-appearance:none; appearance:none;
+  }
+  .field textarea{min-height:130px; resize:vertical; line-height:1.45;}
+
+  .providerToggle{display:flex; background:var(--panel); border-radius:12px; padding:4px; border:1px solid var(--line);}
+  .providerToggle button{flex:1; padding:11px; border-radius:9px; font-size:13.5px; font-weight:600; color:var(--dim);}
+  .providerToggle button.active{background:var(--accent); color:#fff;}
+
+  .startBtn{
+    background:var(--accent); color:#fff; font-weight:650; font-size:16px;
+    padding:16px; border-radius:14px; width:100%; margin-top:6px;
+  }
+  .hint{font-size:12px; color:var(--dim); text-align:center; margin-top:10px; line-height:1.4;}
+
+  .callRow{
+    padding:14px 0; border-bottom:1px solid var(--line);
+    display:flex; justify-content:space-between; align-items:flex-start; gap:12px;
+  }
+  .callRow .name{font-size:15px; font-weight:650;}
+  .callRow .summary{font-size:12.5px; color:var(--dim); margin-top:3px;}
+  .callRow .time{font-size:11.5px; color:var(--dim); white-space:nowrap;}
+  .emptyState{padding:60px 0; text-align:center; color:var(--dim); font-size:13.5px; line-height:1.5;}
+
+  .avatarCircle{
+    width:88px; height:88px; border-radius:50%; margin:8px auto 14px;
+    background:linear-gradient(135deg, #ff5a36, #7a3ab8);
+    display:flex; align-items:center; justify-content:center; font-size:32px; font-weight:700;
+  }
+  .profileName{text-align:center; font-size:18px; font-weight:650; margin-bottom:22px;}
+  .settingsRow{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:14px; margin-bottom:10px;
+  }
+  .settingsRow .label{font-size:11.5px; font-weight:600; color:var(--dim); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:6px;}
+
+  #callScreen{
+    position:fixed; inset:0; width:100vw; height:100dvh; background:#000;
+    display:none; z-index:50;
+  }
+  #callScreen.active{display:block;}
   #remoteVideo, #tavusFrame{
     position:absolute; inset:0; width:100%; height:100%;
     object-fit:cover; border:0; background:#000;
   }
-
-  #idle{
+  #callIdle{
     position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
-    gap:18px; text-align:center; padding:0 32px;
+    gap:10px; text-align:center; padding:0 32px;
   }
-  #idle h1{font-size:19px; font-weight:650; letter-spacing:-0.01em;}
-  #idle p{font-size:13.5px; color:rgba(255,255,255,0.5); line-height:1.5; max-width:280px;}
+  #callStatus{font-size:13px; color:var(--dim);}
 
-  /* floating controls — only the tap targets themselves respect safe area, the video never does */
-  #topBar{
+  #callTop{
     position:absolute; left:0; right:0; top:0;
     padding-top:max(env(safe-area-inset-top), 10px);
-    display:flex; justify-content:space-between; align-items:flex-start;
     padding-left:14px; padding-right:14px;
-    pointer-events:none;
+    display:flex; justify-content:flex-start;
   }
-  #topBar > *{pointer-events:auto;}
   .pill{
-    background:var(--panel); backdrop-filter:blur(20px);
+    background:rgba(20,20,22,0.86); backdrop-filter:blur(20px);
     border:1px solid var(--line); border-radius:100px;
     padding:9px 14px; font-size:12.5px; font-weight:600; color:#fff;
     display:flex; align-items:center; gap:7px;
@@ -55,87 +118,113 @@
   .dot{width:7px; height:7px; border-radius:50%; background:#3a3a3d;}
   .dot.live{background:#3ddc6a;}
 
-  #bottomBar{
+  #callBottom{
     position:absolute; left:0; right:0; bottom:0;
     padding-bottom:max(env(safe-area-inset-bottom), 18px);
     display:flex; justify-content:center; align-items:center; gap:14px;
     transition:opacity 0.2s;
   }
-  #bottomBar.hidden{opacity:0; pointer-events:none;}
-
-  button{
-    -webkit-appearance:none; appearance:none; border:0; cursor:pointer;
-    font-family:inherit; color:#fff;
-  }
+  #callBottom.hidden{opacity:0; pointer-events:none;}
   .roundBtn{
     width:52px; height:52px; border-radius:50%;
-    background:var(--panel); backdrop-filter:blur(20px); border:1px solid var(--line);
+    background:rgba(20,20,22,0.86); backdrop-filter:blur(20px); border:1px solid var(--line);
     display:flex; align-items:center; justify-content:center;
   }
   .endBtn{
     width:64px; height:64px; border-radius:50%;
     background:#ff3b30; display:flex; align-items:center; justify-content:center;
   }
-  .startBtn{
-    background:var(--accent); color:#fff; font-weight:650; font-size:15px;
-    padding:15px 26px; border-radius:14px; width:100%;
-  }
-
-  #settingsSheet{
-    position:absolute; inset:0; background:rgba(0,0,0,0.92); backdrop-filter:blur(10px);
-    display:flex; flex-direction:column; z-index:20;
-    transform:translateY(100%); transition:transform 0.25s ease;
-  }
-  #settingsSheet.open{transform:translateY(0);}
-  #settingsSheet .header{
-    padding-top:max(env(safe-area-inset-top), 16px);
-    padding:16px; display:flex; justify-content:space-between; align-items:center;
-    border-bottom:1px solid var(--line);
-  }
-  #settingsSheet .header h2{font-size:16px; font-weight:650;}
-  #settingsSheet .body{flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:16px;}
-  #settingsSheet .footer{padding:16px; padding-bottom:max(env(safe-area-inset-bottom), 16px);}
-
-  .field label{display:block; font-size:12px; font-weight:600; color:rgba(255,255,255,0.55); margin-bottom:7px; text-transform:uppercase; letter-spacing:0.03em;}
-  .field textarea, .field input{
-    width:100%; background:rgba(255,255,255,0.06); border:1px solid var(--line); border-radius:12px;
-    color:#fff; font-size:14.5px; padding:12px; font-family:inherit;
-  }
-  .field textarea{min-height:110px; resize:vertical; line-height:1.4;}
-
-  .providerToggle{display:flex; background:rgba(255,255,255,0.06); border-radius:12px; padding:4px; border:1px solid var(--line);}
-  .providerToggle button{flex:1; padding:10px; border-radius:9px; font-size:13.5px; font-weight:600; color:rgba(255,255,255,0.5);}
-  .providerToggle button.active{background:var(--accent); color:#fff;}
-
-  #closeSettings{width:34px; height:34px; border-radius:50%; background:rgba(255,255,255,0.08); display:flex; align-items:center; justify-content:center;}
-
-  #statusLine{position:absolute; top:60%; left:0; right:0; text-align:center; font-size:12.5px; color:rgba(255,255,255,0.45); padding:0 30px;}
 </style>
 </head>
 <body>
 
-<div id="stage">
+<div id="app">
+  <div id="screens">
+
+    <div class="screen active" id="screenHome">
+      <h1 class="pageTitle">Brief the call</h1>
+
+      <div class="field">
+        <label>Provider</label>
+        <div class="providerToggle">
+          <button id="pickHeygen" class="active">HeyGen</button>
+          <button id="pickTavus">Tavus</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Persona &amp; goal</label>
+        <textarea id="systemPrompt" placeholder="You are... Keep the tone casual. Somewhere naturally in the conversation, explain that... Let the other person lead; respond to what they actually say.">You are a friend catching up on a casual call. Keep the tone warm and relaxed. Somewhere naturally in the conversation — not as an opener, only when it fits — explain the real reason you didn't show up to work. Let the other person lead; respond to what they actually say, ask follow-up questions, don't recite anything.</textarea>
+      </div>
+
+      <div class="field" id="heygenFields">
+        <label>HeyGen avatar</label>
+        <select id="heygenAvatarId"><option value="">Loading your avatars…</option></select>
+      </div>
+      <div class="field" id="tavusFields" style="display:none;">
+        <label>Tavus replica</label>
+        <select id="tavusReplicaId"><option value="">Loading your replicas…</option></select>
+      </div>
+
+      <button class="startBtn" id="startBtn">Start call</button>
+      <p class="hint" id="homeHint"></p>
+    </div>
+
+    <div class="screen" id="screenRecent">
+      <h1 class="pageTitle">Recent</h1>
+      <div id="recentList"></div>
+    </div>
+
+    <div class="screen" id="screenProfile">
+      <h1 class="pageTitle">Profile</h1>
+      <div class="avatarCircle" id="profileInitial">L</div>
+      <div class="profileName">Live Call</div>
+
+      <div class="settingsRow">
+        <div class="label">Active provider</div>
+        <div id="profileProvider">HeyGen</div>
+      </div>
+      <div class="settingsRow">
+        <div class="label">HeyGen avatar</div>
+        <div id="profileHeygenAvatar">Not set</div>
+      </div>
+      <div class="settingsRow">
+        <div class="label">Tavus replica</div>
+        <div id="profileTavusReplica">Account default</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="tabBar">
+    <button class="tabBtn active" data-tab="home">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg>
+      Home
+    </button>
+    <button class="tabBtn" data-tab="recent">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+      Recent
+    </button>
+    <button class="tabBtn" data-tab="profile">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>
+      Profile
+    </button>
+  </div>
+</div>
+
+<div id="callScreen">
   <video id="remoteVideo" autoplay playsinline style="display:none;"></video>
   <iframe id="tavusFrame" allow="camera; microphone; autoplay; display-capture" style="display:none;"></iframe>
 
-  <div id="idle">
-    <h1>Live Call</h1>
-    <p>Set the persona and pick a provider, then start the call.</p>
-    <div style="width:100%; max-width:280px;">
-      <button class="startBtn" id="startBtn">Start call</button>
-    </div>
+  <div id="callIdle">
+    <div id="callStatus">Connecting…</div>
   </div>
 
-  <div id="statusLine"></div>
-
-  <div id="topBar">
+  <div id="callTop">
     <div class="pill"><span class="dot" id="liveDot"></span><span id="providerLabel">HeyGen</span></div>
-    <button class="roundBtn" id="settingsBtn" aria-label="Settings">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-    </button>
   </div>
 
-  <div id="bottomBar" class="hidden">
+  <div id="callBottom" class="hidden">
     <button class="roundBtn" id="muteBtn" aria-label="Mute">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/></svg>
     </button>
@@ -145,63 +234,41 @@
   </div>
 </div>
 
-<div id="settingsSheet">
-  <div class="header">
-    <h2>Call settings</h2>
-    <button id="closeSettings">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
-    </button>
-  </div>
-  <div class="body">
-    <div class="field">
-      <label>Provider</label>
-      <div class="providerToggle">
-        <button id="pickHeygen" class="active">HeyGen</button>
-        <button id="pickTavus">Tavus</button>
-      </div>
-    </div>
-
-    <div class="field">
-      <label>Persona &amp; goal</label>
-      <textarea id="systemPrompt" placeholder="You are... Keep the tone casual. Somewhere naturally in the conversation, not as an opener, explain that... Let the other person lead; respond to what they actually say.">You are a friend catching up on a casual call. Keep the tone warm and relaxed. Somewhere naturally in the conversation — not as an opener, only when it fits — explain the real reason you didn't show up to work. Let the other person lead; respond to what they actually say, ask follow-up questions, don't recite anything.</textarea>
-    </div>
-
-    <div class="field" id="heygenFields">
-      <label>HeyGen avatar</label>
-      <select id="heygenAvatarId"><option value="">Loading your avatars…</option></select>
-    </div>
-
-    <div class="field" id="tavusFields" style="display:none;">
-      <label>Tavus replica</label>
-      <select id="tavusReplicaId"><option value="">Loading your replicas…</option></select>
-    </div>
-  </div>
-  <div class="footer">
-    <button class="startBtn" id="saveSettings">Save</button>
-  </div>
-</div>
-
 <script type="module">
   const $ = (id) => document.getElementById(id);
-  const idle = $('idle'), stage = $('stage'), topBar = $('topBar'), bottomBar = $('bottomBar');
-  const settingsSheet = $('settingsSheet'), statusLine = $('statusLine');
-  const remoteVideo = $('remoteVideo'), tavusFrame = $('tavusFrame');
-  const liveDot = $('liveDot'), providerLabel = $('providerLabel');
+
+  const screens = { home: $('screenHome'), recent: $('screenRecent'), profile: $('screenProfile') };
+  const tabBtns = document.querySelectorAll('.tabBtn');
+  function showTab(name){
+    Object.entries(screens).forEach(([k, el]) => el.classList.toggle('active', k === name));
+    tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+    if (name === 'recent') renderRecent();
+    if (name === 'profile') renderProfile();
+  }
+  tabBtns.forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
   const state = {
     provider: localStorage.getItem('provider') || 'heygen',
     systemPrompt: localStorage.getItem('systemPrompt') || $('systemPrompt').value,
     heygenAvatarId: localStorage.getItem('heygenAvatarId') || '',
-    heygenVoiceId: localStorage.getItem('heygenVoiceId') || '',
+    heygenAvatarName: localStorage.getItem('heygenAvatarName') || '',
     tavusReplicaId: localStorage.getItem('tavusReplicaId') || '',
+    tavusReplicaName: localStorage.getItem('tavusReplicaName') || '',
   };
+  function persist(){ Object.entries(state).forEach(([k, v]) => localStorage.setItem(k, v)); }
 
-  function applyStateToForm(){
-    $('systemPrompt').value = state.systemPrompt;
-    setProviderUI(state.provider);
-    loadHeygenAvatars();
-    loadTavusReplicas();
+  function setProviderUI(p){
+    state.provider = p; persist();
+    $('pickHeygen').classList.toggle('active', p === 'heygen');
+    $('pickTavus').classList.toggle('active', p === 'tavus');
+    $('heygenFields').style.display = p === 'heygen' ? 'block' : 'none';
+    $('tavusFields').style.display = p === 'tavus' ? 'block' : 'none';
+    $('providerLabel').textContent = p === 'heygen' ? 'HeyGen' : 'Tavus';
   }
+  $('pickHeygen').addEventListener('click', () => setProviderUI('heygen'));
+  $('pickTavus').addEventListener('click', () => setProviderUI('tavus'));
+  $('systemPrompt').addEventListener('change', () => { state.systemPrompt = $('systemPrompt').value; persist(); });
+
   async function loadHeygenAvatars(){
     const sel = $('heygenAvatarId');
     try {
@@ -212,6 +279,11 @@
       if (!avatars.length) { sel.innerHTML = '<option value="">No avatars yet — create one at labs.heygen.com</option>'; return; }
       sel.innerHTML = avatars.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
       if (state.heygenAvatarId) sel.value = state.heygenAvatarId;
+      sel.addEventListener('change', () => {
+        state.heygenAvatarId = sel.value;
+        state.heygenAvatarName = sel.options[sel.selectedIndex]?.textContent || '';
+        persist();
+      });
     } catch (e) { sel.innerHTML = '<option value="">Could not load avatars</option>'; }
   }
   async function loadTavusReplicas(){
@@ -221,76 +293,91 @@
       const data = await r.json();
       if (!r.ok) { sel.innerHTML = '<option value="">Could not load — check TAVUS_API_KEY</option>'; return; }
       const replicas = data.replicas || [];
-      if (!replicas.length) { sel.innerHTML = '<option value="">No replicas yet — create one at tavus.io</option>'; return; }
       sel.innerHTML = '<option value="">Use account default</option>' + replicas.map(r => `<option value="${r.id}">${r.name}${r.status ? ' — ' + r.status : ''}</option>`).join('');
       if (state.tavusReplicaId) sel.value = state.tavusReplicaId;
+      sel.addEventListener('change', () => {
+        state.tavusReplicaId = sel.value;
+        state.tavusReplicaName = sel.options[sel.selectedIndex]?.textContent || '';
+        persist();
+      });
     } catch (e) { sel.innerHTML = '<option value="">Could not load replicas</option>'; }
   }
-  function setProviderUI(p){
-    state.provider = p;
-    $('pickHeygen').classList.toggle('active', p === 'heygen');
-    $('pickTavus').classList.toggle('active', p === 'tavus');
-    $('heygenFields').style.display = p === 'heygen' ? 'block' : 'none';
-    $('heygenVoiceField').style.display = p === 'heygen' ? 'block' : 'none';
-    $('tavusFields').style.display = p === 'tavus' ? 'block' : 'none';
-    providerLabel.textContent = p === 'heygen' ? 'HeyGen' : 'Tavus';
+  setProviderUI(state.provider);
+  loadHeygenAvatars();
+  loadTavusReplicas();
+
+  function renderProfile(){
+    $('profileProvider').textContent = state.provider === 'heygen' ? 'HeyGen' : 'Tavus';
+    $('profileHeygenAvatar').textContent = state.heygenAvatarName || 'Not set';
+    $('profileTavusReplica').textContent = state.tavusReplicaName || 'Account default';
   }
-  applyStateToForm();
 
-  $('pickHeygen').addEventListener('click', () => setProviderUI('heygen'));
-  $('pickTavus').addEventListener('click', () => setProviderUI('tavus'));
-  $('settingsBtn').addEventListener('click', () => settingsSheet.classList.add('open'));
-  $('closeSettings').addEventListener('click', () => settingsSheet.classList.remove('open'));
-  $('saveSettings').addEventListener('click', () => {
-    state.systemPrompt = $('systemPrompt').value;
-    state.heygenAvatarId = $('heygenAvatarId').value;
-    state.tavusReplicaId = $('tavusReplicaId').value;
-    Object.entries(state).forEach(([k, v]) => localStorage.setItem(k, v));
-    settingsSheet.classList.remove('open');
-  });
+  function getHistory(){ try { return JSON.parse(localStorage.getItem('callHistory') || '[]'); } catch(e){ return []; } }
+  function addHistory(entry){
+    const h = getHistory();
+    h.unshift(entry);
+    localStorage.setItem('callHistory', JSON.stringify(h.slice(0, 50)));
+  }
+  function renderRecent(){
+    const list = $('recentList');
+    const h = getHistory();
+    if (!h.length) { list.innerHTML = '<div class="emptyState">No calls yet. Brief the AI on Home and start one.</div>'; return; }
+    list.innerHTML = h.map(e => `
+      <div class="callRow">
+        <div>
+          <div class="name">${e.provider === 'heygen' ? 'HeyGen' : 'Tavus'} call</div>
+          <div class="summary">${e.summary}</div>
+        </div>
+        <div class="time">${e.time}</div>
+      </div>
+    `).join('');
+  }
 
-  // tap video to toggle bottom controls
-  stage.addEventListener('click', (e) => {
-    if (e.target.closest('#topBar') || e.target.closest('#bottomBar')) return;
-    bottomBar.classList.toggle('hidden');
-  });
+  const callScreen = $('callScreen'), callIdle = $('callIdle'), callStatus = $('callStatus'), callBottom = $('callBottom');
+  const remoteVideo = $('remoteVideo'), tavusFrame = $('tavusFrame'), liveDot = $('liveDot');
+  let heygenAvatar = null, micStream = null, audioCtx = null, callStartedAt = null;
 
-  let heygenAvatar = null;
-  let micStream = null;
+  function primeAudioSession(){
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      gain.gain.value = 0;
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start();
+      setTimeout(() => { try { osc.stop(); } catch(e){} }, 300);
+    } catch (e) {}
+  }
 
   async function startCall(){
     if (state.provider === 'heygen' && !state.heygenAvatarId) {
-      settingsSheet.classList.add('open');
+      $('homeHint').textContent = 'Pick a HeyGen avatar first.';
       return;
     }
-    if (state.provider === 'tavus' && !state.systemPrompt) {
-      settingsSheet.classList.add('open');
-      return;
-    }
+    $('homeHint').textContent = '';
 
-    idle.style.display = 'none';
-    statusLine.textContent = 'Connecting…';
+    callScreen.classList.add('active');
+    callIdle.style.display = 'flex';
+    callStatus.textContent = 'Connecting…';
     liveDot.classList.remove('live');
+
+    primeAudioSession();
 
     try {
       micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
-      statusLine.textContent = 'Microphone permission is required';
-      idle.style.display = 'flex';
+      callStatus.textContent = 'Microphone permission is required';
       return;
     }
 
-    if (state.provider === 'heygen') {
-      await startHeygen();
-    } else {
-      await startTavus();
-    }
+    callStartedAt = Date.now();
+    if (state.provider === 'heygen') await startHeygen(); else await startTavus();
   }
 
   async function startHeygen(){
     const tokenResp = await fetch('/api/heygen-token', { method: 'POST' });
     const tokenData = await tokenResp.json();
-    if (!tokenResp.ok) { statusLine.textContent = 'HeyGen error: ' + JSON.stringify(tokenData.error); idle.style.display = 'flex'; return; }
+    if (!tokenResp.ok) { callStatus.textContent = 'HeyGen error: ' + JSON.stringify(tokenData.error); return; }
 
     const { default: StreamingAvatar, AvatarQuality, StreamingEvents } =
       await import('https://esm.sh/@heygen/streaming-avatar@latest');
@@ -299,20 +386,18 @@
 
     heygenAvatar.on(StreamingEvents.STREAM_READY, (event) => {
       remoteVideo.srcObject = event.detail;
+      remoteVideo.volume = 1.0;
       remoteVideo.style.display = 'block';
-      statusLine.textContent = '';
+      callIdle.style.display = 'none';
       liveDot.classList.add('live');
     });
-    heygenAvatar.on(StreamingEvents.STREAM_DISCONNECTED, endCall);
+    heygenAvatar.on(StreamingEvents.STREAM_DISCONNECTED, () => endCall());
 
-    const opts = {
+    await heygenAvatar.createStartAvatar({
       quality: AvatarQuality.High,
       avatarName: state.heygenAvatarId,
       knowledgeBase: state.systemPrompt,
-    };
-    if (state.heygenVoiceId) opts.voice = { voiceId: state.heygenVoiceId };
-
-    await heygenAvatar.createStartAvatar(opts);
+    });
     await heygenAvatar.startVoiceChat();
   }
 
@@ -323,26 +408,40 @@
       body: JSON.stringify({ systemPrompt: state.systemPrompt, replicaId: state.tavusReplicaId || undefined }),
     });
     const data = await resp.json();
-    if (!resp.ok) { statusLine.textContent = 'Tavus error: ' + JSON.stringify(data.error); idle.style.display = 'flex'; return; }
+    if (!resp.ok) { callStatus.textContent = 'Tavus error: ' + JSON.stringify(data.error); return; }
 
     tavusFrame.src = data.conversation_url;
     tavusFrame.style.display = 'block';
-    statusLine.textContent = '';
+    callIdle.style.display = 'none';
     liveDot.classList.add('live');
   }
 
   function endCall(){
+    const durationSec = callStartedAt ? Math.round((Date.now() - callStartedAt) / 1000) : 0;
+    if (callStartedAt) {
+      addHistory({
+        provider: state.provider,
+        time: new Date().toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }),
+        summary: durationSec > 0 ? `Call ended after ${durationSec}s` : 'Call ended immediately',
+      });
+    }
     if (heygenAvatar) { try { heygenAvatar.stopAvatar(); } catch(e){} heygenAvatar = null; }
     if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+    if (audioCtx) { try { audioCtx.close(); } catch(e){} audioCtx = null; }
     remoteVideo.srcObject = null;
     remoteVideo.style.display = 'none';
     tavusFrame.src = 'about:blank';
     tavusFrame.style.display = 'none';
     liveDot.classList.remove('live');
-    statusLine.textContent = '';
-    idle.style.display = 'flex';
-    bottomBar.classList.add('hidden');
+    callBottom.classList.add('hidden');
+    callScreen.classList.remove('active');
+    callStartedAt = null;
   }
+
+  callScreen.addEventListener('click', (e) => {
+    if (e.target.closest('#callTop') || e.target.closest('#callBottom')) return;
+    callBottom.classList.toggle('hidden');
+  });
 
   let muted = false;
   $('muteBtn').addEventListener('click', () => {
