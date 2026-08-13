@@ -63,8 +63,21 @@
 
   .startBtn{
     background:var(--accent); color:#fff; font-weight:650; font-size:16px;
-    padding:16px; border-radius:14px; width:100%; margin-top:6px;
+    width:46px; height:46px; border-radius:50%; flex:none;
+    display:flex; align-items:center; justify-content:center;
   }
+
+  #homeInputBar{
+    display:none; align-items:center; gap:10px;
+    padding:10px 14px;
+    border-top:1px solid var(--line); background:#000;
+  }
+  #homeInputBar.visible{display:flex;}
+  #briefInput{
+    flex:1; background:var(--panel); border:1px solid var(--line); border-radius:22px;
+    color:#fff; font-size:15px; padding:12px 16px; font-family:inherit;
+  }
+  #briefInput::placeholder{color:var(--dim);}
   .hint{font-size:12px; color:var(--dim); text-align:center; margin-top:10px; line-height:1.4;}
 
   .callRow{
@@ -152,11 +165,6 @@
         </div>
       </div>
 
-      <div class="field">
-        <label>Persona &amp; goal</label>
-        <textarea id="systemPrompt" placeholder="You are... Keep the tone casual. Somewhere naturally in the conversation, explain that... Let the other person lead; respond to what they actually say.">You are a friend catching up on a casual call. Keep the tone warm and relaxed. Somewhere naturally in the conversation — not as an opener, only when it fits — explain the real reason you didn't show up to work. Let the other person lead; respond to what they actually say, ask follow-up questions, don't recite anything.</textarea>
-      </div>
-
       <div class="field" id="heygenFields">
         <label>HeyGen avatar</label>
         <select id="heygenAvatarId"><option value="">Loading your avatars…</option></select>
@@ -166,8 +174,7 @@
         <select id="tavusReplicaId"><option value="">Loading your replicas…</option></select>
       </div>
 
-      <button class="startBtn" id="startBtn">Start call</button>
-      <p class="hint" id="homeHint"></p>
+      <p class="hint" id="homeHint" style="margin-bottom:8px;"></p>
     </div>
 
     <div class="screen" id="screenRecent">
@@ -194,6 +201,13 @@
       </div>
     </div>
 
+  </div>
+
+  <div id="homeInputBar" class="visible">
+    <input id="briefInput" type="text" placeholder="Tell it what to do…" />
+    <button id="startBtn" aria-label="Start call">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 9c-2.5 0-4.9.5-7 1.4a1.5 1.5 0 0 0-.9 1.7l.6 2.5c.15.6.7 1 1.3 1 .2 0 .4 0 .6-.1l2-.8c.4-.15.7-.5.8-.9l.3-1.3c1.3-.3 2.7-.5 4.3-.5s3 .2 4.3.5l.3 1.3c.1.4.4.75.8.9l2 .8c.2.1.4.1.6.1.6 0 1.15-.4 1.3-1l.6-2.5a1.5 1.5 0 0 0-.9-1.7C16.9 9.5 14.5 9 12 9z"/></svg>
+    </button>
   </div>
 
   <div id="tabBar">
@@ -242,6 +256,7 @@
   function showTab(name){
     Object.entries(screens).forEach(([k, el]) => el.classList.toggle('active', k === name));
     tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+    $('homeInputBar').classList.toggle('visible', name === 'home');
     if (name === 'recent') renderRecent();
     if (name === 'profile') renderProfile();
   }
@@ -249,12 +264,13 @@
 
   const state = {
     provider: localStorage.getItem('provider') || 'heygen',
-    systemPrompt: localStorage.getItem('systemPrompt') || $('systemPrompt').value,
+    systemPrompt: localStorage.getItem('systemPrompt') || '',
     heygenAvatarId: localStorage.getItem('heygenAvatarId') || '',
     heygenAvatarName: localStorage.getItem('heygenAvatarName') || '',
     tavusReplicaId: localStorage.getItem('tavusReplicaId') || '',
     tavusReplicaName: localStorage.getItem('tavusReplicaName') || '',
   };
+  $('briefInput').value = state.systemPrompt;
   function persist(){ Object.entries(state).forEach(([k, v]) => localStorage.setItem(k, v)); }
 
   function setProviderUI(p){
@@ -267,7 +283,7 @@
   }
   $('pickHeygen').addEventListener('click', () => setProviderUI('heygen'));
   $('pickTavus').addEventListener('click', () => setProviderUI('tavus'));
-  $('systemPrompt').addEventListener('change', () => { state.systemPrompt = $('systemPrompt').value; persist(); });
+  $('briefInput').addEventListener('change', () => { state.systemPrompt = $('briefInput').value; persist(); });
 
   async function loadHeygenAvatars(){
     const sel = $('heygenAvatarId');
@@ -350,6 +366,12 @@
   }
 
   async function startCall(){
+    state.systemPrompt = $('briefInput').value.trim();
+    persist();
+    if (!state.systemPrompt) {
+      $('homeHint').textContent = 'Type what you want it to do first.';
+      return;
+    }
     if (state.provider === 'heygen' && !state.heygenAvatarId) {
       $('homeHint').textContent = 'Pick a HeyGen avatar first.';
       return;
