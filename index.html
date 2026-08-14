@@ -38,13 +38,13 @@
 
   /* ---------- floating liquid-glass dock: input row + tabs, one panel, zero dead padding ---------- */
   #dock{
-    position:fixed; left:10px; right:10px; bottom:max(env(safe-area-inset-bottom), 10px);
-    border-radius:26px; overflow:hidden;
+    position:fixed; left:0; right:0; bottom:0;
+    padding-bottom:env(safe-area-inset-bottom);
+    border-radius:0; overflow:hidden;
     background:rgba(28,28,32,0.55);
     backdrop-filter:blur(28px) saturate(180%);
     -webkit-backdrop-filter:blur(28px) saturate(180%);
-    border:1px solid rgba(255,255,255,0.14);
-    box-shadow:0 8px 30px rgba(0,0,0,0.45);
+    border-top:1px solid rgba(255,255,255,0.14);
   }
   #homeInputBar{
     display:none; align-items:center; gap:8px;
