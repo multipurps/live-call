@@ -508,6 +508,41 @@
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
   }
+
+  // ---------- TEMP DEBUG: prints real measured values so we stop guessing ----------
+  (function(){
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;bottom:0;height:0;padding-bottom:env(safe-area-inset-bottom);visibility:hidden;';
+    document.body.appendChild(probe);
+
+    function report(){
+      const safeBottom = getComputedStyle(probe).paddingBottom;
+      const tb = document.getElementById('tabBar');
+      const r = tb.getBoundingClientRect();
+      const vv = window.visualViewport;
+      const lines = [
+        'innerHeight: ' + window.innerHeight,
+        'visualViewport.h: ' + (vv ? vv.height : 'n/a'),
+        'devicePixelRatio: ' + window.devicePixelRatio,
+        'safe-area-inset-bottom: ' + safeBottom,
+        'tabBar rect.top: ' + r.top.toFixed(1),
+        'tabBar rect.bottom: ' + r.bottom.toFixed(1),
+        'tabBar rect.height: ' + r.height.toFixed(1),
+        'gap tabBar.bottom to window bottom: ' + (window.innerHeight - r.bottom).toFixed(1)
+      ];
+      let panel = document.getElementById('debugPanel');
+      if (!panel) {
+        panel = document.createElement('div');
+        panel.id = 'debugPanel';
+        panel.style.cssText = 'position:fixed;top:70px;left:10px;right:10px;z-index:99999;background:#ff2d55;color:#fff;font-size:12px;line-height:1.6;padding:10px;font-family:monospace;white-space:pre-wrap;border-radius:8px;';
+        document.body.appendChild(panel);
+      }
+      panel.textContent = lines.join('\n');
+    }
+    window.addEventListener('load', report);
+    window.addEventListener('resize', report);
+    setTimeout(report, 500);
+  })();
 </script>
 </body>
 </html>
