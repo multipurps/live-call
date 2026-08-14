@@ -36,19 +36,31 @@
   }
   .screen.active{display:block;}
 
-  /* ---------- floating liquid-glass dock: input row + tabs, one panel, zero dead padding ---------- */
-  #dock{
-    position:fixed; left:0; right:0; bottom:0;
+  /* ---------- bottom tab nav: liquid-glass, owns the true bottom edge, on its own ---------- */
+  #tabBar{
+    position:fixed; left:0; right:0; bottom:0; z-index:10;
+    display:flex;
     padding-bottom:env(safe-area-inset-bottom);
-    border-radius:0; overflow:hidden;
     background:rgba(28,28,32,0.55);
     backdrop-filter:blur(28px) saturate(180%);
     -webkit-backdrop-filter:blur(28px) saturate(180%);
     border-top:1px solid rgba(255,255,255,0.14);
   }
+  .tabBtn{
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:2px;
+    padding:8px 0 6px; color:var(--dim); font-size:11px; font-weight:600;
+  }
+  .tabBtn.active{color:#fff;}
+  .tabBtn svg{stroke:var(--dim);}
+  .tabBtn.active svg{stroke:#fff;}
+
+  /* ---------- brief input: a completely separate row, sits above the tab nav, own background ---------- */
   #homeInputBar{
     display:none; align-items:center; gap:8px;
-    padding:8px 8px 0 12px;
+    position:fixed; left:0; right:0; bottom:calc(58px + env(safe-area-inset-bottom)); z-index:9;
+    padding:8px 12px;
+    background:#0c0c0e;
+    border-top:1px solid var(--line);
   }
   #homeInputBar.visible{display:flex;}
   #briefInput{
@@ -57,7 +69,6 @@
   }
   #briefInput::placeholder{color:var(--dim);}
 
-  #tabBar{display:flex;}
   .tabBtn{
     flex:1; display:flex; flex-direction:column; align-items:center; gap:2px;
     padding:8px 0 6px; color:var(--dim); font-size:11px; font-weight:600;
@@ -211,28 +222,26 @@
 
   </div>
 
-  <div id="dock">
-    <div id="homeInputBar" class="visible">
-      <input id="briefInput" type="text" placeholder="Tell it what to do…" />
-      <button id="startBtn" aria-label="Start call">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 9c-2.5 0-4.9.5-7 1.4a1.5 1.5 0 0 0-.9 1.7l.6 2.5c.15.6.7 1 1.3 1 .2 0 .4 0 .6-.1l2-.8c.4-.15.7-.5.8-.9l.3-1.3c1.3-.3 2.7-.5 4.3-.5s3 .2 4.3.5l.3 1.3c.1.4.4.75.8.9l2 .8c.2.1.4.1.6.1.6 0 1.15-.4 1.3-1l.6-2.5a1.5 1.5 0 0 0-.9-1.7C16.9 9.5 14.5 9 12 9z"/></svg>
-      </button>
-    </div>
+  <div id="homeInputBar" class="visible">
+    <input id="briefInput" type="text" placeholder="Tell it what to do…" />
+    <button id="startBtn" aria-label="Start call">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 9c-2.5 0-4.9.5-7 1.4a1.5 1.5 0 0 0-.9 1.7l.6 2.5c.15.6.7 1 1.3 1 .2 0 .4 0 .6-.1l2-.8c.4-.15.7-.5.8-.9l.3-1.3c1.3-.3 2.7-.5 4.3-.5s3 .2 4.3.5l.3 1.3c.1.4.4.75.8.9l2 .8c.2.1.4.1.6.1.6 0 1.15-.4 1.3-1l.6-2.5a1.5 1.5 0 0 0-.9-1.7C16.9 9.5 14.5 9 12 9z"/></svg>
+    </button>
+  </div>
 
-    <div id="tabBar">
-      <button class="tabBtn active" data-tab="home">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg>
-        Home
-      </button>
-      <button class="tabBtn" data-tab="recent">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
-        Recent
-      </button>
-      <button class="tabBtn" data-tab="profile">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>
-        Profile
-      </button>
-    </div>
+  <div id="tabBar">
+    <button class="tabBtn active" data-tab="home">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg>
+      Home
+    </button>
+    <button class="tabBtn" data-tab="recent">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+      Recent
+    </button>
+    <button class="tabBtn" data-tab="profile">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>
+      Profile
+    </button>
   </div>
 </div>
 
