@@ -114,7 +114,7 @@
     display:none; z-index:50;
   }
   #callScreen.active{display:block;}
-  #remoteVideo, #tavusFrame{
+  #remoteVideo{
     position:absolute; inset:0; width:100%; height:100%;
     object-fit:cover; border:0; background:#000;
   }
@@ -238,7 +238,6 @@
 
 <div id="callScreen">
   <video id="remoteVideo" autoplay playsinline style="display:none;"></video>
-  <iframe id="tavusFrame" allow="camera; microphone; autoplay; display-capture" style="display:none;"></iframe>
 
   <div id="callIdle">
     <div id="callStatus">Connecting…</div>
@@ -360,8 +359,8 @@
   }
 
   const callScreen = $('callScreen'), callIdle = $('callIdle'), callStatus = $('callStatus'), callBottom = $('callBottom');
-  const remoteVideo = $('remoteVideo'), tavusFrame = $('tavusFrame'), liveDot = $('liveDot');
-  let heygenAvatar = null, micStream = null, audioCtx = null, callStartedAt = null;
+  const remoteVideo = $('remoteVideo'), liveDot = $('liveDot');
+  let heygenAvatar = null, dailyCall = null, micStream = null, audioCtx = null, callStartedAt = null;
 
   function primeAudioSession(){
     try {
@@ -442,10 +441,30 @@
     const data = await resp.json();
     if (!resp.ok) { callStatus.textContent = 'Tavus error: ' + JSON.stringify(data.error); return; }
 
-    tavusFrame.src = data.conversation_url;
-    tavusFrame.style.display = 'block';
-    callIdle.style.display = 'none';
-    liveDot.classList.add('live');
+    // Joining headlessly via the Daily SDK (no iframe) is what avoids Daily's prebuilt UI
+    // entirely — a plain iframe embed of conversation_url always renders their own call
+    // chrome, which no CSS in this app can reach since it's a different origin's document.
+    const { default: Daily } = await import('https://esm.sh/@daily-co/daily-js@latest');
+    dailyCall = Daily.createCallObject();
+
+    dailyCall.on('track-started', (ev) => {
+      if (ev.participant?.local) return; // don't render our own mic/camera back to ourselves
+      if (ev.track.kind === 'video') {
+        remoteVideo.srcObject = new MediaStream([ev.track]);
+        remoteVideo.volume = 1.0;
+        remoteVideo.style.display = 'block';
+        callIdle.style.display = 'none';
+        liveDot.classList.add('live');
+      }
+      if (ev.track.kind === 'audio') {
+        let stream = remoteVideo.srcObject instanceof MediaStream ? remoteVideo.srcObject : new MediaStream();
+        stream.addTrack(ev.track);
+        remoteVideo.srcObject = stream;
+      }
+    });
+    dailyCall.on('left-meeting', () => endCall());
+
+    await dailyCall.join({ url: data.conversation_url, videoSource: false, audioSource: micStream ? micStream.getAudioTracks()[0] : true });
   }
 
   function endCall(){
@@ -458,12 +477,11 @@
       });
     }
     if (heygenAvatar) { try { heygenAvatar.stopAvatar(); } catch(e){} heygenAvatar = null; }
+    if (dailyCall) { try { dailyCall.leave(); dailyCall.destroy(); } catch(e){} dailyCall = null; }
     if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
     if (audioCtx) { try { audioCtx.close(); } catch(e){} audioCtx = null; }
     remoteVideo.srcObject = null;
     remoteVideo.style.display = 'none';
-    tavusFrame.src = 'about:blank';
-    tavusFrame.style.display = 'none';
     liveDot.classList.remove('live');
     callBottom.classList.add('hidden');
     callScreen.classList.remove('active');
