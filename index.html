@@ -25,23 +25,42 @@
   }
   button{-webkit-appearance:none; appearance:none; border:0; cursor:pointer; font-family:inherit; color:#fff; background:none;}
 
-  #app{position:fixed; inset:0; display:flex; flex-direction:column;}
-  #screens{flex:1; position:relative; min-height:0;}
+  #app{position:fixed; inset:0;}
+  #screens{position:absolute; inset:0;}
   .screen{
     position:absolute; inset:0; overflow-y:auto;
     padding-top:max(env(safe-area-inset-top), 16px);
     padding-left:18px; padding-right:18px;
+    padding-bottom:110px; /* keeps content clear of the floating dock, not the dock itself */
     display:none;
   }
   .screen.active{display:block;}
 
-  #tabBar{
-    display:flex; border-top:1px solid var(--line); background:#000;
-    padding-bottom:env(safe-area-inset-bottom);
+  /* ---------- floating liquid-glass dock: input row + tabs, one panel, zero dead padding ---------- */
+  #dock{
+    position:fixed; left:10px; right:10px; bottom:max(env(safe-area-inset-bottom), 10px);
+    border-radius:26px; overflow:hidden;
+    background:rgba(28,28,32,0.55);
+    backdrop-filter:blur(28px) saturate(180%);
+    -webkit-backdrop-filter:blur(28px) saturate(180%);
+    border:1px solid rgba(255,255,255,0.14);
+    box-shadow:0 8px 30px rgba(0,0,0,0.45);
   }
+  #homeInputBar{
+    display:none; align-items:center; gap:8px;
+    padding:8px 8px 0 12px;
+  }
+  #homeInputBar.visible{display:flex;}
+  #briefInput{
+    flex:1; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12); border-radius:18px;
+    color:#fff; font-size:15px; padding:9px 14px; font-family:inherit;
+  }
+  #briefInput::placeholder{color:var(--dim);}
+
+  #tabBar{display:flex;}
   .tabBtn{
     flex:1; display:flex; flex-direction:column; align-items:center; gap:2px;
-    padding:6px 0 4px; color:var(--dim); font-size:11px; font-weight:600;
+    padding:8px 0 6px; color:var(--dim); font-size:11px; font-weight:600;
   }
   .tabBtn.active{color:#fff;}
   .tabBtn svg{stroke:var(--dim);}
@@ -63,21 +82,10 @@
 
   .startBtn{
     background:var(--accent); color:#fff; font-weight:650; font-size:16px;
-    width:38px; height:38px; border-radius:50%; flex:none;
+    width:36px; height:36px; border-radius:50%; flex:none;
     display:flex; align-items:center; justify-content:center;
   }
 
-  #homeInputBar{
-    display:none; align-items:center; gap:8px;
-    padding:6px 12px;
-    border-top:1px solid var(--line); background:#000;
-  }
-  #homeInputBar.visible{display:flex;}
-  #briefInput{
-    flex:1; background:var(--panel); border:1px solid var(--line); border-radius:20px;
-    color:#fff; font-size:15px; padding:9px 14px; font-family:inherit;
-  }
-  #briefInput::placeholder{color:var(--dim);}
   .hint{font-size:12px; color:var(--dim); text-align:center; margin-top:10px; line-height:1.4;}
 
   .callRow{
@@ -203,26 +211,28 @@
 
   </div>
 
-  <div id="homeInputBar" class="visible">
-    <input id="briefInput" type="text" placeholder="Tell it what to do…" />
-    <button id="startBtn" aria-label="Start call">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 9c-2.5 0-4.9.5-7 1.4a1.5 1.5 0 0 0-.9 1.7l.6 2.5c.15.6.7 1 1.3 1 .2 0 .4 0 .6-.1l2-.8c.4-.15.7-.5.8-.9l.3-1.3c1.3-.3 2.7-.5 4.3-.5s3 .2 4.3.5l.3 1.3c.1.4.4.75.8.9l2 .8c.2.1.4.1.6.1.6 0 1.15-.4 1.3-1l.6-2.5a1.5 1.5 0 0 0-.9-1.7C16.9 9.5 14.5 9 12 9z"/></svg>
-    </button>
-  </div>
+  <div id="dock">
+    <div id="homeInputBar" class="visible">
+      <input id="briefInput" type="text" placeholder="Tell it what to do…" />
+      <button id="startBtn" aria-label="Start call">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 9c-2.5 0-4.9.5-7 1.4a1.5 1.5 0 0 0-.9 1.7l.6 2.5c.15.6.7 1 1.3 1 .2 0 .4 0 .6-.1l2-.8c.4-.15.7-.5.8-.9l.3-1.3c1.3-.3 2.7-.5 4.3-.5s3 .2 4.3.5l.3 1.3c.1.4.4.75.8.9l2 .8c.2.1.4.1.6.1.6 0 1.15-.4 1.3-1l.6-2.5a1.5 1.5 0 0 0-.9-1.7C16.9 9.5 14.5 9 12 9z"/></svg>
+      </button>
+    </div>
 
-  <div id="tabBar">
-    <button class="tabBtn active" data-tab="home">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg>
-      Home
-    </button>
-    <button class="tabBtn" data-tab="recent">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
-      Recent
-    </button>
-    <button class="tabBtn" data-tab="profile">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>
-      Profile
-    </button>
+    <div id="tabBar">
+      <button class="tabBtn active" data-tab="home">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg>
+        Home
+      </button>
+      <button class="tabBtn" data-tab="recent">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+        Recent
+      </button>
+      <button class="tabBtn" data-tab="profile">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>
+        Profile
+      </button>
+    </div>
   </div>
 </div>
 
