@@ -17,8 +17,9 @@
     --dim: rgba(255,230,210,0.55);
     --coffee:#1e130d;
     --coffee-light:#2b1c14;
+    --tabbar-h:56px; /* fixed content height of the tab bar, excludes safe area. Single source of truth - never let this be content-driven. */
   }
-  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; margin:0; padding:0;}
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; margin:0; padding:0; -webkit-text-size-adjust:100%;}
   html,body{height:100%; background:var(--coffee); overflow:hidden;}
   body{
     font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
@@ -41,14 +42,15 @@
   /* ---------- bottom tab nav: liquid-glass, owns the true bottom edge, on its own ---------- */
   #tabBar{
     position:fixed; left:0; right:0; bottom:0; z-index:10;
+    height:calc(var(--tabbar-h) + env(safe-area-inset-bottom));
     display:flex;
     padding-bottom:env(safe-area-inset-bottom);
     background:#1e130d;
     border-top:1px solid rgba(255,255,255,0.14);
   }
   .tabBtn{
-    flex:1; display:flex; flex-direction:column; align-items:center; gap:2px;
-    padding:8px 0 6px; color:var(--dim); font-size:11px; font-weight:600;
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    color:var(--dim); font-size:11px; line-height:1.2; font-weight:600;
   }
   .tabBtn.active{color:#fff;}
   .tabBtn svg{stroke:var(--dim);}
@@ -57,7 +59,7 @@
   /* ---------- brief input: a completely separate row, sits above the tab nav, own background ---------- */
   #homeInputBar{
     display:none; align-items:center; gap:8px;
-    position:fixed; left:0; right:0; bottom:calc(58px + env(safe-area-inset-bottom)); z-index:9;
+    position:fixed; left:0; right:0; bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom)); z-index:9;
     padding:8px 12px;
     background:#231610;
     border-top:1px solid var(--line);
