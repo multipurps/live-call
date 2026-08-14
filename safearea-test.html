@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+<title>Safe-area test</title>
+<meta name="theme-color" content="#0f9d68" />
+<style>
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    position:fixed; inset:0; width:100vw; height:100dvh;
+    background:#0f9d68; /* bright green so ANY mismatch is obvious */
+    font-family:-apple-system,sans-serif; color:#fff;
+  }
+  #label{
+    position:absolute; top:20%; left:0; right:0; text-align:center; font-size:14px; padding:0 24px;
+  }
+  #bar{
+    position:fixed; left:0; right:0; bottom:0;
+    height:56px;
+    padding-bottom:env(safe-area-inset-bottom);
+    background:#7c2d92; /* bright purple — must be the ONLY color visible at the very bottom edge */
+    display:flex; align-items:center; justify-content:center;
+    font-size:13px; font-weight:600;
+  }
+  #edgeMarker{
+    position:fixed; left:0; right:0; bottom:0; height:2px; background:#ffee00; z-index:99;
+  }
+</style>
+</head>
+<body>
+  <div id="label">
+    If the strip between purple and the very bottom edge is GREEN (body color) or any other color —
+    that's a real CSS bug in this minimal page, reproducible outside the main app.<br/><br/>
+    If purple reaches the true bottom edge with the home indicator sitting on top of it, with a yellow
+    line marking the true edge and no visible gap — the bar behaves correctly here.
+  </div>
+  <div id="bar">PURPLE must reach the very bottom edge</div>
+  <div id="edgeMarker"></div>
+</body>
+</html>
