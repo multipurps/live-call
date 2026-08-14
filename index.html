@@ -4,20 +4,22 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
 <title>Live Call</title>
-<meta name="theme-color" content="#000000" />
+<meta name="theme-color" content="#1e130d" />
 <link rel="manifest" href="manifest.json" />
 <link rel="apple-touch-icon" href="icon-192.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <style>
   :root{
-    --accent:#ff5a36;
-    --panel:#141416;
-    --line: rgba(255,255,255,0.12);
-    --dim: rgba(255,255,255,0.5);
+    --accent:#0f9d68;
+    --panel:#3a2a20;
+    --line: rgba(255,222,196,0.14);
+    --dim: rgba(255,230,210,0.55);
+    --coffee:#1e130d;
+    --coffee-light:#2b1c14;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; margin:0; padding:0;}
-  html,body{height:100%; background:#000; overflow:hidden;}
+  html,body{height:100%; background:var(--coffee); overflow:hidden;}
   body{
     font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
     color:#fff;
@@ -41,7 +43,7 @@
     position:fixed; left:0; right:0; bottom:0; z-index:10;
     display:flex;
     padding-bottom:env(safe-area-inset-bottom);
-    background:rgba(28,28,32,0.55);
+    background:rgba(43,28,20,0.6);
     backdrop-filter:blur(28px) saturate(180%);
     -webkit-backdrop-filter:blur(28px) saturate(180%);
     border-top:1px solid rgba(255,255,255,0.14);
@@ -59,7 +61,7 @@
     display:none; align-items:center; gap:8px;
     position:fixed; left:0; right:0; bottom:calc(58px + env(safe-area-inset-bottom)); z-index:9;
     padding:8px 12px;
-    background:#0c0c0e;
+    background:#231610;
     border-top:1px solid var(--line);
   }
   #homeInputBar.visible{display:flex;}
@@ -110,7 +112,7 @@
 
   .avatarCircle{
     width:88px; height:88px; border-radius:50%; margin:8px auto 14px;
-    background:linear-gradient(135deg, #ff5a36, #7a3ab8);
+    background:linear-gradient(135deg, #0f9d68, #3a2a20);
     display:flex; align-items:center; justify-content:center; font-size:32px; font-weight:700;
   }
   .profileName{text-align:center; font-size:18px; font-weight:650; margin-bottom:22px;}
@@ -121,13 +123,13 @@
   .settingsRow .label{font-size:11.5px; font-weight:600; color:var(--dim); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:6px;}
 
   #callScreen{
-    position:fixed; inset:0; width:100vw; height:100dvh; background:#000;
+    position:fixed; inset:0; width:100vw; height:100dvh; background:var(--coffee);
     display:none; z-index:50;
   }
   #callScreen.active{display:block;}
   #remoteVideo{
     position:absolute; inset:0; width:100%; height:100%;
-    object-fit:cover; border:0; background:#000;
+    object-fit:cover; border:0; background:var(--coffee);
   }
   #callIdle{
     position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -142,7 +144,7 @@
     display:flex; justify-content:flex-start;
   }
   .pill{
-    background:rgba(20,20,22,0.86); backdrop-filter:blur(20px);
+    background:rgba(43,28,20,0.82); backdrop-filter:blur(20px);
     border:1px solid var(--line); border-radius:100px;
     padding:9px 14px; font-size:12.5px; font-weight:600; color:#fff;
     display:flex; align-items:center; gap:7px;
@@ -159,7 +161,7 @@
   #callBottom.hidden{opacity:0; pointer-events:none;}
   .roundBtn{
     width:52px; height:52px; border-radius:50%;
-    background:rgba(20,20,22,0.86); backdrop-filter:blur(20px); border:1px solid var(--line);
+    background:rgba(43,28,20,0.82); backdrop-filter:blur(20px); border:1px solid var(--line);
     display:flex; align-items:center; justify-content:center;
   }
   .endBtn{
