@@ -37,11 +37,11 @@
 
   #tabBar{
     display:flex; border-top:1px solid var(--line); background:#000;
-    padding-bottom:max(env(safe-area-inset-bottom), 8px);
+    padding-bottom:env(safe-area-inset-bottom);
   }
   .tabBtn{
-    flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;
-    padding:10px 0 6px; color:var(--dim); font-size:11px; font-weight:600;
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:2px;
+    padding:6px 0 4px; color:var(--dim); font-size:11px; font-weight:600;
   }
   .tabBtn.active{color:#fff;}
   .tabBtn svg{stroke:var(--dim);}
@@ -63,19 +63,19 @@
 
   .startBtn{
     background:var(--accent); color:#fff; font-weight:650; font-size:16px;
-    width:46px; height:46px; border-radius:50%; flex:none;
+    width:38px; height:38px; border-radius:50%; flex:none;
     display:flex; align-items:center; justify-content:center;
   }
 
   #homeInputBar{
-    display:none; align-items:center; gap:10px;
-    padding:10px 14px;
+    display:none; align-items:center; gap:8px;
+    padding:6px 12px;
     border-top:1px solid var(--line); background:#000;
   }
   #homeInputBar.visible{display:flex;}
   #briefInput{
-    flex:1; background:var(--panel); border:1px solid var(--line); border-radius:22px;
-    color:#fff; font-size:15px; padding:12px 16px; font-family:inherit;
+    flex:1; background:var(--panel); border:1px solid var(--line); border-radius:20px;
+    color:#fff; font-size:15px; padding:9px 14px; font-family:inherit;
   }
   #briefInput::placeholder{color:var(--dim);}
   .hint{font-size:12px; color:var(--dim); text-align:center; margin-top:10px; line-height:1.4;}
