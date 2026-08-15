@@ -21,11 +21,20 @@
   .field label{display:block; font-size:12px; font-weight:600; color:var(--dim); margin-bottom:7px; text-transform:uppercase; letter-spacing:0.03em;}
   .field input{
     width:100%; background:var(--panel); border:1px solid var(--line); border-radius:12px;
-    color:#fff; font-size:15px; padding:12px 14px; font-family:inherit;
+    color:#fff; font-size:20px; padding:12px 14px; font-family:inherit; text-align:center; letter-spacing:0.3em;
   }
   button{-webkit-appearance:none; appearance:none; border:0; cursor:pointer; font-family:inherit;}
-  .btn{background:var(--accent); color:#fff; font-weight:650; font-size:15px; padding:13px; border-radius:12px; width:100%;}
-  .hint{font-size:12px; color:var(--dim); margin-top:10px; text-align:center;}
+  .btn{
+    width:100%; padding:14px; border-radius:16px; font-size:15px; font-weight:650; color:#fff;
+    background:rgba(15,157,104,0.35); backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%);
+    border:1px solid rgba(15,157,104,0.6);
+  }
+  #googleBtn{
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.18);
+  }
+  #googleBtn svg{background:#fff; border-radius:50%; padding:2px;}
+  .hint{font-size:12px; color:var(--dim); margin-top:12px; text-align:center;}
   #userList{margin-top:24px; display:none;}
   .userRow{
     background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:10px;
@@ -36,17 +45,26 @@
   .toggleBtn{padding:9px 14px; border-radius:9px; font-size:13px; font-weight:650; flex:none;}
   .toggleBtn.approved{background:var(--accent); color:#fff;}
   .toggleBtn.pending{background:#3a2620; color:var(--dim); border:1px solid var(--line);}
-  #signInBox{max-width:340px; margin:60px auto 0;}
+  #signInBox, #pinBox{max-width:320px; margin:70px auto 0; text-align:center;}
+  #pinBox{display:none;}
 </style>
 </head>
 <body>
 
 <div id="signInBox">
-  <h1>Admin sign in</h1>
-  <div class="field"><label>Email</label><input id="email" type="email" /></div>
-  <div class="field"><label>Password</label><input id="password" type="password" /></div>
-  <button class="btn" id="signInBtn">Sign in</button>
+  <h1>Admin</h1>
+  <button class="btn" id="googleBtn">
+    <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.4 0 5.7 1.5 7 2.7l5.1-5C33 3.9 29 2 24 2 14.8 2 7 7.6 3.9 15.6l6 4.6C11.4 14.1 17.2 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-2.8-.4-4.1H24v7.8h12.7c-.3 2.1-1.6 5.2-4.6 7.3l6 4.6c3.5-3.2 5.4-7.9 5.4-13.6z"/><path fill="#FBBC05" d="M9.9 20.2C9.3 21.9 9 23.9 9 26s.3 4.1.9 5.8l-6 4.6C1.7 33 1 29.6 1 26s.7-7 2.9-10.4z"/><path fill="#34A853" d="M24 46c5 0 9.2-1.7 12.3-4.5l-6-4.6c-1.7 1.1-3.8 1.9-6.3 1.9-6.8 0-12.6-4.6-14.7-10.8l-6 4.6C7 40.4 14.8 46 24 46z"/></svg>
+    Continue with Google
+  </button>
   <p class="hint" id="hint"></p>
+</div>
+
+<div id="pinBox">
+  <h1>Enter PIN</h1>
+  <div class="field"><input id="pinInput" type="password" inputmode="numeric" maxlength="6" placeholder="••••" /></div>
+  <button class="btn" id="pinSubmit">Unlock</button>
+  <p class="hint" id="pinHint"></p>
 </div>
 
 <div id="userList">
@@ -58,12 +76,28 @@
   import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   const supabase = createClient('https://ewgtpxomgkpbmfyddypw.supabase.co', 'sb_publishable_NkeueZ7vabkD9nUIPDaGwQ_GCd5Ci40');
 
+  const ADMIN_PIN = '2048';
   const $ = (id) => document.getElementById(id);
 
-  $('signInBtn').addEventListener('click', async () => {
-    $('hint').textContent = 'Signing in…';
-    const { error } = await supabase.auth.signInWithPassword({ email: $('email').value.trim(), password: $('password').value });
-    if (error) { $('hint').textContent = error.message; return; }
+  $('googleBtn').addEventListener('click', async () => {
+    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + '/admin.html' } });
+  });
+
+  function showPinGate(){
+    $('signInBox').style.display = 'none';
+    $('userList').style.display = 'none';
+    if (localStorage.getItem('admin_pin_ok') === 'true') { loadUsers(); return; }
+    $('pinBox').style.display = 'block';
+  }
+
+  $('pinSubmit').addEventListener('click', () => {
+    if ($('pinInput').value === ADMIN_PIN) {
+      localStorage.setItem('admin_pin_ok', 'true');
+      $('pinBox').style.display = 'none';
+      loadUsers();
+    } else {
+      $('pinHint').textContent = 'Wrong PIN.';
+    }
   });
 
   async function loadUsers(){
@@ -71,9 +105,9 @@
     if (!session) return;
     const r = await fetch('/api/admin-list-users', { headers: { Authorization: `Bearer ${session.access_token}` } });
     const data = await r.json();
-    if (!r.ok) { $('hint').textContent = data.error; $('signInBox').style.display = 'block'; $('userList').style.display = 'none'; return; }
+    if (!r.ok) { $('hint').textContent = data.error; $('signInBox').style.display = 'block'; $('pinBox').style.display = 'none'; $('userList').style.display = 'none'; return; }
 
-    $('signInBox').style.display = 'none';
+    $('pinBox').style.display = 'none';
     $('userList').style.display = 'block';
     $('rows').innerHTML = data.users.map(u => `
       <div class="userRow">
@@ -101,8 +135,10 @@
     });
   }
 
-  supabase.auth.onAuthStateChange(() => loadUsers());
-  loadUsers();
+  supabase.auth.onAuthStateChange((_event, session) => {
+    if (session?.user) showPinGate();
+    else { $('signInBox').style.display = 'block'; $('pinBox').style.display = 'none'; $('userList').style.display = 'none'; }
+  });
 </script>
 </body>
 </html>
