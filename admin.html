@@ -51,6 +51,23 @@
 </head>
 <body>
 
+<div id="debugBar" style="display:none; position:fixed; top:0; left:0; right:0; background:#ff3b30; color:#fff; font-size:11px; padding:8px 12px; z-index:999; white-space:pre-wrap; word-break:break-all;"></div>
+<script>
+  window.onerror = function(msg, src, line, col, err){
+    const bar = document.getElementById('debugBar');
+    bar.style.display = 'block';
+    bar.textContent = 'JS ERROR: ' + msg + ' (line ' + line + ')';
+  };
+  setTimeout(function(){
+    var box = document.getElementById('signInBox');
+    if (box && getComputedStyle(box).display === 'none' && document.getElementById('userList').style.display !== 'block') {
+      var bar = document.getElementById('debugBar');
+      bar.style.display = 'block';
+      bar.textContent = 'TIMEOUT: script never finished (likely the Supabase import hung or failed silently)';
+    }
+  }, 4000);
+</script>
+
 <div id="signInBox">
   <h1>Admin</h1>
   <button class="btn" id="googleBtn">
@@ -139,6 +156,5 @@
     if (session?.user) showPinGate();
     else { $('signInBox').style.display = 'block'; $('pinBox').style.display = 'none'; $('userList').style.display = 'none'; }
   });
-</script>
-</body>
+</script></body>
 </html>
