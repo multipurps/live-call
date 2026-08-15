@@ -1,0 +1,24 @@
+import { createClient } from '@supabase/supabase-js';
+
+export default async function handler(req, res) {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (!serviceKey || !adminEmail) return res.status(500).json({ error: 'Server not configured (SUPABASE_SERVICE_ROLE_KEY / ADMIN_EMAIL missing)' });
+
+  const token = (req.headers.authorization || '').replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: 'Missing auth token' });
+
+  const supabase = createClient('https://ewgtpxomgkpbmfyddypw.supabase.co', serviceKey);
+
+  const { data: userData, error: userErr } = await supabase.auth.getUser(token);
+  if (userErr || !userData?.user) return res.status(401).json({ error: 'Invalid session' });
+  if (userData.user.email !== adminEmail) return res.status(403).json({ error: 'Not authorized' });
+
+  const { data, error } = await supabase
+    .from('user_approvals')
+    .select('user_id, email, approved, created_at')
+    .order('created_at', { ascending: false });
+
+  if (error) return res.status(500).json({ error: error.message });
+  return res.status(200).json({ users: data });
+}
