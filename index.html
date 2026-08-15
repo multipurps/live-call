@@ -17,7 +17,7 @@
     --dim: rgba(255,230,210,0.55);
     --coffee:#1e130d;
     --coffee-light:#2b1c14;
-    --tabbar-h:56px; /* fixed content height of the tab bar, excludes safe area. Single source of truth - never let this be content-driven. */
+    --tabbar-h:44px; /* fixed content height of the tab bar, excludes safe area. Single source of truth - never let this be content-driven. */
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; margin:0; padding:0; -webkit-text-size-adjust:100%;}
   html,body{height:100%; background:var(--coffee); overflow:hidden;}
@@ -48,20 +48,20 @@
     border-top:1px solid rgba(255,255,255,0.14);
   }
   .tabBtn{
-    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
-    color:var(--dim); font-size:11px; line-height:1.2; font-weight:600;
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
+    color:var(--dim); font-size:10px; line-height:1.15; font-weight:600;
   }
   .tabBtn.active{color:#fff;}
-  .tabBtn svg{stroke:var(--dim);}
-  .tabBtn.active svg{stroke:#fff;}
+  .tabBtn svg{width:18px; height:18px;}
 
-  /* ---------- brief input: a completely separate row, sits above the tab nav, own background ---------- */
+  /* ---------- brief input: floats free above the tab nav, own pill, not attached to anything ---------- */
   #homeInputBar{
     display:none; align-items:center; gap:8px;
-    position:fixed; left:0; right:0; bottom:var(--tabbar-h); z-index:9;
-    padding:8px 12px;
-    background:#231610;
-    border-top:1px solid var(--line);
+    position:fixed; left:14px; right:14px; bottom:calc(var(--tabbar-h) + 12px); z-index:9;
+    padding:8px 8px 8px 16px;
+    background:#2b1c14;
+    border-radius:28px;
+    box-shadow:0 8px 24px rgba(0,0,0,0.45);
   }
   #homeInputBar.visible{display:flex;}
   #briefInput{
@@ -224,15 +224,15 @@
 
   <div id="tabBar">
     <button class="tabBtn active" data-tab="home">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg>
+      <svg viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M2.33537 7.87495C1.79491 9.00229 1.98463 10.3208 2.36407 12.9579L2.64284 14.8952C3.13025 18.2827 3.37396 19.9764 4.54903 20.9882C5.72409 22 7.44737 22 10.8939 22H13.1061C16.5526 22 18.2759 22 19.451 20.9882C20.626 19.9764 20.8697 18.2827 21.3572 14.8952L21.6359 12.9579C22.0154 10.3208 22.2051 9.00229 21.6646 7.87495C21.1242 6.7476 19.9738 6.06234 17.6731 4.69181L16.2882 3.86687C14.199 2.62229 13.1543 2 12 2C10.8457 2 9.80104 2.62229 7.71175 3.86687L6.32691 4.69181C4.02619 6.06234 2.87583 6.7476 2.33537 7.87495ZM8.2501 17.9998C8.2501 17.5856 8.58589 17.2498 9.0001 17.2498H15.0001C15.4143 17.2498 15.7501 17.5856 15.7501 17.9998C15.7501 18.414 15.4143 18.7498 15.0001 18.7498H9.0001C8.58589 18.7498 8.2501 18.414 8.2501 17.9998Z" fill="currentColor"/></svg>
       Home
     </button>
     <button class="tabBtn" data-tab="recent">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+      <svg viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M22 12c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2s10 4.477 10 10zm-4.581 3.324a1 1 0 0 0-.525-1.313L13 12.341V6.5a1 1 0 0 0-2 0v6.17c0 .6.357 1.143.909 1.379l4.197 1.8a1 1 0 0 0 1.313-.525z" fill="currentColor"/></svg>
       Recent
     </button>
     <button class="tabBtn" data-tab="profile">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>
+      <svg viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M6.75 6.5C6.75 3.6005 9.1005 1.25 12 1.25C14.8995 1.25 17.25 3.6005 17.25 6.5C17.25 9.3995 14.8995 11.75 12 11.75C9.1005 11.75 6.75 9.3995 6.75 6.5Z" fill="currentColor"/><path fill-rule="evenodd" clip-rule="evenodd" d="M4.25 18.5714C4.25 15.6325 6.63249 13.25 9.57143 13.25H14.4286C17.3675 13.25 19.75 15.6325 19.75 18.5714C19.75 20.8792 17.8792 22.75 15.5714 22.75H8.42857C6.12081 22.75 4.25 20.8792 4.25 18.5714Z" fill="currentColor"/></svg>
       Profile
     </button>
   </div>
