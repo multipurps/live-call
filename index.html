@@ -56,17 +56,13 @@
 
   /* ---------- brief input: floats free above the tab nav, own pill, not attached to anything ---------- */
   #homeInputBar{
-    display:none; align-items:center; gap:8px;
-    position:fixed; left:14px; right:14px; bottom:calc(var(--tabbar-h) + 12px); z-index:9;
-    padding:8px 8px 8px 16px;
-    background:#2b1c14;
-    border-radius:28px;
-    box-shadow:0 8px 24px rgba(0,0,0,0.45);
+    display:none;
+    position:fixed; left:18px; right:18px; bottom:calc(var(--tabbar-h) + 14px); z-index:9;
   }
-  #homeInputBar.visible{display:flex;}
+  #homeInputBar.visible{display:block;}
   #briefInput{
-    flex:1; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12); border-radius:18px;
-    color:#fff; font-size:15px; padding:9px 14px; font-family:inherit;
+    width:100%; background:none; border:none; outline:none; -webkit-appearance:none; appearance:none;
+    color:#fff; font-size:16px; font-family:inherit; padding:0;
   }
   #briefInput::placeholder{color:var(--dim);}
 
@@ -80,15 +76,44 @@
   }
   .field textarea{min-height:130px; resize:vertical; line-height:1.45;}
 
-  .providerToggle{display:flex; background:var(--panel); border-radius:12px; padding:4px; border:1px solid var(--line);}
-  .providerToggle button{flex:1; padding:11px; border-radius:9px; font-size:13.5px; font-weight:600; color:var(--dim);}
-  .providerToggle button.active{background:var(--accent); color:#fff;}
-
   .startBtn{
-    background:var(--accent); color:#fff; font-weight:650; font-size:16px;
-    width:36px; height:36px; border-radius:50%; flex:none;
-    display:flex; align-items:center; justify-content:center;
+    width:100%; background:var(--accent); color:#fff; font-weight:650; font-size:15px;
+    padding:13px; border-radius:14px; display:flex; align-items:center; justify-content:center;
   }
+
+  /* ---------- home header: provider dropdown left, logo overlapping center, call button right ---------- */
+  #homeHeader{
+    position:relative; overflow:visible;
+    display:flex; align-items:center; justify-content:space-between;
+    height:44px; margin:6px 0 0;
+  }
+  #providerPicker{position:relative;}
+  #providerPickerBtn{
+    display:flex; align-items:center; gap:5px;
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:7px 10px; font-size:13px; font-weight:650; color:#fff;
+  }
+  #providerPickerBtn .chev{color:var(--dim); transition:transform 0.15s;}
+  #providerPicker.open #providerPickerBtn .chev{transform:rotate(180deg);}
+  #providerPickerMenu{
+    display:none; position:absolute; top:calc(100% + 6px); left:0; z-index:30;
+    min-width:120px; background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,0.4);
+  }
+  #providerPicker.open #providerPickerMenu{display:block;}
+  #providerPickerMenu button{
+    display:block; width:100%; text-align:left; padding:11px 13px;
+    font-size:13.5px; font-weight:600; color:var(--dim);
+  }
+  #providerPickerMenu button.active{color:#fff; background:rgba(255,255,255,0.06);}
+
+  #headerLogo{
+    position:absolute; left:50%; top:0; transform:translateX(-50%);
+    width:76px; height:76px; object-fit:contain; pointer-events:none;
+  }
+
+  #headerCallBtn{flex:none; width:34px; height:34px;}
+  #headerCallBtn svg{width:34px; height:34px; display:block;}
 
   .hint{font-size:12px; color:var(--dim); text-align:center; margin-top:10px; line-height:1.4;}
 
@@ -168,9 +193,7 @@
   #authScreen.hidden{display:none;}
   #authBox{width:100%; max-width:360px;}
   #authLogo{
-    width:64px; height:64px; border-radius:20px; margin:0 auto 20px;
-    background:linear-gradient(135deg, #0f9d68, #3a2a20);
-    display:flex; align-items:center; justify-content:center;
+    display:block; width:72px; height:72px; margin:0 auto 20px; object-fit:contain;
   }
   #authTitle{font-size:26px; font-weight:800; letter-spacing:-0.02em; text-align:center; margin-bottom:6px;}
   #authSubtitle{font-size:13.5px; color:var(--dim); text-align:center; margin-bottom:32px;}
@@ -236,9 +259,7 @@
 
 <div id="authScreen">
   <div id="authBox">
-    <div id="authLogo">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 9c-2.5 0-4.9.5-7 1.4a1.5 1.5 0 0 0-.9 1.7l.6 2.5c.15.6.7 1 1.3 1 .2 0 .4 0 .6-.1l2-.8c.4-.15.7-.5.8-.9l.3-1.3c1.3-.3 2.7-.5 4.3-.5s3 .2 4.3.5l.3 1.3c.1.4.4.75.8.9l2 .8c.2.1.4.1.6.1.6 0 1.15-.4 1.3-1l.6-2.5a1.5 1.5 0 0 0-.9-1.7C16.9 9.5 14.5 9 12 9z"/></svg>
-    </div>
+    <img id="authLogo" src="logo.png" alt="Live Call" />
     <div id="authTitle">Live Call</div>
     <div id="authSubtitle">Sign in to brief and start your call</div>
 
@@ -262,7 +283,7 @@
     <p class="hint" id="authHint"></p>
   </div>
   <div id="pendingBox" style="display:none; text-align:center; max-width:320px;">
-    <div id="authLogo"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
+    <img id="authLogo" src="logo.png" alt="Live Call" style="width:52px; height:52px;" />
     <div id="authTitle">Pending approval</div>
     <div id="authSubtitle">Your account is created — an admin needs to approve it before you can start calls. Check back soon.</div>
     <button id="pendingSignOut" style="width:100%; padding:13px; border-radius:12px; background:var(--panel); color:#fff; font-weight:600; font-size:14px; border:1px solid var(--line);">Sign out</button>
@@ -273,17 +294,26 @@
   <div id="screens">
 
     <div class="screen active" id="screenHome">
-      <h1 class="pageTitle">Brief the call</h1>
-
-      <div class="field">
-        <label>Provider</label>
-        <div class="providerToggle">
-          <button id="pickHeygen" class="active">HeyGen</button>
-          <button id="pickTavus">Tavus</button>
+      <div id="homeHeader">
+        <div id="providerPicker">
+          <button id="providerPickerBtn" aria-haspopup="listbox" aria-expanded="false">
+            <span id="providerPickerLabel">HeyGen</span>
+            <svg class="chev" viewBox="0 0 24 24" width="11" height="11"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div id="providerPickerMenu">
+            <button data-provider="heygen" class="active">HeyGen</button>
+            <button data-provider="tavus">Tavus</button>
+          </div>
         </div>
+
+        <img id="headerLogo" src="logo.png" alt="Live Call" />
+
+        <button id="headerCallBtn" aria-label="Start call">
+          <svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"><rect fill="#ffffff" height="60" rx="10" width="60"></rect><rect fill="#d19d01" height="32" rx="4" width="34" x="8" y="14"></rect><path d="M38,47.5H12A5.506,5.506,0,0,1,6.5,42V18A5.506,5.506,0,0,1,12,12.5H38A5.506,5.506,0,0,1,43.5,18V42A5.506,5.506,0,0,1,38,47.5Zm-26-32A2.5,2.5,0,0,0,9.5,18V42A2.5,2.5,0,0,0,12,44.5H38A2.5,2.5,0,0,0,40.5,42V18A2.5,2.5,0,0,0,38,15.5Z" fill="#000000"></path><polygon fill="#d19d01" points="52 16 42 22 42 38 52 44 52 16"></polygon><path d="M52,45.5a1.488,1.488,0,0,1-.771-.214l-10-6A1.5,1.5,0,0,1,40.5,38V22a1.5,1.5,0,0,1,.729-1.286l10-6A1.5,1.5,0,0,1,53.5,16V44A1.5,1.5,0,0,1,52,45.5Zm-8.5-8.349,7,4.2v-22.7l-7,4.2Z" fill="#000000"></path><path d="M8,43.5A1.5,1.5,0,0,1,6.5,42V18A5.506,5.506,0,0,1,12,12.5H38a1.5,1.5,0,0,1,0,3H12A2.5,2.5,0,0,0,9.5,18V42A1.5,1.5,0,0,1,8,43.5Z" fill="#669d34"></path></svg>
+        </button>
       </div>
 
-      <div class="field" id="heygenFields">
+      <div class="field" id="heygenFields" style="margin-top:34px;">
         <label>HeyGen avatar</label>
         <select id="heygenAvatarId"><option value="">Loading your avatars…</option></select>
       </div>
@@ -430,13 +460,24 @@
 
   function setProviderUI(p){
     state.provider = p; persist();
-    $('pickHeygen').classList.toggle('active', p === 'heygen');
-    $('pickTavus').classList.toggle('active', p === 'tavus');
+    $('providerPickerLabel').textContent = p === 'heygen' ? 'HeyGen' : 'Tavus';
+    document.querySelectorAll('#providerPickerMenu button').forEach(b => b.classList.toggle('active', b.dataset.provider === p));
     $('heygenFields').style.display = p === 'heygen' ? 'block' : 'none';
     $('tavusFields').style.display = p === 'tavus' ? 'block' : 'none';
   }
-  $('pickHeygen').addEventListener('click', () => setProviderUI('heygen'));
-  $('pickTavus').addEventListener('click', () => setProviderUI('tavus'));
+  $('providerPickerBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    $('providerPicker').classList.toggle('open');
+  });
+  document.querySelectorAll('#providerPickerMenu button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setProviderUI(btn.dataset.provider);
+      $('providerPicker').classList.remove('open');
+    });
+  });
+  document.addEventListener('click', (e) => {
+    if (!$('providerPicker').contains(e.target)) $('providerPicker').classList.remove('open');
+  });
   $('briefInput').addEventListener('change', () => { state.systemPrompt = $('briefInput').value; persist(); });
 
   async function loadHeygenAvatars(){
@@ -656,7 +697,7 @@
       : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/></svg>';
   });
 
-  $('startBtn').addEventListener('click', startCall);
+  $('headerCallBtn').addEventListener('click', startCall);
   $('endBtn').addEventListener('click', endCall);
 
   // ---------- auth ----------
