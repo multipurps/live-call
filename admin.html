@@ -45,7 +45,7 @@
   .toggleBtn{padding:9px 14px; border-radius:9px; font-size:13px; font-weight:650; flex:none;}
   .toggleBtn.approved{background:var(--accent); color:#fff;}
   .toggleBtn.pending{background:#3a2620; color:var(--dim); border:1px solid var(--line);}
-  #signInBox, #pinBox{max-width:320px; margin:70px auto 0; text-align:center;}
+  #signInBox, #pinBox{max-width:320px; margin:70px auto 0; text-align:center; display:block;}
   #pinBox{display:none;}
 </style>
 </head>
@@ -63,7 +63,7 @@
     if (box && getComputedStyle(box).display === 'none' && document.getElementById('userList').style.display !== 'block') {
       var bar = document.getElementById('debugBar');
       bar.style.display = 'block';
-      bar.textContent = 'TIMEOUT: script never finished (likely the Supabase import hung or failed silently)';
+      bar.innerHTML = 'Could not load (weak connection?). <button onclick="location.reload()" style="text-decoration:underline; background:none; border:0; color:#fff; font-weight:700;">Tap to retry</button>';
     }
   }, 4000);
 </script>
