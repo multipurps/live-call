@@ -125,6 +125,17 @@
   #headerCallBtn{flex:none; width:34px; height:34px;}
   #headerCallBtn svg{width:34px; height:34px; display:block;}
 
+  #chatThread{display:flex; flex-direction:column; gap:10px; margin-bottom:16px;}
+  .msgRow{display:flex;}
+  .msgRow.user{justify-content:flex-end;}
+  .msgRow.ai{justify-content:flex-start;}
+  .bubble{
+    max-width:78%; padding:11px 14px; border-radius:16px; font-size:14.5px; line-height:1.4;
+  }
+  .msgRow.user .bubble{background:var(--accent); color:#fff; border-bottom-right-radius:5px;}
+  .msgRow.ai .bubble{background:var(--panel); color:#fff; border:1px solid var(--line); border-bottom-left-radius:5px;}
+  .msgRow.thinking .bubble{color:var(--dim); font-style:italic;}
+
   .hint{font-size:12px; color:var(--dim); text-align:center; margin-top:10px; line-height:1.4;}
 
   .callRow{
@@ -316,6 +327,8 @@
       </div>
       <div style="height:1px; background:var(--line); margin:16px 0 26px;"></div>
 
+      <div id="chatThread"></div>
+
       <p class="hint" id="homeHint" style="margin-bottom:8px;"></p>
     </div>
 
@@ -436,6 +449,8 @@
     tavusReplicaName: '',
   };
   let currentUser = null;
+  let currentChatId = null;
+  let chatMessages = []; // [{role: 'user'|'assistant', content: '...'}]
 
   async function persist(){
     if (!currentUser) return;
@@ -463,8 +478,6 @@
     } else {
       await persist(); // first login — create the row
     }
-    $('briefInput').value = state.systemPrompt;
-    autoGrow();
     setProviderUI(state.provider);
   }
 
@@ -488,7 +501,6 @@
   document.addEventListener('click', (e) => {
     if (!$('providerPicker').contains(e.target)) $('providerPicker').classList.remove('open');
   });
-  $('briefInput').addEventListener('change', () => { state.systemPrompt = $('briefInput').value; persist(); });
   function autoGrow(){
     const el = $('briefInput');
     el.style.height = 'auto';
@@ -496,9 +508,71 @@
   }
   $('briefInput').addEventListener('input', autoGrow);
   $('briefInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('briefInput').blur(); startCall(); }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
   });
-  $('sendBtn').addEventListener('click', startCall);
+  $('sendBtn').addEventListener('click', sendChatMessage);
+
+  function renderChatThread(){
+    const el = $('chatThread');
+    el.innerHTML = chatMessages.map(m => `
+      <div class="msgRow ${m.role === 'user' ? 'user' : 'ai'}"><div class="bubble">${m.content.replace(/</g,'&lt;')}</div></div>
+    `).join('');
+    el.scrollIntoView({ block: 'end' });
+  }
+
+  async function saveChat(title){
+    if (!currentUser) return;
+    if (currentChatId) {
+      await supabase.from('video_call_chats').update({
+        messages: chatMessages, provider: state.provider,
+        title: title || undefined, updated_at: new Date().toISOString(),
+      }).eq('id', currentChatId);
+    } else {
+      const { data } = await supabase.from('video_call_chats').insert({
+        user_id: currentUser.id, messages: chatMessages, provider: state.provider,
+        title: title || 'New chat',
+      }).select('id').single();
+      if (data) currentChatId = data.id;
+    }
+  }
+
+  async function sendChatMessage(){
+    const text = $('briefInput').value.trim();
+    if (!text) return;
+    $('briefInput').value = ''; autoGrow();
+    chatMessages.push({ role: 'user', content: text });
+    renderChatThread();
+
+    chatMessages.push({ role: 'assistant', content: '…' });
+    const thinkingIdx = chatMessages.length - 1;
+    renderChatThread();
+
+    try {
+      const r = await fetch('/api/chat-respond', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: chatMessages.slice(0, -1).map(m => ({ role: m.role, content: m.content })) }),
+      });
+      const data = await r.json();
+      chatMessages[thinkingIdx] = { role: 'assistant', content: r.ok ? data.reply : ('Error: ' + JSON.stringify(data.error)) };
+      renderChatThread();
+
+      // Fold the whole conversation so far into the persona brief the call actually uses.
+      state.systemPrompt = chatMessages.filter(m => m.role === 'user').map(m => m.content).join(' ');
+      persist();
+      if (r.ok && data.title) saveChat(data.title);
+      else saveChat();
+    } catch (e) {
+      chatMessages[thinkingIdx] = { role: 'assistant', content: 'Connection error — try again.' };
+      renderChatThread();
+    }
+  }
+
+  function startNewChat(){
+    currentChatId = null;
+    chatMessages = [];
+    renderChatThread();
+  }
 
   async function loadHeygenAvatars(){
     const sel = $('heygenAvatarId');
@@ -550,21 +624,41 @@
     const list = $('recentList');
     if (!currentUser) return;
     const { data, error } = await supabase
-      .from('video_call_history')
+      .from('video_call_chats')
       .select('*')
       .eq('user_id', currentUser.id)
-      .order('created_at', { ascending: false })
+      .order('updated_at', { ascending: false })
       .limit(50);
-    if (error || !data || !data.length) { list.innerHTML = '<div class="emptyState">No calls yet. Brief the AI on Home and start one.</div>'; return; }
-    list.innerHTML = data.map(e => `
-      <div class="callRow">
+    if (error || !data || !data.length) { list.innerHTML = '<div class="emptyState">No chats yet. Brief the AI on Home to start one.</div>'; return; }
+    list.innerHTML = data.map(c => {
+      const msgs = Array.isArray(c.messages) ? c.messages : [];
+      const lastMsg = msgs[msgs.length - 1]?.content || '';
+      return `
+      <div class="callRow" data-chat-id="${c.id}" style="cursor:pointer;">
         <div>
-          <div class="name">${e.provider === 'heygen' ? 'HeyGen' : 'Tavus'} call</div>
-          <div class="summary">${e.summary}</div>
+          <div class="name">${(c.title || 'New chat').replace(/</g,'&lt;')}</div>
+          <div class="summary">${lastMsg.replace(/</g,'&lt;').slice(0, 80)}</div>
         </div>
-        <div class="time">${new Date(e.created_at).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}</div>
+        <div class="time">${new Date(c.updated_at).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}</div>
       </div>
-    `).join('');
+    `;
+    }).join('');
+    list.querySelectorAll('[data-chat-id]').forEach(row => {
+      row.addEventListener('click', () => resumeChat(row.dataset.chatId, data));
+    });
+  }
+
+  function resumeChat(chatId, chats){
+    const chat = chats.find(c => c.id === chatId);
+    if (!chat) return;
+    currentChatId = chat.id;
+    chatMessages = Array.isArray(chat.messages) ? chat.messages : [];
+    state.provider = chat.provider || state.provider;
+    state.systemPrompt = chatMessages.filter(m => m.role === 'user').map(m => m.content).join(' ');
+    setProviderUI(state.provider);
+    persist();
+    showTab('home');
+    renderChatThread();
   }
 
   const callScreen = $('callScreen'), callIdle = $('callIdle'), callStatus = $('callStatus'), callBottom = $('callBottom');
