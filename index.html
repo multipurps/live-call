@@ -321,7 +321,7 @@
 
   async function persist(){
     if (!currentUser) return;
-    await supabase.from('user_settings').upsert({
+    await supabase.from('video_call_settings').upsert({
       user_id: currentUser.id,
       provider: state.provider,
       system_prompt: state.systemPrompt,
@@ -334,7 +334,7 @@
   }
 
   async function loadSettings(){
-    const { data } = await supabase.from('user_settings').select('*').eq('user_id', currentUser.id).maybeSingle();
+    const { data } = await supabase.from('video_call_settings').select('*').eq('user_id', currentUser.id).maybeSingle();
     if (data) {
       state.provider = data.provider || 'heygen';
       state.systemPrompt = data.system_prompt || '';
@@ -403,7 +403,7 @@
 
   async function addHistory(entry){
     if (!currentUser) return;
-    await supabase.from('call_history').insert({
+    await supabase.from('video_call_history').insert({
       user_id: currentUser.id,
       provider: entry.provider,
       summary: entry.summary,
@@ -413,7 +413,7 @@
     const list = $('recentList');
     if (!currentUser) return;
     const { data, error } = await supabase
-      .from('call_history')
+      .from('video_call_history')
       .select('*')
       .eq('user_id', currentUser.id)
       .order('created_at', { ascending: false })
