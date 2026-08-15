@@ -58,6 +58,9 @@
   #homeInputBar{
     display:none;
     position:fixed; left:18px; right:18px; bottom:calc(var(--tabbar-h) + 14px); z-index:9;
+    background:#2b1c14; border:1px solid var(--line); border-radius:20px;
+    box-shadow:0 8px 24px rgba(0,0,0,0.45);
+    padding:13px 16px;
   }
   #homeInputBar.visible{display:block;}
   #briefInput{
@@ -81,23 +84,23 @@
     padding:13px; border-radius:14px; display:flex; align-items:center; justify-content:center;
   }
 
-  /* ---------- home header: provider dropdown left, logo overlapping center, call button right ---------- */
+  /* ---------- home header: logo overlapping center, call button right (provider picker lives in Profile now) ---------- */
   #homeHeader{
     position:relative; overflow:visible;
-    display:flex; align-items:center; justify-content:space-between;
+    display:flex; align-items:center; justify-content:flex-end;
     height:44px; margin:6px 0 0;
   }
   #providerPicker{position:relative;}
   #providerPickerBtn{
-    display:flex; align-items:center; gap:5px;
-    background:var(--panel); border:1px solid var(--line); border-radius:10px;
-    padding:7px 10px; font-size:13px; font-weight:650; color:#fff;
+    display:flex; align-items:center; justify-content:space-between; gap:5px; width:100%;
+    background:var(--coffee); border:1px solid var(--line); border-radius:10px;
+    padding:10px 12px; font-size:14px; font-weight:650; color:#fff;
   }
   #providerPickerBtn .chev{color:var(--dim); transition:transform 0.15s;}
   #providerPicker.open #providerPickerBtn .chev{transform:rotate(180deg);}
   #providerPickerMenu{
-    display:none; position:absolute; top:calc(100% + 6px); left:0; z-index:30;
-    min-width:120px; background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    display:none; position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:30;
+    background:var(--coffee); border:1px solid var(--line); border-radius:12px;
     overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,0.4);
   }
   #providerPicker.open #providerPickerMenu{display:block;}
@@ -191,6 +194,8 @@
     display:flex; align-items:center; justify-content:center; padding:28px;
   }
   #authScreen.hidden{display:none;}
+  #authBoot{display:flex; align-items:center; justify-content:center;}
+  #authBoot img{width:72px; height:72px; object-fit:contain;}
   #authBox{width:100%; max-width:360px;}
   #authLogo{
     display:block; width:72px; height:72px; margin:0 auto 20px; object-fit:contain;
@@ -258,7 +263,8 @@
 </script>
 
 <div id="authScreen">
-  <div id="authBox">
+  <div id="authBoot"><img src="logo.png" alt="" /></div>
+  <div id="authBox" style="display:none;">
     <img id="authLogo" src="logo.png" alt="Live Call" />
     <div id="authTitle">Live Call</div>
     <div id="authSubtitle">Sign in to brief and start your call</div>
@@ -295,25 +301,15 @@
 
     <div class="screen active" id="screenHome">
       <div id="homeHeader">
-        <div id="providerPicker">
-          <button id="providerPickerBtn" aria-haspopup="listbox" aria-expanded="false">
-            <span id="providerPickerLabel">HeyGen</span>
-            <svg class="chev" viewBox="0 0 24 24" width="11" height="11"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-          <div id="providerPickerMenu">
-            <button data-provider="heygen" class="active">HeyGen</button>
-            <button data-provider="tavus">Tavus</button>
-          </div>
-        </div>
-
         <img id="headerLogo" src="logo.png" alt="Live Call" />
 
         <button id="headerCallBtn" aria-label="Start call">
-          <svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"><rect fill="#ffffff" height="60" rx="10" width="60"></rect><rect fill="#d19d01" height="32" rx="4" width="34" x="8" y="14"></rect><path d="M38,47.5H12A5.506,5.506,0,0,1,6.5,42V18A5.506,5.506,0,0,1,12,12.5H38A5.506,5.506,0,0,1,43.5,18V42A5.506,5.506,0,0,1,38,47.5Zm-26-32A2.5,2.5,0,0,0,9.5,18V42A2.5,2.5,0,0,0,12,44.5H38A2.5,2.5,0,0,0,40.5,42V18A2.5,2.5,0,0,0,38,15.5Z" fill="#000000"></path><polygon fill="#d19d01" points="52 16 42 22 42 38 52 44 52 16"></polygon><path d="M52,45.5a1.488,1.488,0,0,1-.771-.214l-10-6A1.5,1.5,0,0,1,40.5,38V22a1.5,1.5,0,0,1,.729-1.286l10-6A1.5,1.5,0,0,1,53.5,16V44A1.5,1.5,0,0,1,52,45.5Zm-8.5-8.349,7,4.2v-22.7l-7,4.2Z" fill="#000000"></path><path d="M8,43.5A1.5,1.5,0,0,1,6.5,42V18A5.506,5.506,0,0,1,12,12.5H38a1.5,1.5,0,0,1,0,3H12A2.5,2.5,0,0,0,9.5,18V42A1.5,1.5,0,0,1,8,43.5Z" fill="#669d34"></path></svg>
+          <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path fill="#0f9d68" d="M8,12h22c2.2,0,4,1.8,4,4v16c0,2.2-1.8,4-4,4H8c-2.2,0-4-1.8-4-4V16C4,13.8,5.8,12,8,12z"></path><polygon fill="#0b7c53" points="44,35 34,29 34,19 44,13"></polygon></svg>
         </button>
       </div>
+      <div style="height:1px; background:var(--line); margin:16px 0 26px;"></div>
 
-      <div class="field" id="heygenFields" style="margin-top:34px;">
+      <div class="field" id="heygenFields">
         <label>HeyGen avatar</label>
         <select id="heygenAvatarId"><option value="">Loading your avatars…</option></select>
       </div>
@@ -332,12 +328,23 @@
 
     <div class="screen" id="screenProfile">
       <h1 class="pageTitle">Profile</h1>
-      <div class="avatarCircle" id="profileInitial">L</div>
+      <div class="avatarCircle" id="profileInitial">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M6.75 6.5C6.75 3.6005 9.1005 1.25 12 1.25C14.8995 1.25 17.25 3.6005 17.25 6.5C17.25 9.3995 14.8995 11.75 12 11.75C9.1005 11.75 6.75 9.3995 6.75 6.5Z" fill="currentColor"/><path fill-rule="evenodd" clip-rule="evenodd" d="M4.25 18.5714C4.25 15.6325 6.63249 13.25 9.57143 13.25H14.4286C17.3675 13.25 19.75 15.6325 19.75 18.5714C19.75 20.8792 17.8792 22.75 15.5714 22.75H8.42857C6.12081 22.75 4.25 20.8792 4.25 18.5714Z" fill="currentColor"/></svg>
+      </div>
       <div class="profileName" id="profileEmail">Live Call</div>
 
       <div class="settingsRow">
         <div class="label">Active provider</div>
-        <div id="profileProvider">HeyGen</div>
+        <div id="providerPicker">
+          <button id="providerPickerBtn" aria-haspopup="listbox" aria-expanded="false">
+            <span id="providerPickerLabel">HeyGen</span>
+            <svg class="chev" viewBox="0 0 24 24" width="12" height="12"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div id="providerPickerMenu">
+            <button data-provider="heygen" class="active">HeyGen</button>
+            <button data-provider="tavus">Tavus</button>
+          </div>
+        </div>
       </div>
       <div class="settingsRow">
         <div class="label">HeyGen avatar</div>
@@ -354,10 +361,7 @@
   </div>
 
   <div id="homeInputBar" class="visible">
-    <input id="briefInput" type="text" placeholder="Tell it what to do…" />
-    <button id="startBtn" aria-label="Start call">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 9c-2.5 0-4.9.5-7 1.4a1.5 1.5 0 0 0-.9 1.7l.6 2.5c.15.6.7 1 1.3 1 .2 0 .4 0 .6-.1l2-.8c.4-.15.7-.5.8-.9l.3-1.3c1.3-.3 2.7-.5 4.3-.5s3 .2 4.3.5l.3 1.3c.1.4.4.75.8.9l2 .8c.2.1.4.1.6.1.6 0 1.15-.4 1.3-1l.6-2.5a1.5 1.5 0 0 0-.9-1.7C16.9 9.5 14.5 9 12 9z"/></svg>
-    </button>
+    <input id="briefInput" type="text" placeholder="Tell it what to do…" enterkeyhint="go" />
   </div>
 
   <div id="tabBar">
@@ -479,6 +483,9 @@
     if (!$('providerPicker').contains(e.target)) $('providerPicker').classList.remove('open');
   });
   $('briefInput').addEventListener('change', () => { state.systemPrompt = $('briefInput').value; persist(); });
+  $('briefInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); $('briefInput').blur(); startCall(); }
+  });
 
   async function loadHeygenAvatars(){
     const sel = $('heygenAvatarId');
@@ -516,7 +523,6 @@
 
   function renderProfile(){
     $('profileEmail').textContent = currentUser?.email || 'Live Call';
-    $('profileProvider').textContent = state.provider === 'heygen' ? 'HeyGen' : 'Tavus';
     $('profileHeygenAvatar').textContent = state.heygenAvatarName || 'Not set';
     $('profileTavusReplica').textContent = state.tavusReplicaName || 'Account default';
   }
@@ -744,10 +750,12 @@
     const approved = await checkApproval(user.id);
     if (!approved) {
       authScreen.classList.remove('hidden');
+      $('authBoot').style.display = 'none';
       $('authBox').style.display = 'none';
       $('pendingBox').style.display = 'block';
       return;
     }
+    $('authBoot').style.display = 'none';
     $('authBox').style.display = '';
     $('pendingBox').style.display = 'none';
     authScreen.classList.add('hidden');
@@ -761,6 +769,7 @@
       enterApp(session.user);
     } else {
       currentUser = null;
+      $('authBoot').style.display = 'none';
       $('authBox').style.display = '';
       $('pendingBox').style.display = 'none';
       authScreen.classList.remove('hidden');
