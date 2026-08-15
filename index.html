@@ -155,13 +155,41 @@
     background:rgba(43,28,20,0.82); backdrop-filter:blur(20px); border:1px solid var(--line);
     display:flex; align-items:center; justify-content:center;
   }
+  .roundBtn.muted{background:var(--accent); border-color:var(--accent);}
   .endBtn{
     width:64px; height:64px; border-radius:50%;
     background:#ff3b30; display:flex; align-items:center; justify-content:center;
   }
+  #authScreen{
+    position:fixed; inset:0; z-index:100; background:var(--coffee);
+    display:flex; align-items:center; justify-content:center; padding:24px;
+  }
+  #authScreen.hidden{display:none;}
+  #authBox{width:100%; max-width:340px;}
+  #authBox .field{margin-bottom:14px;}
+  #authToggleMode{
+    width:100%; text-align:center; padding:12px; font-size:13px; color:var(--dim); margin-top:6px;
+  }
 </style>
 </head>
 <body>
+
+<div id="authScreen">
+  <div id="authBox">
+    <h1 class="pageTitle" style="text-align:center;">Live Call</h1>
+    <div class="field">
+      <label>Email</label>
+      <input id="authEmail" type="email" autocomplete="email" />
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input id="authPassword" type="password" autocomplete="current-password" />
+    </div>
+    <button class="startBtn" id="authSubmit" style="width:100%; height:auto; border-radius:14px; padding:14px;">Sign in</button>
+    <button id="authToggleMode">Need an account? Sign up</button>
+    <p class="hint" id="authHint"></p>
+  </div>
+</div>
 
 <div id="app">
   <div id="screens">
@@ -197,7 +225,7 @@
     <div class="screen" id="screenProfile">
       <h1 class="pageTitle">Profile</h1>
       <div class="avatarCircle" id="profileInitial">L</div>
-      <div class="profileName">Live Call</div>
+      <div class="profileName" id="profileEmail">Live Call</div>
 
       <div class="settingsRow">
         <div class="label">Active provider</div>
@@ -211,6 +239,8 @@
         <div class="label">Tavus replica</div>
         <div id="profileTavusReplica">Account default</div>
       </div>
+
+      <button class="startBtn" id="signOutBtn" style="width:100%; height:auto; border-radius:14px; padding:14px; background:#3a2a20; margin-top:16px;">Sign out</button>
     </div>
 
   </div>
@@ -245,10 +275,6 @@
     <div id="callStatus">Connecting…</div>
   </div>
 
-  <div id="callTop">
-    <div class="pill"><span class="dot" id="liveDot"></span><span id="providerLabel">HeyGen</span></div>
-  </div>
-
   <div id="callBottom" class="hidden">
     <button class="roundBtn" id="muteBtn" aria-label="Mute">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/></svg>
@@ -260,6 +286,16 @@
 </div>
 
 <script type="module">
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+  const SUPABASE_URL = 'https://ewgtpxomgkpbmfyddypw.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_NkeueZ7vabkD9nUIPDaGwQ_GCd5Ci40';
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  // Note: this is Supabase's publishable/anon key, which is designed to be safely embedded in
+  // client-side code — access is controlled by the Row Level Security policies on each table
+  // (see supabase_schema.sql), not by hiding this key. The session token itself is the only
+  // thing Supabase's own SDK keeps in localStorage — everything else below reads/writes Supabase.
+
   const $ = (id) => document.getElementById(id);
 
   const screens = { home: $('screenHome'), recent: $('screenRecent'), profile: $('screenProfile') };
@@ -274,15 +310,44 @@
   tabBtns.forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
   const state = {
-    provider: localStorage.getItem('provider') || 'heygen',
-    systemPrompt: localStorage.getItem('systemPrompt') || '',
-    heygenAvatarId: localStorage.getItem('heygenAvatarId') || '',
-    heygenAvatarName: localStorage.getItem('heygenAvatarName') || '',
-    tavusReplicaId: localStorage.getItem('tavusReplicaId') || '',
-    tavusReplicaName: localStorage.getItem('tavusReplicaName') || '',
+    provider: 'heygen',
+    systemPrompt: '',
+    heygenAvatarId: '',
+    heygenAvatarName: '',
+    tavusReplicaId: '',
+    tavusReplicaName: '',
   };
-  $('briefInput').value = state.systemPrompt;
-  function persist(){ Object.entries(state).forEach(([k, v]) => localStorage.setItem(k, v)); }
+  let currentUser = null;
+
+  async function persist(){
+    if (!currentUser) return;
+    await supabase.from('user_settings').upsert({
+      user_id: currentUser.id,
+      provider: state.provider,
+      system_prompt: state.systemPrompt,
+      heygen_avatar_id: state.heygenAvatarId,
+      heygen_avatar_name: state.heygenAvatarName,
+      tavus_replica_id: state.tavusReplicaId,
+      tavus_replica_name: state.tavusReplicaName,
+      updated_at: new Date().toISOString(),
+    });
+  }
+
+  async function loadSettings(){
+    const { data } = await supabase.from('user_settings').select('*').eq('user_id', currentUser.id).maybeSingle();
+    if (data) {
+      state.provider = data.provider || 'heygen';
+      state.systemPrompt = data.system_prompt || '';
+      state.heygenAvatarId = data.heygen_avatar_id || '';
+      state.heygenAvatarName = data.heygen_avatar_name || '';
+      state.tavusReplicaId = data.tavus_replica_id || '';
+      state.tavusReplicaName = data.tavus_replica_name || '';
+    } else {
+      await persist(); // first login — create the row
+    }
+    $('briefInput').value = state.systemPrompt;
+    setProviderUI(state.provider);
+  }
 
   function setProviderUI(p){
     state.provider = p; persist();
@@ -290,7 +355,6 @@
     $('pickTavus').classList.toggle('active', p === 'tavus');
     $('heygenFields').style.display = p === 'heygen' ? 'block' : 'none';
     $('tavusFields').style.display = p === 'tavus' ? 'block' : 'none';
-    $('providerLabel').textContent = p === 'heygen' ? 'HeyGen' : 'Tavus';
   }
   $('pickHeygen').addEventListener('click', () => setProviderUI('heygen'));
   $('pickTavus').addEventListener('click', () => setProviderUI('tavus'));
@@ -329,33 +393,39 @@
       });
     } catch (e) { sel.innerHTML = '<option value="">Could not load replicas</option>'; }
   }
-  setProviderUI(state.provider);
-  loadHeygenAvatars();
-  loadTavusReplicas();
 
   function renderProfile(){
+    $('profileEmail').textContent = currentUser?.email || 'Live Call';
     $('profileProvider').textContent = state.provider === 'heygen' ? 'HeyGen' : 'Tavus';
     $('profileHeygenAvatar').textContent = state.heygenAvatarName || 'Not set';
     $('profileTavusReplica').textContent = state.tavusReplicaName || 'Account default';
   }
 
-  function getHistory(){ try { return JSON.parse(localStorage.getItem('callHistory') || '[]'); } catch(e){ return []; } }
-  function addHistory(entry){
-    const h = getHistory();
-    h.unshift(entry);
-    localStorage.setItem('callHistory', JSON.stringify(h.slice(0, 50)));
+  async function addHistory(entry){
+    if (!currentUser) return;
+    await supabase.from('call_history').insert({
+      user_id: currentUser.id,
+      provider: entry.provider,
+      summary: entry.summary,
+    });
   }
-  function renderRecent(){
+  async function renderRecent(){
     const list = $('recentList');
-    const h = getHistory();
-    if (!h.length) { list.innerHTML = '<div class="emptyState">No calls yet. Brief the AI on Home and start one.</div>'; return; }
-    list.innerHTML = h.map(e => `
+    if (!currentUser) return;
+    const { data, error } = await supabase
+      .from('call_history')
+      .select('*')
+      .eq('user_id', currentUser.id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error || !data || !data.length) { list.innerHTML = '<div class="emptyState">No calls yet. Brief the AI on Home and start one.</div>'; return; }
+    list.innerHTML = data.map(e => `
       <div class="callRow">
         <div>
           <div class="name">${e.provider === 'heygen' ? 'HeyGen' : 'Tavus'} call</div>
           <div class="summary">${e.summary}</div>
         </div>
-        <div class="time">${e.time}</div>
+        <div class="time">${new Date(e.created_at).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}</div>
       </div>
     `).join('');
   }
@@ -443,25 +513,26 @@
     const data = await resp.json();
     if (!resp.ok) { callStatus.textContent = 'Tavus error: ' + JSON.stringify(data.error); return; }
 
-    // Joining headlessly via the Daily SDK (no iframe) is what avoids Daily's prebuilt UI
-    // entirely — a plain iframe embed of conversation_url always renders their own call
-    // chrome, which no CSS in this app can reach since it's a different origin's document.
     const { default: Daily } = await import('https://esm.sh/@daily-co/daily-js@latest');
     dailyCall = Daily.createCallObject();
 
+    // Create the output stream ONCE, up front, and only ever addTrack to this same object.
+    // Reassigning video.srcObject each time a track arrives is what was breaking audio —
+    // Safari doesn't reliably pick up a re-assigned MediaStream mid-call, only tracks
+    // added to an already-attached stream.
+    const outStream = new MediaStream();
+    remoteVideo.srcObject = outStream;
+    remoteVideo.muted = false;
+    remoteVideo.volume = 1.0;
+
     dailyCall.on('track-started', (ev) => {
       if (ev.participant?.local) return; // don't render our own mic/camera back to ourselves
+      outStream.addTrack(ev.track);
+      remoteVideo.play().catch(() => {});
       if (ev.track.kind === 'video') {
-        remoteVideo.srcObject = new MediaStream([ev.track]);
-        remoteVideo.volume = 1.0;
         remoteVideo.style.display = 'block';
         callIdle.style.display = 'none';
         liveDot.classList.add('live');
-      }
-      if (ev.track.kind === 'audio') {
-        let stream = remoteVideo.srcObject instanceof MediaStream ? remoteVideo.srcObject : new MediaStream();
-        stream.addTrack(ev.track);
-        remoteVideo.srcObject = stream;
       }
     });
     dailyCall.on('left-meeting', () => endCall());
@@ -499,10 +570,58 @@
   $('muteBtn').addEventListener('click', () => {
     muted = !muted;
     if (micStream) micStream.getAudioTracks().forEach(t => t.enabled = !muted);
+    $('muteBtn').classList.toggle('muted', muted);
+    $('muteBtn').innerHTML = muted
+      ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M3 3l18 18"/><path d="M12 1a3 3 0 0 0-3 3v6.5M15 9V4a3 3 0 0 0-3-3"/><path d="M19 10v2a7 7 0 0 1-9.8 6.4M5 10v2a7 7 0 0 0 2 4.9"/><path d="M12 19v4"/></svg>'
+      : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/></svg>';
   });
 
   $('startBtn').addEventListener('click', startCall);
   $('endBtn').addEventListener('click', endCall);
+
+  // ---------- auth ----------
+  const authScreen = $('authScreen');
+  let authMode = 'signin';
+
+  $('authToggleMode').addEventListener('click', () => {
+    authMode = authMode === 'signin' ? 'signup' : 'signin';
+    $('authSubmit').textContent = authMode === 'signin' ? 'Sign in' : 'Sign up';
+    $('authToggleMode').textContent = authMode === 'signin' ? 'Need an account? Sign up' : 'Have an account? Sign in';
+    $('authHint').textContent = '';
+  });
+
+  $('authSubmit').addEventListener('click', async () => {
+    const email = $('authEmail').value.trim();
+    const password = $('authPassword').value;
+    if (!email || !password) { $('authHint').textContent = 'Enter an email and password.'; return; }
+    $('authHint').textContent = 'Working…';
+    const { error } = authMode === 'signin'
+      ? await supabase.auth.signInWithPassword({ email, password })
+      : await supabase.auth.signUp({ email, password });
+    if (error) { $('authHint').textContent = error.message; return; }
+    if (authMode === 'signup') { $('authHint').textContent = 'Check your email to confirm, then sign in.'; }
+  });
+
+  $('signOutBtn').addEventListener('click', async () => {
+    await supabase.auth.signOut();
+  });
+
+  async function enterApp(user){
+    currentUser = user;
+    authScreen.classList.add('hidden');
+    await loadSettings();
+    loadHeygenAvatars();
+    loadTavusReplicas();
+  }
+
+  supabase.auth.onAuthStateChange((_event, session) => {
+    if (session?.user) {
+      enterApp(session.user);
+    } else {
+      currentUser = null;
+      authScreen.classList.remove('hidden');
+    }
+  });
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
