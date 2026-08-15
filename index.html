@@ -211,6 +211,29 @@
 </head>
 <body>
 
+<div id="debugBar" style="display:none; position:fixed; top:0; left:0; right:0; background:#ff3b30; color:#fff; font-size:11px; padding:8px 12px; z-index:999; white-space:pre-wrap; word-break:break-all;"></div>
+<script>
+  window.onerror = function(msg, src, line, col, err){
+    const bar = document.getElementById('debugBar');
+    bar.style.display = 'block';
+    bar.textContent = 'JS ERROR: ' + msg + ' (line ' + line + ')';
+  };
+  window.addEventListener('unhandledrejection', function(e){
+    const bar = document.getElementById('debugBar');
+    bar.style.display = 'block';
+    bar.textContent = 'PROMISE ERROR: ' + (e.reason?.message || e.reason);
+  });
+  setTimeout(function(){
+    var auth = document.getElementById('authScreen');
+    var home = document.getElementById('screenHome');
+    if (auth && auth.classList.contains('hidden') && home && home.offsetHeight === 0) {
+      var bar = document.getElementById('debugBar');
+      bar.style.display = 'block';
+      bar.innerHTML = 'App did not render after sign-in. <button onclick="location.reload()" style="text-decoration:underline; background:none; border:0; color:#fff; font-weight:700;">Tap to retry</button>';
+    }
+  }, 4000);
+</script>
+
 <div id="authScreen">
   <div id="authBox">
     <div id="authLogo">
