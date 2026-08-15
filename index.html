@@ -56,18 +56,25 @@
 
   /* ---------- brief input: floats free above the tab nav, own pill, not attached to anything ---------- */
   #homeInputBar{
-    display:none;
     position:fixed; left:18px; right:18px; bottom:calc(var(--tabbar-h) + 14px); z-index:9;
     background:#2b1c14; border:1px solid var(--line); border-radius:20px;
     box-shadow:0 8px 24px rgba(0,0,0,0.45);
-    padding:13px 16px;
+    padding:11px 11px 11px 16px;
+    display:none; align-items:flex-end; gap:8px;
   }
-  #homeInputBar.visible{display:block;}
+  #homeInputBar.visible{display:flex;}
   #briefInput{
-    width:100%; background:none; border:none; outline:none; -webkit-appearance:none; appearance:none;
-    color:#fff; font-size:16px; font-family:inherit; padding:0;
+    flex:1; width:100%; background:none; border:none; outline:none; resize:none;
+    -webkit-appearance:none; appearance:none;
+    color:#fff; font-size:16px; font-family:inherit; padding:6px 0;
+    max-height:120px; overflow-y:auto; line-height:1.35;
   }
   #briefInput::placeholder{color:var(--dim);}
+  #sendBtn{
+    flex:none; width:34px; height:34px; border-radius:50%;
+    background:var(--accent); display:flex; align-items:center; justify-content:center;
+  }
+  #sendBtn svg{width:16px; height:16px;}
 
   h1.pageTitle{font-size:22px; font-weight:700; letter-spacing:-0.01em; margin:6px 0 18px;}
 
@@ -309,15 +316,6 @@
       </div>
       <div style="height:1px; background:var(--line); margin:16px 0 26px;"></div>
 
-      <div class="field" id="heygenFields">
-        <label>HeyGen avatar</label>
-        <select id="heygenAvatarId"><option value="">Loading your avatars…</option></select>
-      </div>
-      <div class="field" id="tavusFields" style="display:none;">
-        <label>Tavus replica</label>
-        <select id="tavusReplicaId"><option value="">Loading your replicas…</option></select>
-      </div>
-
       <p class="hint" id="homeHint" style="margin-bottom:8px;"></p>
     </div>
 
@@ -346,13 +344,13 @@
           </div>
         </div>
       </div>
-      <div class="settingsRow">
-        <div class="label">HeyGen avatar</div>
-        <div id="profileHeygenAvatar">Not set</div>
+      <div class="field" id="heygenFields">
+        <label>HeyGen avatar</label>
+        <select id="heygenAvatarId"><option value="">Loading your avatars…</option></select>
       </div>
-      <div class="settingsRow">
-        <div class="label">Tavus replica</div>
-        <div id="profileTavusReplica">Account default</div>
+      <div class="field" id="tavusFields" style="display:none;">
+        <label>Tavus replica</label>
+        <select id="tavusReplicaId"><option value="">Loading your replicas…</option></select>
       </div>
 
       <button class="startBtn" id="signOutBtn" style="width:100%; height:auto; border-radius:14px; padding:14px; background:#3a2a20; margin-top:16px;">Sign out</button>
@@ -361,7 +359,10 @@
   </div>
 
   <div id="homeInputBar" class="visible">
-    <input id="briefInput" type="text" placeholder="Tell it what to do…" enterkeyhint="go" />
+    <textarea id="briefInput" rows="1" placeholder="Tell it what to do…" enterkeyhint="go"></textarea>
+    <button id="sendBtn" aria-label="Send">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M3 11L21 3L13 21L11 13L3 11Z" fill="white"/></svg>
+    </button>
   </div>
 
   <div id="tabBar">
@@ -382,6 +383,10 @@
 
 <div id="callScreen">
   <video id="remoteVideo" autoplay playsinline style="display:none;"></video>
+
+  <div id="callTop">
+    <div class="pill"><span class="dot" id="liveDot"></span><span>Live</span></div>
+  </div>
 
   <div id="callIdle">
     <div id="callConfirm"></div>
@@ -459,6 +464,7 @@
       await persist(); // first login — create the row
     }
     $('briefInput').value = state.systemPrompt;
+    autoGrow();
     setProviderUI(state.provider);
   }
 
@@ -483,9 +489,16 @@
     if (!$('providerPicker').contains(e.target)) $('providerPicker').classList.remove('open');
   });
   $('briefInput').addEventListener('change', () => { state.systemPrompt = $('briefInput').value; persist(); });
+  function autoGrow(){
+    const el = $('briefInput');
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  }
+  $('briefInput').addEventListener('input', autoGrow);
   $('briefInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); $('briefInput').blur(); startCall(); }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('briefInput').blur(); startCall(); }
   });
+  $('sendBtn').addEventListener('click', startCall);
 
   async function loadHeygenAvatars(){
     const sel = $('heygenAvatarId');
@@ -523,8 +536,6 @@
 
   function renderProfile(){
     $('profileEmail').textContent = currentUser?.email || 'Live Call';
-    $('profileHeygenAvatar').textContent = state.heygenAvatarName || 'Not set';
-    $('profileTavusReplica').textContent = state.tavusReplicaName || 'Account default';
   }
 
   async function addHistory(entry){
@@ -620,6 +631,7 @@
       remoteVideo.style.display = 'block';
       callIdle.style.display = 'none';
       liveDot.classList.add('live');
+      callBottom.classList.remove('hidden');
     });
     heygenAvatar.on(StreamingEvents.STREAM_DISCONNECTED, () => endCall());
 
@@ -660,6 +672,7 @@
         remoteVideo.style.display = 'block';
         callIdle.style.display = 'none';
         liveDot.classList.add('live');
+        callBottom.classList.remove('hidden');
       }
     });
     dailyCall.on('left-meeting', () => endCall());
