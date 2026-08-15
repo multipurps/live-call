@@ -11,7 +11,14 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: { 'x-api-key': apiKey },
     });
-    const data = await r.json();
+    const raw = await r.text();
+    let data;
+    try { data = JSON.parse(raw); }
+    catch {
+      return res.status(502).json({
+        error: `HeyGen returned a non-JSON response (status ${r.status}). This usually means HEYGEN_API_KEY is missing, invalid, or lacks streaming access on Vercel. Raw response: ${raw.slice(0, 200)}`
+      });
+    }
     if (!r.ok) return res.status(r.status).json({ error: data });
     return res.status(200).json({ token: data.data.token });
   } catch (err) {
