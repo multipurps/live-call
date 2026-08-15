@@ -162,32 +162,73 @@
   }
   #authScreen{
     position:fixed; inset:0; z-index:100; background:var(--coffee);
-    display:flex; align-items:center; justify-content:center; padding:24px;
+    display:flex; align-items:center; justify-content:center; padding:28px;
   }
   #authScreen.hidden{display:none;}
-  #authBox{width:100%; max-width:340px;}
-  #authBox .field{margin-bottom:14px;}
-  #authToggleMode{
-    width:100%; text-align:center; padding:12px; font-size:13px; color:var(--dim); margin-top:6px;
+  #authBox{width:100%; max-width:360px;}
+  #authLogo{
+    width:64px; height:64px; border-radius:20px; margin:0 auto 20px;
+    background:linear-gradient(135deg, #0f9d68, #3a2a20);
+    display:flex; align-items:center; justify-content:center;
   }
+  #authTitle{font-size:26px; font-weight:800; letter-spacing:-0.02em; text-align:center; margin-bottom:6px;}
+  #authSubtitle{font-size:13.5px; color:var(--dim); text-align:center; margin-bottom:32px;}
+  #authBox .field{margin-bottom:16px;}
+  #authBox .field input{
+    width:100%; background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    color:#fff; font-size:15px; padding:13px 14px; font-family:inherit; -webkit-appearance:none; appearance:none;
+  }
+  #authBox .field input::placeholder{color:rgba(255,230,210,0.3);}
+  #authSubmit{width:100%; margin-top:6px;}
+  #authDivider{
+    display:flex; align-items:center; gap:12px; margin:20px 0; color:var(--dim); font-size:12px;
+  }
+  #authDivider::before, #authDivider::after{content:''; flex:1; height:1px; background:var(--line);}
+  #googleSignIn{
+    width:100%; background:#fff; color:#1e130d; font-weight:650; font-size:15px;
+    padding:13px; border-radius:14px; display:flex; align-items:center; justify-content:center; gap:10px;
+  }
+  #authToggleMode{
+    width:100%; text-align:center; padding:16px 0 0; font-size:13.5px; color:var(--dim);
+  }
+  #authToggleMode b{color:#0f9d68; font-weight:650;}
+
 </style>
 </head>
 <body>
 
 <div id="authScreen">
   <div id="authBox">
-    <h1 class="pageTitle" style="text-align:center;">Live Call</h1>
+    <div id="authLogo">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 9c-2.5 0-4.9.5-7 1.4a1.5 1.5 0 0 0-.9 1.7l.6 2.5c.15.6.7 1 1.3 1 .2 0 .4 0 .6-.1l2-.8c.4-.15.7-.5.8-.9l.3-1.3c1.3-.3 2.7-.5 4.3-.5s3 .2 4.3.5l.3 1.3c.1.4.4.75.8.9l2 .8c.2.1.4.1.6.1.6 0 1.15-.4 1.3-1l.6-2.5a1.5 1.5 0 0 0-.9-1.7C16.9 9.5 14.5 9 12 9z"/></svg>
+    </div>
+    <div id="authTitle">Live Call</div>
+    <div id="authSubtitle">Sign in to brief and start your call</div>
+
+    <button id="googleSignIn">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.4 0 5.7 1.5 7 2.7l5.1-5C33 3.9 29 2 24 2 14.8 2 7 7.6 3.9 15.6l6 4.6C11.4 14.1 17.2 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-2.8-.4-4.1H24v7.8h12.7c-.3 2.1-1.6 5.2-4.6 7.3l6 4.6c3.5-3.2 5.4-7.9 5.4-13.6z"/><path fill="#FBBC05" d="M9.9 20.2C9.3 21.9 9 23.9 9 26s.3 4.1.9 5.8l-6 4.6C1.7 33 1 29.6 1 26s.7-7 2.9-10.4z"/><path fill="#34A853" d="M24 46c5 0 9.2-1.7 12.3-4.5l-6-4.6c-1.7 1.1-3.8 1.9-6.3 1.9-6.8 0-12.6-4.6-14.7-10.8l-6 4.6C7 40.4 14.8 46 24 46z"/></svg>
+      Continue with Google
+    </button>
+
+    <div id="authDivider">or email</div>
+
     <div class="field">
       <label>Email</label>
-      <input id="authEmail" type="email" autocomplete="email" />
+      <input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com" />
     </div>
     <div class="field">
       <label>Password</label>
-      <input id="authPassword" type="password" autocomplete="current-password" />
+      <input id="authPassword" type="password" autocomplete="current-password" placeholder="••••••••" />
     </div>
-    <button class="startBtn" id="authSubmit" style="width:100%; height:auto; border-radius:14px; padding:14px;">Sign in</button>
-    <button id="authToggleMode">Need an account? Sign up</button>
+    <button class="startBtn" id="authSubmit">Sign in</button>
+    <div id="authToggleMode">Need an account? <b>Sign up</b></div>
     <p class="hint" id="authHint"></p>
+  </div>
+  <div id="pendingBox" style="display:none; text-align:center; max-width:320px;">
+    <div id="authLogo"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
+    <div id="authTitle">Pending approval</div>
+    <div id="authSubtitle">Your account is created — an admin needs to approve it before you can start calls. Check back soon.</div>
+    <button id="pendingSignOut" style="width:100%; padding:13px; border-radius:12px; background:var(--panel); color:#fff; font-weight:600; font-size:14px; border:1px solid var(--line);">Sign out</button>
   </div>
 </div>
 
@@ -365,7 +406,7 @@
     try {
       const r = await fetch('/api/heygen-avatars');
       const data = await r.json();
-      if (!r.ok) { sel.innerHTML = '<option value="">Could not load — check HEYGEN_API_KEY</option>'; return; }
+      if (!r.ok) { sel.innerHTML = `<option value="">Error: ${JSON.stringify(data.error).slice(0,120)}</option>`; return; }
       const avatars = data.avatars || [];
       if (!avatars.length) { sel.innerHTML = '<option value="">No avatars yet — create one at labs.heygen.com</option>'; return; }
       sel.innerHTML = avatars.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
@@ -382,7 +423,7 @@
     try {
       const r = await fetch('/api/tavus-replicas');
       const data = await r.json();
-      if (!r.ok) { sel.innerHTML = '<option value="">Could not load — check TAVUS_API_KEY</option>'; return; }
+      if (!r.ok) { sel.innerHTML = `<option value="">Error: ${JSON.stringify(data.error).slice(0,120)}</option>`; return; }
       const replicas = data.replicas || [];
       sel.innerHTML = '<option value="">Use account default</option>' + replicas.map(r => `<option value="${r.id}">${r.name}${r.status ? ' — ' + r.status : ''}</option>`).join('');
       if (state.tavusReplicaId) sel.value = state.tavusReplicaId;
@@ -586,7 +627,7 @@
   $('authToggleMode').addEventListener('click', () => {
     authMode = authMode === 'signin' ? 'signup' : 'signin';
     $('authSubmit').textContent = authMode === 'signin' ? 'Sign in' : 'Sign up';
-    $('authToggleMode').textContent = authMode === 'signin' ? 'Need an account? Sign up' : 'Have an account? Sign in';
+    $('authToggleMode').innerHTML = authMode === 'signin' ? 'Need an account? <b>Sign up</b>' : 'Have an account? <b>Sign in</b>';
     $('authHint').textContent = '';
   });
 
@@ -599,15 +640,36 @@
       ? await supabase.auth.signInWithPassword({ email, password })
       : await supabase.auth.signUp({ email, password });
     if (error) { $('authHint').textContent = error.message; return; }
-    if (authMode === 'signup') { $('authHint').textContent = 'Check your email to confirm, then sign in.'; }
+    if (authMode === 'signup') { $('authHint').textContent = 'Check your email to confirm, then wait for approval.'; }
+  });
+
+  $('googleSignIn').addEventListener('click', async () => {
+    await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
   });
 
   $('signOutBtn').addEventListener('click', async () => {
     await supabase.auth.signOut();
   });
+  $('pendingSignOut').addEventListener('click', async () => {
+    await supabase.auth.signOut();
+  });
+
+  async function checkApproval(userId){
+    const { data } = await supabase.from('user_approvals').select('approved').eq('user_id', userId).maybeSingle();
+    return !!data?.approved;
+  }
 
   async function enterApp(user){
     currentUser = user;
+    const approved = await checkApproval(user.id);
+    if (!approved) {
+      authScreen.classList.remove('hidden');
+      $('authBox').style.display = 'none';
+      $('pendingBox').style.display = 'block';
+      return;
+    }
+    $('authBox').style.display = '';
+    $('pendingBox').style.display = 'none';
     authScreen.classList.add('hidden');
     await loadSettings();
     loadHeygenAvatars();
@@ -619,6 +681,8 @@
       enterApp(session.user);
     } else {
       currentUser = null;
+      $('authBox').style.display = '';
+      $('pendingBox').style.display = 'none';
       authScreen.classList.remove('hidden');
     }
   });
