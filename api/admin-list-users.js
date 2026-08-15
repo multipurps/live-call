@@ -12,7 +12,10 @@ export default async function handler(req, res) {
 
   const { data: userData, error: userErr } = await supabase.auth.getUser(token);
   if (userErr || !userData?.user) return res.status(401).json({ error: 'Invalid session' });
-  if (userData.user.email !== adminEmail) return res.status(403).json({ error: 'Not authorized' });
+  const signedInEmail = (userData.user.email || '').trim().toLowerCase();
+  if (signedInEmail !== adminEmail.trim().toLowerCase()) {
+    return res.status(403).json({ error: `Not authorized — signed in as "${userData.user.email}", expected admin email to match server's ADMIN_EMAIL` });
+  }
 
   const { data, error } = await supabase
     .from('user_approvals')
