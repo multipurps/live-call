@@ -1,6 +1,8 @@
+// Lists the signed-in user's own HeyGen avatars, using their own API key (sent from the
+// client, sourced from their Supabase settings) - not a shared Vercel environment variable.
 export default async function handler(req, res) {
-  const apiKey = process.env.HEYGEN_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'HEYGEN_API_KEY not set on server' });
+  const apiKey = req.headers['x-heygen-key'];
+  if (!apiKey) return res.status(400).json({ error: 'No HeyGen API key set. Add yours in Profile settings.' });
 
   try {
     const r = await fetch('https://api.heygen.com/v1/streaming/avatar.list', {
@@ -10,10 +12,8 @@ export default async function handler(req, res) {
     let data;
     try { data = JSON.parse(raw); }
     catch {
-      // HeyGen (or a proxy/WAF in front of it) returned something that isn't JSON at all -
-      // almost always means the API key is invalid/expired/wrong-tier, not a code bug.
       return res.status(502).json({
-        error: `HeyGen returned a non-JSON response (status ${r.status}). This usually means HEYGEN_API_KEY is missing, invalid, or lacks streaming access on Vercel. Raw response: ${raw.slice(0, 200)}`
+        error: `HeyGen returned a non-JSON response (status ${r.status}). This usually means your HeyGen API key is invalid or lacks streaming access. Raw response: ${raw.slice(0, 200)}`
       });
     }
     if (!r.ok) return res.status(r.status).json({ error: data });

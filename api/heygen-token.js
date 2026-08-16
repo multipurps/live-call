@@ -1,10 +1,12 @@
 // Mints a short-lived HeyGen streaming session token.
-// HEYGEN_API_KEY must be set as a Vercel environment variable — never sent to the browser.
+// The HeyGen API key comes from the signed-in user's own settings (stored in Supabase,
+// sent by the client on each request) - NOT a shared Vercel environment variable. This
+// means every user burns their own HeyGen credits, never the app owner's.
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
-  const apiKey = process.env.HEYGEN_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'HEYGEN_API_KEY not set on server' });
+  const apiKey = req.headers['x-heygen-key'];
+  if (!apiKey) return res.status(400).json({ error: 'No HeyGen API key set. Add yours in Profile settings.' });
 
   try {
     const r = await fetch('https://api.heygen.com/v1/streaming.create_token', {
@@ -16,7 +18,7 @@ export default async function handler(req, res) {
     try { data = JSON.parse(raw); }
     catch {
       return res.status(502).json({
-        error: `HeyGen returned a non-JSON response (status ${r.status}). This usually means HEYGEN_API_KEY is missing, invalid, or lacks streaming access on Vercel. Raw response: ${raw.slice(0, 200)}`
+        error: `HeyGen returned a non-JSON response (status ${r.status}). This usually means your HeyGen API key is invalid or lacks streaming access. Raw response: ${raw.slice(0, 200)}`
       });
     }
     if (!r.ok) return res.status(r.status).json({ error: data });

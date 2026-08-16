@@ -1,10 +1,11 @@
 // Creates a Tavus persona (with the given system prompt) and a conversation, returns conversation_url.
-// TAVUS_API_KEY must be set as a Vercel environment variable — never sent to the browser.
+// The Tavus API key comes from the signed-in user's own settings (stored in Supabase, sent
+// by the client on each request) - NOT a shared Vercel environment variable.
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
-  const apiKey = process.env.TAVUS_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'TAVUS_API_KEY not set on server' });
+  const apiKey = req.headers['x-tavus-key'];
+  if (!apiKey) return res.status(400).json({ error: 'No Tavus API key set. Add yours in Profile settings.' });
 
   const { systemPrompt, replicaId, greeting } = req.body || {};
   if (!systemPrompt) return res.status(400).json({ error: 'systemPrompt is required' });

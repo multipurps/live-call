@@ -357,6 +357,15 @@
           </div>
         </div>
       </div>
+      <div class="field">
+        <label>HeyGen API key</label>
+        <input id="heygenApiKey" type="password" autocomplete="off" placeholder="Paste your HeyGen API key" />
+      </div>
+      <div class="field">
+        <label>Tavus API key</label>
+        <input id="tavusApiKey" type="password" autocomplete="off" placeholder="Paste your Tavus API key" />
+      </div>
+      <p class="hint" style="margin:-8px 0 18px;">Your keys are stored on your account only and used for your own calls — never shared.</p>
       <div class="field" id="heygenFields">
         <label>HeyGen avatar</label>
         <select id="heygenAvatarId"><option value="">Loading your avatars…</option></select>
@@ -447,6 +456,8 @@
     heygenAvatarName: '',
     tavusReplicaId: '',
     tavusReplicaName: '',
+    heygenApiKey: '',
+    tavusApiKey: '',
   };
   let currentUser = null;
   let currentChatId = null;
@@ -462,6 +473,8 @@
       heygen_avatar_name: state.heygenAvatarName,
       tavus_replica_id: state.tavusReplicaId,
       tavus_replica_name: state.tavusReplicaName,
+      heygen_api_key: state.heygenApiKey,
+      tavus_api_key: state.tavusApiKey,
       updated_at: new Date().toISOString(),
     });
   }
@@ -475,9 +488,13 @@
       state.heygenAvatarName = data.heygen_avatar_name || '';
       state.tavusReplicaId = data.tavus_replica_id || '';
       state.tavusReplicaName = data.tavus_replica_name || '';
+      state.heygenApiKey = data.heygen_api_key || '';
+      state.tavusApiKey = data.tavus_api_key || '';
     } else {
       await persist(); // first login — create the row
     }
+    $('heygenApiKey').value = state.heygenApiKey;
+    $('tavusApiKey').value = state.tavusApiKey;
     setProviderUI(state.provider);
   }
 
@@ -511,6 +528,16 @@
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
   });
   $('sendBtn').addEventListener('click', sendChatMessage);
+  $('heygenApiKey').addEventListener('change', () => {
+    state.heygenApiKey = $('heygenApiKey').value.trim();
+    persist();
+    loadHeygenAvatars();
+  });
+  $('tavusApiKey').addEventListener('change', () => {
+    state.tavusApiKey = $('tavusApiKey').value.trim();
+    persist();
+    loadTavusReplicas();
+  });
 
   function renderChatThread(){
     const el = $('chatThread');
@@ -577,7 +604,7 @@
   async function loadHeygenAvatars(){
     const sel = $('heygenAvatarId');
     try {
-      const r = await fetch('/api/heygen-avatars');
+      const r = await fetch('/api/heygen-avatars', { headers: { 'x-heygen-key': state.heygenApiKey } });
       const data = await r.json();
       if (!r.ok) { sel.innerHTML = `<option value="">Error: ${JSON.stringify(data.error).slice(0,120)}</option>`; return; }
       const avatars = data.avatars || [];
@@ -594,7 +621,7 @@
   async function loadTavusReplicas(){
     const sel = $('tavusReplicaId');
     try {
-      const r = await fetch('/api/tavus-replicas');
+      const r = await fetch('/api/tavus-replicas', { headers: { 'x-tavus-key': state.tavusApiKey } });
       const data = await r.json();
       if (!r.ok) { sel.innerHTML = `<option value="">Error: ${JSON.stringify(data.error).slice(0,120)}</option>`; return; }
       const replicas = data.replicas || [];
@@ -710,7 +737,8 @@
   }
 
   async function startHeygen(){
-    const tokenResp = await fetch('/api/heygen-token', { method: 'POST' });
+    if (!state.heygenApiKey) { callStatus.textContent = 'Add your HeyGen API key in Profile settings first.'; return; }
+    const tokenResp = await fetch('/api/heygen-token', { method: 'POST', headers: { 'x-heygen-key': state.heygenApiKey } });
     const tokenData = await tokenResp.json();
     if (!tokenResp.ok) { callStatus.textContent = 'HeyGen error: ' + JSON.stringify(tokenData.error); return; }
 
@@ -738,9 +766,10 @@
   }
 
   async function startTavus(){
+    if (!state.tavusApiKey) { callStatus.textContent = 'Add your Tavus API key in Profile settings first.'; return; }
     const resp = await fetch('/api/tavus-conversation', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-tavus-key': state.tavusApiKey },
       body: JSON.stringify({ systemPrompt: state.systemPrompt, replicaId: state.tavusReplicaId || undefined }),
     });
     const data = await resp.json();

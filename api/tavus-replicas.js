@@ -1,6 +1,8 @@
+// Lists the signed-in user's own Tavus replicas, using their own API key (sent from the
+// client, sourced from their Supabase settings) - not a shared Vercel environment variable.
 export default async function handler(req, res) {
-  const apiKey = process.env.TAVUS_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'TAVUS_API_KEY not set on server' });
+  const apiKey = req.headers['x-tavus-key'];
+  if (!apiKey) return res.status(400).json({ error: 'No Tavus API key set. Add yours in Profile settings.' });
 
   try {
     const r = await fetch('https://tavusapi.com/v2/replicas', {
