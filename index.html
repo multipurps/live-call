@@ -148,16 +148,48 @@
   .emptyState{padding:60px 0; text-align:center; color:var(--dim); font-size:13.5px; line-height:1.5;}
 
   .avatarCircle{
-    width:88px; height:88px; border-radius:50%; margin:8px auto 14px;
-    background:linear-gradient(135deg, #0f9d68, #3a2a20);
+    width:112px; height:112px; border-radius:50%; margin:8px auto 16px;
+    background:linear-gradient(135deg, #0f9d68, #1c9e7a, #3a2a20);
     display:flex; align-items:center; justify-content:center; font-size:32px; font-weight:700;
   }
-  .profileName{text-align:center; font-size:18px; font-weight:650; margin-bottom:22px;}
-  .settingsRow{
-    background:var(--panel); border:1px solid var(--line); border-radius:12px;
-    padding:14px; margin-bottom:10px;
+  .profileName{text-align:center; font-size:22px; font-weight:700; margin-bottom:28px; letter-spacing:-0.01em;}
+
+  .profileCard{
+    display:flex; align-items:center; gap:13px;
+    background:#2b1c14; border-radius:20px; padding:15px 17px;
+    margin-bottom:12px;
   }
-  .settingsRow .label{font-size:11.5px; font-weight:600; color:var(--dim); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:6px;}
+  .profileCard .cIcon{
+    width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.07);
+    display:flex; align-items:center; justify-content:center; flex:none; color:var(--dim);
+  }
+  .profileCard .cIcon svg{width:18px; height:18px;}
+  .profileCard .cBody{flex:1; min-width:0;}
+  .profileCard .cLabel{font-size:11.5px; font-weight:600; color:var(--dim); text-transform:uppercase; letter-spacing:0.03em; margin-bottom:2px;}
+  .profileCard .cValue{font-size:15px; font-weight:600; color:#fff;}
+  .profileCard .cChev{flex:none; color:var(--dim);}
+
+  .profileCard #providerPickerBtn{
+    background:none; border:none; padding:0; width:auto; display:flex; align-items:center; gap:6px;
+    font-size:15px; font-weight:600; color:#fff;
+  }
+  .profileCard #providerPickerMenu{left:auto; right:0; min-width:130px;}
+  .profileCard .cInputRow{display:flex; align-items:center; gap:8px;}
+  .profileCard input[type="text"].keyInput, .profileCard input.keyInput{
+    flex:1; min-width:0; background:none; border:none; outline:none;
+    color:#fff; font-size:15px; font-weight:600; font-family:inherit; padding:0;
+    -webkit-text-security:disc;
+  }
+  .profileCard input.keyInput.revealed{-webkit-text-security:none;}
+  .profileCard input.keyInput::placeholder{color:var(--dim); font-weight:500;}
+  .profileCard .eyeToggle{flex:none; color:var(--dim); background:none; padding:4px;}
+  .profileCard .eyeToggle svg{width:18px; height:18px; display:block;}
+  .profileCard select.cSelect{
+    background:none; border:none; outline:none; -webkit-appearance:none; appearance:none;
+    color:#fff; font-size:15px; font-weight:600; font-family:inherit; width:100%; text-align:left; padding:0;
+  }
+  .profileCard.signOutCard{justify-content:center; margin-top:6px;}
+  .profileCard.signOutCard .cValue{color:#ff6b6b;}
 
   #callScreen{
     position:fixed; inset:0; width:100vw; height:100dvh; background:var(--coffee);
@@ -344,38 +376,68 @@
       </div>
       <div class="profileName" id="profileEmail">Live Call</div>
 
-      <div class="settingsRow">
-        <div class="label">Active provider</div>
-        <div id="providerPicker">
-          <button id="providerPickerBtn" aria-haspopup="listbox" aria-expanded="false">
-            <span id="providerPickerLabel">HeyGen</span>
-            <svg class="chev" viewBox="0 0 24 24" width="12" height="12"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </button>
-          <div id="providerPickerMenu">
-            <button data-provider="heygen" class="active">HeyGen</button>
-            <button data-provider="tavus">Tavus</button>
+      <div class="profileCard">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3L4 8l8 5 8-5-8-5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 12l8 5 8-5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 16l8 5 8-5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+        <div class="cBody">
+          <div class="cLabel">Active provider</div>
+          <div id="providerPicker">
+            <button id="providerPickerBtn" aria-haspopup="listbox" aria-expanded="false">
+              <span id="providerPickerLabel">HeyGen</span>
+            </button>
+            <div id="providerPickerMenu">
+              <button data-provider="heygen" class="active">HeyGen</button>
+              <button data-provider="tavus">Tavus</button>
+            </div>
           </div>
         </div>
-      </div>
-      <div class="field">
-        <label>HeyGen API key</label>
-        <input id="heygenApiKey" type="password" autocomplete="off" placeholder="Paste your HeyGen API key" />
-      </div>
-      <div class="field">
-        <label>Tavus API key</label>
-        <input id="tavusApiKey" type="password" autocomplete="off" placeholder="Paste your Tavus API key" />
-      </div>
-      <p class="hint" style="margin:-8px 0 18px;">Your keys are stored on your account only and used for your own calls — never shared.</p>
-      <div class="field" id="heygenFields">
-        <label>HeyGen avatar</label>
-        <select id="heygenAvatarId"><option value="">Loading your avatars…</option></select>
-      </div>
-      <div class="field" id="tavusFields" style="display:none;">
-        <label>Tavus replica</label>
-        <select id="tavusReplicaId"><option value="">Loading your replicas…</option></select>
+        <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
 
-      <button class="startBtn" id="signOutBtn" style="width:100%; height:auto; border-radius:14px; padding:14px; background:#3a2a20; margin-top:16px;">Sign out</button>
+      <div class="profileCard">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="cBody">
+          <div class="cLabel">HeyGen API key</div>
+          <div class="cInputRow">
+            <input class="keyInput" id="heygenApiKey" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore name="heygen-key-field" placeholder="Paste your HeyGen API key" />
+          </div>
+        </div>
+        <button class="eyeToggle" type="button" data-reveal-for="heygenApiKey" aria-label="Show key">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/></svg>
+        </button>
+      </div>
+
+      <div class="profileCard">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="cBody">
+          <div class="cLabel">Tavus API key</div>
+          <div class="cInputRow">
+            <input class="keyInput" id="tavusApiKey" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore name="tavus-key-field" placeholder="Paste your Tavus API key" />
+          </div>
+        </div>
+        <button class="eyeToggle" type="button" data-reveal-for="tavusApiKey" aria-label="Show key">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/></svg>
+        </button>
+      </div>
+      <p class="hint" style="margin:-6px 0 18px;">Your keys are stored on your account only and used for your own calls — never shared.</p>
+
+      <div class="profileCard" id="heygenFields">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <div class="cBody">
+          <div class="cLabel">HeyGen avatar</div>
+          <select class="cSelect" id="heygenAvatarId"><option value="">Loading your avatars…</option></select>
+        </div>
+      </div>
+      <div class="profileCard" id="tavusFields" style="display:none;">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <div class="cBody">
+          <div class="cLabel">Tavus replica</div>
+          <select class="cSelect" id="tavusReplicaId"><option value="">Loading your replicas…</option></select>
+        </div>
+      </div>
+
+      <div class="profileCard signOutCard" id="signOutBtn">
+        <div class="cValue">Sign out</div>
+      </div>
     </div>
 
   </div>
@@ -537,6 +599,12 @@
     state.tavusApiKey = $('tavusApiKey').value.trim();
     persist();
     loadTavusReplicas();
+  });
+  document.querySelectorAll('.eyeToggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const input = $(btn.dataset.revealFor);
+      input.classList.toggle('revealed');
+    });
   });
 
   function renderChatThread(){
