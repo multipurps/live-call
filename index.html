@@ -488,6 +488,11 @@
           <select class="cSelect" id="tavusReplicaId"><option value="">Loading your replicas…</option></select>
         </div>
       </div>
+      <div class="profileCard navRow" id="openTavusPresets" style="display:none;">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3c2.5 2.5 3.8 6 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-6-3.8-9s1.3-6.5 3.8-9z" stroke="currentColor" stroke-width="1.8"/></svg></div>
+        <div class="cBody"><div class="cValue">Browse Tavus presets</div></div>
+        <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
 
       <div class="profileCard navRow" id="openApiKeys">
         <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
@@ -573,6 +578,19 @@
       <div class="subScreenBody">
         <p class="hint" style="margin:0 0 16px; text-align:left;">Pick any avatar from LiveAvatar's public directory. This sets your avatar without needing one of your own.</p>
         <div id="publicAvatarsList"></div>
+      </div>
+    </div>
+
+    <div id="tavusPresetsScreen" class="subScreen">
+      <div class="subScreenHeader">
+        <button class="backBtn" id="closeTavusPresets" aria-label="Back">
+          <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="subScreenTitle">Tavus presets</div>
+      </div>
+      <div class="subScreenBody">
+        <p class="hint" style="margin:0 0 16px; text-align:left;">Pick any replica from Tavus's stock preset library. This sets your replica without needing one of your own.</p>
+        <div id="tavusPresetsList"></div>
       </div>
     </div>
 
@@ -679,6 +697,8 @@
 
   $('openPublicAvatars').addEventListener('click', () => { $('publicAvatarsScreen').classList.add('active'); loadPublicHeygenAvatars(); });
   $('closePublicAvatars').addEventListener('click', () => $('publicAvatarsScreen').classList.remove('active'));
+  $('openTavusPresets').addEventListener('click', () => { $('tavusPresetsScreen').classList.add('active'); loadTavusPresets(); });
+  $('closeTavusPresets').addEventListener('click', () => $('tavusPresetsScreen').classList.remove('active'));
 
   const infoContent = {
     faq: {
@@ -809,6 +829,7 @@
     document.querySelectorAll('#providerPickerMenu button').forEach(b => b.classList.toggle('active', b.dataset.provider === p));
     $('heygenFields').style.display = p === 'heygen' ? 'block' : 'none';
     $('tavusFields').style.display = p === 'tavus' ? 'block' : 'none';
+    $('openTavusPresets').style.display = p === 'tavus' ? 'flex' : 'none';
   }
   $('providerPickerBtn').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -968,6 +989,38 @@
         });
       });
     } catch (e) { list.innerHTML = '<div class="emptyState">Could not load public avatars.</div>'; }
+  }
+  async function loadTavusPresets(){
+    const list = $('tavusPresetsList');
+    if (!state.tavusApiKey) { list.innerHTML = '<div class="emptyState">Add your Tavus API key in the API screen first.</div>'; return; }
+    list.innerHTML = '<div class="emptyState">Loading…</div>';
+    try {
+      const r = await fetch('/api/tavus-presets', { headers: { 'x-tavus-key': state.tavusApiKey } });
+      const data = await r.json();
+      if (!r.ok) { list.innerHTML = `<div class="emptyState">Error: ${JSON.stringify(data.error).slice(0,160)}</div>`; return; }
+      const presets = data.presets || [];
+      if (!presets.length) { list.innerHTML = '<div class="emptyState">No presets found.</div>'; return; }
+      list.innerHTML = presets.map(p => `
+        <button class="publicAvatarRow${p.id === state.tavusReplicaId ? ' selected' : ''}" data-replica-id="${p.id}" data-replica-name="${p.name.replace(/"/g,'&quot;')}">
+          ${p.preview_url ? `<video class="paThumb" src="${p.preview_url}" autoplay muted loop playsinline></video>` : '<div class="paThumb"></div>'}
+          <div class="paName">${p.name.replace(/</g,'&lt;')}</div>
+        </button>
+      `).join('');
+      list.querySelectorAll('[data-replica-id]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.tavusReplicaId = btn.dataset.replicaId;
+          state.tavusReplicaName = btn.dataset.replicaName;
+          persist();
+          const sel = $('tavusReplicaId');
+          if (sel && ![...sel.options].some(o => o.value === state.tavusReplicaId)) {
+            sel.insertAdjacentHTML('afterbegin', `<option value="${state.tavusReplicaId}">${btn.dataset.replicaName}</option>`);
+          }
+          if (sel) sel.value = state.tavusReplicaId;
+          list.querySelectorAll('.publicAvatarRow').forEach(row => row.classList.toggle('selected', row.dataset.replicaId === state.tavusReplicaId));
+          $('tavusPresetsScreen').classList.remove('active');
+        });
+      });
+    } catch (e) { list.innerHTML = '<div class="emptyState">Could not load Tavus presets.</div>'; }
   }
   async function loadTavusReplicas(){
     const sel = $('tavusReplicaId');
