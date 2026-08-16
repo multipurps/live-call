@@ -235,7 +235,11 @@
   .profileCard.signOutCard .cValue{color:#ff6b6b;}
 
   #callScreen{
-    position:fixed; inset:0; width:100vw; height:100dvh; background:var(--coffee);
+    /* inset:0 alone sizes this to the nearest transformed ancestor's box - #deviceFrame
+       on desktop, the real viewport on phones (see the #deviceFrame comment above).
+       Explicit 100vw/100dvh here used to override that and blow the call screen out to
+       the full browser window even inside the desktop phone frame - never set those. */
+    position:fixed; inset:0; background:var(--coffee);
     display:none; z-index:50;
   }
   #callScreen.active{display:block;}
@@ -941,7 +945,7 @@
 
   const callScreen = $('callScreen'), callIdle = $('callIdle'), callStatus = $('callStatus'), callBottom = $('callBottom');
   const remoteVideo = $('remoteVideo'), liveDot = $('liveDot');
-  let heygenAvatar = null, dailyCall = null, micStream = null, audioCtx = null, callStartedAt = null;
+  let liveavatarRoom = null, liveavatarSessionId = null, dailyCall = null, micStream = null, audioCtx = null, callStartedAt = null;
 
   function primeAudioSession(){
     try {
@@ -963,7 +967,7 @@
       return;
     }
     if (state.provider === 'heygen' && !state.heygenAvatarId) {
-      $('homeHint').textContent = 'Pick a HeyGen avatar first.';
+      $('homeHint').textContent = 'Pick an avatar first.';
       return;
     }
     $('homeHint').textContent = '';
@@ -988,32 +992,44 @@
   }
 
   async function startHeygen(){
-    if (!state.heygenApiKey) { callStatus.textContent = 'Add your HeyGen API key in Profile settings first.'; return; }
-    const tokenResp = await fetch('/api/heygen-token', { method: 'POST', headers: { 'x-heygen-key': state.heygenApiKey } });
-    const tokenData = await tokenResp.json();
-    if (!tokenResp.ok) { callStatus.textContent = 'HeyGen error: ' + JSON.stringify(tokenData.error); return; }
-
-    const { default: StreamingAvatar, AvatarQuality, StreamingEvents } =
-      await import('https://esm.sh/@heygen/streaming-avatar@latest');
-
-    heygenAvatar = new StreamingAvatar({ token: tokenData.token });
-
-    heygenAvatar.on(StreamingEvents.STREAM_READY, (event) => {
-      remoteVideo.srcObject = event.detail;
-      remoteVideo.volume = 1.0;
-      remoteVideo.style.display = 'block';
-      callIdle.style.display = 'none';
-      liveDot.classList.add('live');
-      callBottom.classList.remove('hidden');
+    // "HeyGen" here means LiveAvatar - HeyGen's real-time avatar product now lives on
+    // its own platform (app.liveavatar.com) with its own key and its own API, separate
+    // from the old HeyGen Interactive Avatar API. The saved "HeyGen API key" is a
+    // LiveAvatar key (see the hint on the API key screen).
+    if (!state.heygenApiKey) { callStatus.textContent = 'Add your LiveAvatar API key in Profile settings first.'; return; }
+    const sessionResp = await fetch('/api/heygen-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-heygen-key': state.heygenApiKey },
+      body: JSON.stringify({ avatarId: state.heygenAvatarId, systemPrompt: state.systemPrompt }),
     });
-    heygenAvatar.on(StreamingEvents.STREAM_DISCONNECTED, () => endCall());
+    const sessionData = await sessionResp.json();
+    if (!sessionResp.ok) { callStatus.textContent = 'LiveAvatar error: ' + JSON.stringify(sessionData.error); return; }
+    liveavatarSessionId = sessionData.sessionId;
 
-    await heygenAvatar.createStartAvatar({
-      quality: AvatarQuality.High,
-      avatarName: state.heygenAvatarId,
-      knowledgeBase: state.systemPrompt,
+    const { Room, RoomEvent, Track } = await import('https://esm.sh/livekit-client@latest');
+    liveavatarRoom = new Room();
+
+    const outStream = new MediaStream();
+    remoteVideo.srcObject = outStream;
+    remoteVideo.muted = false;
+    remoteVideo.volume = 1.0;
+
+    liveavatarRoom.on(RoomEvent.TrackSubscribed, (track) => {
+      if (track.kind !== Track.Kind.Video && track.kind !== Track.Kind.Audio) return;
+      outStream.addTrack(track.mediaStreamTrack);
+      remoteVideo.play().catch(() => {});
+      if (track.kind === Track.Kind.Video) {
+        remoteVideo.style.display = 'block';
+        callIdle.style.display = 'none';
+        liveDot.classList.add('live');
+        callBottom.classList.remove('hidden');
+      }
     });
-    await heygenAvatar.startVoiceChat();
+    liveavatarRoom.on(RoomEvent.Disconnected, () => endCall());
+
+    await liveavatarRoom.connect(sessionData.livekitUrl, sessionData.livekitToken);
+    if (micStream) await liveavatarRoom.localParticipant.publishTrack(micStream.getAudioTracks()[0]);
+    else await liveavatarRoom.localParticipant.setMicrophoneEnabled(true);
   }
 
   async function startTavus(){
@@ -1063,7 +1079,15 @@
         summary: durationSec > 0 ? `Call ended after ${durationSec}s` : 'Call ended immediately',
       });
     }
-    if (heygenAvatar) { try { heygenAvatar.stopAvatar(); } catch(e){} heygenAvatar = null; }
+    if (liveavatarRoom) { try { liveavatarRoom.disconnect(); } catch(e){} liveavatarRoom = null; }
+    if (liveavatarSessionId) {
+      fetch('/api/heygen-stop-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-heygen-key': state.heygenApiKey },
+        body: JSON.stringify({ sessionId: liveavatarSessionId }),
+      }).catch(() => {});
+      liveavatarSessionId = null;
+    }
     if (dailyCall) { try { dailyCall.leave(); dailyCall.destroy(); } catch(e){} dailyCall = null; }
     if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
     if (audioCtx) { try { audioCtx.close(); } catch(e){} audioCtx = null; }
