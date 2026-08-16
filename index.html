@@ -234,6 +234,18 @@
   .profileCard.signOutCard{justify-content:center; margin-top:6px;}
   .profileCard.signOutCard .cValue{color:#ff6b6b;}
 
+  .publicAvatarRow{
+    display:flex; align-items:center; gap:13px;
+    background:#2b1c14; border-radius:20px; padding:10px 14px;
+    margin-bottom:10px; text-align:left; width:100%;
+  }
+  .publicAvatarRow .paThumb{
+    width:48px; height:48px; border-radius:14px; flex:none; object-fit:cover;
+    background:rgba(255,255,255,0.07);
+  }
+  .publicAvatarRow .paName{font-size:14.5px; font-weight:650; color:#fff;}
+  .publicAvatarRow.selected{box-shadow:0 0 0 2px rgba(15,157,104,0.8) inset;}
+
   #callScreen{
     /* inset:0 alone sizes this to the nearest transformed ancestor's box - #deviceFrame
        on desktop, the real viewport on phones (see the #deviceFrame comment above).
@@ -464,6 +476,11 @@
           <select class="cSelect" id="heygenAvatarId"><option value="">Loading your avatars…</option></select>
         </div>
       </div>
+      <div class="profileCard navRow" id="openPublicAvatars">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3c2.5 2.5 3.8 6 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-6-3.8-9s1.3-6.5 3.8-9z" stroke="currentColor" stroke-width="1.8"/></svg></div>
+        <div class="cBody"><div class="cValue">Browse public avatars</div></div>
+        <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
       <div class="profileCard" id="tavusFields" style="display:none;">
         <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
         <div class="cBody">
@@ -543,6 +560,19 @@
         </div>
         <button class="saveKeyBtn" id="saveTavusKey">Save Tavus key</button>
         <p class="hint" style="margin:8px 0 18px;">Your keys are stored on your account only and used for your own calls — never shown back to you or anyone else after saving.</p>
+      </div>
+    </div>
+
+    <div id="publicAvatarsScreen" class="subScreen">
+      <div class="subScreenHeader">
+        <button class="backBtn" id="closePublicAvatars" aria-label="Back">
+          <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="subScreenTitle">Public avatars</div>
+      </div>
+      <div class="subScreenBody">
+        <p class="hint" style="margin:0 0 16px; text-align:left;">Pick any avatar from LiveAvatar's public directory. This sets your avatar without needing one of your own.</p>
+        <div id="publicAvatarsList"></div>
       </div>
     </div>
 
@@ -646,6 +676,9 @@
 
   $('openApiKeys').addEventListener('click', () => $('apiKeysScreen').classList.add('active'));
   $('closeApiKeys').addEventListener('click', () => $('apiKeysScreen').classList.remove('active'));
+
+  $('openPublicAvatars').addEventListener('click', () => { $('publicAvatarsScreen').classList.add('active'); loadPublicHeygenAvatars(); });
+  $('closePublicAvatars').addEventListener('click', () => $('publicAvatarsScreen').classList.remove('active'));
 
   const infoContent = {
     faq: {
@@ -903,6 +936,38 @@
         persist();
       });
     } catch (e) { sel.innerHTML = '<option value="">Could not load avatars</option>'; }
+  }
+  async function loadPublicHeygenAvatars(){
+    const list = $('publicAvatarsList');
+    if (!state.heygenApiKey) { list.innerHTML = '<div class="emptyState">Add your LiveAvatar API key in the API screen first.</div>'; return; }
+    list.innerHTML = '<div class="emptyState">Loading…</div>';
+    try {
+      const r = await fetch('/api/heygen-public-avatars', { headers: { 'x-heygen-key': state.heygenApiKey } });
+      const data = await r.json();
+      if (!r.ok) { list.innerHTML = `<div class="emptyState">Error: ${JSON.stringify(data.error).slice(0,160)}</div>`; return; }
+      const avatars = data.avatars || [];
+      if (!avatars.length) { list.innerHTML = '<div class="emptyState">No public avatars found.</div>'; return; }
+      list.innerHTML = avatars.map(a => `
+        <button class="publicAvatarRow${a.id === state.heygenAvatarId ? ' selected' : ''}" data-avatar-id="${a.id}" data-avatar-name="${a.name.replace(/"/g,'&quot;')}">
+          ${a.preview_url ? `<img class="paThumb" src="${a.preview_url}" alt="" />` : '<div class="paThumb"></div>'}
+          <div class="paName">${a.name.replace(/</g,'&lt;')}</div>
+        </button>
+      `).join('');
+      list.querySelectorAll('[data-avatar-id]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.heygenAvatarId = btn.dataset.avatarId;
+          state.heygenAvatarName = btn.dataset.avatarName;
+          persist();
+          const sel = $('heygenAvatarId');
+          if (sel && ![...sel.options].some(o => o.value === state.heygenAvatarId)) {
+            sel.insertAdjacentHTML('afterbegin', `<option value="${state.heygenAvatarId}">${btn.dataset.avatarName}</option>`);
+          }
+          if (sel) sel.value = state.heygenAvatarId;
+          list.querySelectorAll('.publicAvatarRow').forEach(row => row.classList.toggle('selected', row.dataset.avatarId === state.heygenAvatarId));
+          $('publicAvatarsScreen').classList.remove('active');
+        });
+      });
+    } catch (e) { list.innerHTML = '<div class="emptyState">Could not load public avatars.</div>'; }
   }
   async function loadTavusReplicas(){
     const sel = $('tavusReplicaId');
