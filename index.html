@@ -1116,7 +1116,7 @@
     const sel = $('anamAvatarId');
     if (!state.anamApiKey) { sel.innerHTML = '<option value="">Add your Anam API key in the API screen first</option>'; return; }
     try {
-      const r = await fetch('/api/anam-avatars', { headers: { 'x-anam-key': state.anamApiKey } });
+      const r = await fetch('/api/anam', { headers: { 'x-anam-key': state.anamApiKey } });
       const data = await r.json();
       if (!r.ok) { sel.innerHTML = `<option value="">Error: ${JSON.stringify(data.error).slice(0,120)}</option>`; return; }
       const avatars = data.avatars || [];
@@ -1303,7 +1303,7 @@
 
   async function startAnam(){
     if (!state.anamApiKey) { callStatus.textContent = 'Add your Anam API key in Profile settings first.'; return; }
-    const resp = await fetch('/api/anam-session', {
+    const resp = await fetch('/api/anam', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-anam-key': state.anamApiKey },
       body: JSON.stringify({ avatarId: state.anamAvatarId, systemPrompt: state.systemPrompt }),
