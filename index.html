@@ -28,6 +28,44 @@
   }
   button{-webkit-appearance:none; appearance:none; border:0; cursor:pointer; font-family:inherit; color:#fff; background:none;}
 
+  #deviceFrame{position:relative; width:100%; height:100%;}
+
+  /* ---------- desktop: everything below is position:fixed to the *viewport* on phones,
+     but on wide screens we contain it to a centered phone-sized card instead. Giving
+     #deviceFrame a transform makes it the containing block for all fixed descendants -
+     no need to touch any of their position:fixed rules individually. ---------- */
+  @media (min-width:701px){
+    body{background:#0e0b08; display:flex; align-items:center; justify-content:center;}
+    #deviceFrame{
+      width:430px; height:min(932px, 94vh); flex:none;
+      transform:translateZ(0);
+      border-radius:36px; overflow:hidden;
+      box-shadow:0 40px 100px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.06);
+    }
+  }
+
+  .subScreen{
+    position:fixed; inset:0; z-index:50; background:var(--coffee);
+    display:none; flex-direction:column;
+  }
+  .subScreen.active{display:flex;}
+  .subScreenHeader{
+    flex:none; display:flex; align-items:center; gap:12px;
+    padding:max(env(safe-area-inset-top), 16px) 18px 14px;
+  }
+  .backBtn{
+    width:34px; height:34px; border-radius:50%; background:rgba(255,255,255,0.07);
+    display:flex; align-items:center; justify-content:center; flex:none; color:#fff;
+  }
+  .subScreenTitle{font-size:19px; font-weight:700; letter-spacing:-0.01em;}
+  .subScreenBody{flex:1; overflow-y:auto; padding:4px 18px calc(40px + env(safe-area-inset-bottom));}
+  .subScreenBody h3{font-size:15px; font-weight:700; margin:20px 0 8px;}
+  .subScreenBody h3:first-child{margin-top:4px;}
+  .subScreenBody p{font-size:14px; color:var(--dim); line-height:1.55; margin-bottom:2px;}
+
+  .navRow{cursor:pointer;}
+  .navRow:active{opacity:0.65;}
+
   #app{position:fixed; inset:0;}
   #screens{position:absolute; inset:0;}
   .screen{
@@ -312,6 +350,7 @@
   }, 4000);
 </script>
 
+<div id="deviceFrame">
 <div id="authScreen">
   <div id="authBoot"><img src="logo.png" alt="" /></div>
   <div id="authBox" style="display:none;">
@@ -393,33 +432,6 @@
         <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
 
-      <div class="profileCard">
-        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-        <div class="cBody">
-          <div class="cLabel">HeyGen API key</div>
-          <div class="cInputRow">
-            <input class="keyInput" id="heygenApiKey" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore name="heygen-key-field" placeholder="Paste your HeyGen API key" />
-          </div>
-        </div>
-        <button class="eyeToggle" type="button" data-reveal-for="heygenApiKey" aria-label="Show key">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/></svg>
-        </button>
-      </div>
-
-      <div class="profileCard">
-        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-        <div class="cBody">
-          <div class="cLabel">Tavus API key</div>
-          <div class="cInputRow">
-            <input class="keyInput" id="tavusApiKey" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore name="tavus-key-field" placeholder="Paste your Tavus API key" />
-          </div>
-        </div>
-        <button class="eyeToggle" type="button" data-reveal-for="tavusApiKey" aria-label="Show key">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/></svg>
-        </button>
-      </div>
-      <p class="hint" style="margin:-6px 0 18px;">Your keys are stored on your account only and used for your own calls — never shared.</p>
-
       <div class="profileCard" id="heygenFields">
         <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
         <div class="cBody">
@@ -435,9 +447,86 @@
         </div>
       </div>
 
-      <div class="profileCard signOutCard" id="signOutBtn">
+      <div class="profileCard navRow" id="openApiKeys">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="cBody"><div class="cValue">API</div></div>
+        <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+
+      <div style="height:1px; background:var(--line); margin:6px 0 12px;"></div>
+
+      <div class="profileCard navRow" data-info="faq">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M9.5 9a2.5 2.5 0 0 1 4.6-1.4c.6.9.4 1.9-.5 2.6-.9.7-1.6 1.1-1.6 2.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="16.3" r="0.9" fill="currentColor"/></svg></div>
+        <div class="cBody"><div class="cValue">FAQ</div></div>
+        <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="profileCard navRow" data-info="about">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="8" r="0.9" fill="currentColor"/><path d="M12 11v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <div class="cBody"><div class="cValue">About</div></div>
+        <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="profileCard navRow" data-info="policy">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12h6M9 16h6M9 8h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <div class="cBody"><div class="cValue">Privacy Policy</div></div>
+        <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="profileCard navRow" data-info="terms">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12h6M9 16h6M9 8h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <div class="cBody"><div class="cValue">Terms &amp; Conditions</div></div>
+        <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+
+      <div class="profileCard signOutCard" id="signOutBtn" style="margin-top:14px;">
         <div class="cValue">Sign out</div>
       </div>
+    </div>
+
+    <div id="apiKeysScreen" class="subScreen">
+      <div class="subScreenHeader">
+        <button class="backBtn" id="closeApiKeys" aria-label="Back">
+          <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="subScreenTitle">API</div>
+      </div>
+      <div class="subScreenBody">
+        <div class="profileCard">
+          <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="cBody">
+            <div class="cLabel">HeyGen API key</div>
+            <div class="cInputRow">
+              <input class="keyInput" id="heygenApiKey" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore name="heygen-key-field" placeholder="Paste your HeyGen API key" />
+            </div>
+          </div>
+          <button class="eyeToggle" type="button" data-reveal-for="heygenApiKey" aria-label="Show key">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/></svg>
+          </button>
+        </div>
+        <p class="hint" style="margin:-6px 0 18px;">Get this from <b>app.liveavatar.com/developers</b> — your old HeyGen dashboard key will not work here, HeyGen's real-time avatar product moved to a separate platform called LiveAvatar with its own key.</p>
+
+        <div class="profileCard">
+          <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="cBody">
+            <div class="cLabel">Tavus API key</div>
+            <div class="cInputRow">
+              <input class="keyInput" id="tavusApiKey" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore name="tavus-key-field" placeholder="Paste your Tavus API key" />
+            </div>
+          </div>
+          <button class="eyeToggle" type="button" data-reveal-for="tavusApiKey" aria-label="Show key">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/></svg>
+          </button>
+        </div>
+        <p class="hint" style="margin:-6px 0 18px;">Your keys are stored on your account only and used for your own calls — never shared.</p>
+      </div>
+    </div>
+
+    <div id="infoScreen" class="subScreen">
+      <div class="subScreenHeader">
+        <button class="backBtn" id="closeInfo" aria-label="Back">
+          <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="subScreenTitle" id="infoScreenTitle">FAQ</div>
+      </div>
+      <div class="subScreenBody" id="infoScreenBody"></div>
     </div>
 
   </div>
@@ -487,6 +576,8 @@
   </div>
 </div>
 
+</div><!-- /deviceFrame -->
+
 <script type="module">
   import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -510,6 +601,63 @@
     if (name === 'profile') renderProfile();
   }
   tabBtns.forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
+  $('openApiKeys').addEventListener('click', () => $('apiKeysScreen').classList.add('active'));
+  $('closeApiKeys').addEventListener('click', () => $('apiKeysScreen').classList.remove('active'));
+
+  const infoContent = {
+    faq: {
+      title: 'FAQ',
+      html: `
+        <h3>Which providers can I use?</h3>
+        <p>HeyGen and Tavus. Pick the active one in Profile, and add your own API key for it under the API screen — each user brings their own key, so your calls are billed to your own account, never anyone else's.</p>
+        <h3>Why does it say my HeyGen key is invalid?</h3>
+        <p>HeyGen's real-time avatar product moved to a separate platform called LiveAvatar. Your old HeyGen dashboard key won't work — get a new one from app.liveavatar.com/developers.</p>
+        <h3>Where do I manage my avatar or replica?</h3>
+        <p>In Profile, right under Active provider — the dropdown shows the avatars or replicas available on your account for whichever provider is active.</p>
+        <h3>Is my API key visible to anyone else?</h3>
+        <p>No. It's stored against your account only and sent only when you start a call.</p>
+      `,
+    },
+    about: {
+      title: 'About',
+      html: `
+        <h3>Live Call</h3>
+        <p>A lightweight way to start a real-time video call with an AI avatar, powered by your own HeyGen or Tavus account.</p>
+        <h3>Built for iPhone</h3>
+        <p>Live Call is a Progressive Web App — add it to your home screen for the full experience.</p>
+      `,
+    },
+    policy: {
+      title: 'Privacy Policy',
+      html: `
+        <p>Placeholder — replace with your actual policy before sharing this app with anyone outside your own testing.</p>
+        <h3>What we store</h3>
+        <p>Your email, your chosen provider and avatar/replica selections, your own API keys, and a history of your calls — all tied to your account only.</p>
+        <h3>What we don't do</h3>
+        <p>We don't share your API keys or call data with any other user of this app.</p>
+      `,
+    },
+    terms: {
+      title: 'Terms & Conditions',
+      html: `
+        <p>Placeholder — replace with real terms before sharing this app with anyone outside your own testing.</p>
+        <h3>Your account</h3>
+        <p>You're responsible for the API keys you add and any usage/cost they incur on HeyGen or Tavus.</p>
+        <h3>Acceptable use</h3>
+        <p>Don't use this app for anything illegal or for impersonating a real person without their consent.</p>
+      `,
+    },
+  };
+  document.querySelectorAll('.navRow[data-info]').forEach(row => {
+    row.addEventListener('click', () => {
+      const info = infoContent[row.dataset.info];
+      $('infoScreenTitle').textContent = info.title;
+      $('infoScreenBody').innerHTML = info.html;
+      $('infoScreen').classList.add('active');
+    });
+  });
+  $('closeInfo').addEventListener('click', () => $('infoScreen').classList.remove('active'));
 
   const state = {
     provider: 'heygen',
