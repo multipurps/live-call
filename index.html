@@ -131,9 +131,10 @@
 
   /* ---------- home header: logo overlapping center, call button right (provider picker lives in Profile now) ---------- */
   #homeHeader{
-    position:relative; overflow:visible;
+    position:sticky; top:0; z-index:20; overflow:visible;
     display:flex; align-items:center; justify-content:space-between;
-    height:44px; margin:6px 0 0;
+    height:44px; margin:6px 0 0; padding-bottom:6px;
+    background:var(--coffee);
   }
   #newChatBtn{flex:none; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#fff;}
   #newChatBtn svg{width:22px; height:22px; display:block;}
@@ -961,8 +962,15 @@
       const data = await r.json();
       if (!r.ok) { sel.innerHTML = `<option value="">Error: ${JSON.stringify(data.error).slice(0,120)}</option>`; return; }
       const avatars = data.avatars || [];
-      if (!avatars.length) { sel.innerHTML = '<option value="">No avatars yet — create one at app.liveavatar.com/home</option>'; return; }
-      sel.innerHTML = avatars.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
+      const options = avatars.map(a => `<option value="${a.id}">${a.name}</option>`);
+      // If the saved selection (e.g. picked via Browse Public Avatars) isn't in the
+      // user's own private avatar list, still show it instead of losing it in the UI —
+      // the id is already persisted and used for calls either way.
+      if (state.heygenAvatarId && !avatars.some(a => a.id === state.heygenAvatarId)) {
+        options.unshift(`<option value="${state.heygenAvatarId}">${state.heygenAvatarName || state.heygenAvatarId}</option>`);
+      }
+      if (!options.length) { sel.innerHTML = '<option value="">No avatars yet — create one at app.liveavatar.com/home</option>'; return; }
+      sel.innerHTML = options.join('');
       if (state.heygenAvatarId) sel.value = state.heygenAvatarId;
       sel.addEventListener('change', () => {
         state.heygenAvatarId = sel.value;
@@ -1042,7 +1050,13 @@
       const data = await r.json();
       if (!r.ok) { sel.innerHTML = `<option value="">Error: ${JSON.stringify(data.error).slice(0,120)}</option>`; return; }
       const replicas = data.replicas || [];
-      sel.innerHTML = '<option value="">Use account default</option>' + replicas.map(r => `<option value="${r.id}">${r.name}${r.status ? ' — ' + r.status : ''}</option>`).join('');
+      const options = replicas.map(r => `<option value="${r.id}">${r.name}${r.status ? ' — ' + r.status : ''}</option>`);
+      // Same fix as HeyGen: keep a saved selection visible even if it came from
+      // Browse Tavus Presets (a system replica) rather than the user's own replicas.
+      if (state.tavusReplicaId && !replicas.some(r => r.id === state.tavusReplicaId)) {
+        options.unshift(`<option value="${state.tavusReplicaId}">${state.tavusReplicaName || state.tavusReplicaId}</option>`);
+      }
+      sel.innerHTML = '<option value="">Use account default</option>' + options.join('');
       if (state.tavusReplicaId) sel.value = state.tavusReplicaId;
       sel.addEventListener('change', () => {
         state.tavusReplicaId = sel.value;
