@@ -348,15 +348,31 @@
     bar.style.display = 'block';
     bar.textContent = 'PROMISE ERROR: ' + (e.reason?.message || e.reason);
   });
-  setTimeout(function(){
+  // Poll instead of a single check: a slow network (auth + approval + settings + avatar
+  // list, all sequential) can easily blow past a one-shot timer even when the app is
+  // about to render fine, and a one-shot check that fires early also never gets undone
+  // once things do resolve - leaving a stale "didn't render" banner over a working app.
+  // This checks repeatedly, clears itself the moment home actually renders, and only
+  // keeps the message up if it's still broken after a longer grace period.
+  var renderCheckCount = 0;
+  var renderCheckInterval = setInterval(function(){
+    renderCheckCount++;
     var auth = document.getElementById('authScreen');
     var home = document.getElementById('screenHome');
-    if (auth && auth.classList.contains('hidden') && home && home.offsetHeight === 0) {
-      var bar = document.getElementById('debugBar');
+    var bar = document.getElementById('debugBar');
+    var rendered = home && home.offsetHeight > 0;
+    var signedIn = auth && auth.classList.contains('hidden');
+    if (rendered) {
+      if (bar.textContent.indexOf('did not render') !== -1) { bar.style.display = 'none'; bar.textContent = ''; }
+      clearInterval(renderCheckInterval);
+      return;
+    }
+    if (signedIn && renderCheckCount >= 8) { // ~8s of being signed-in with nothing rendered
       bar.style.display = 'block';
       bar.innerHTML = 'App did not render after sign-in. <button onclick="location.reload()" style="text-decoration:underline; background:none; border:0; color:#fff; font-weight:700;">Tap to retry</button>';
+      clearInterval(renderCheckInterval);
     }
-  }, 4000);
+  }, 1000);
 </script>
 
 <div id="deviceFrame">
@@ -601,6 +617,21 @@
   // thing Supabase's own SDK keeps in localStorage — everything else below reads/writes Supabase.
 
   const $ = (id) => document.getElementById(id);
+
+  // Admin-set login background (public read, works even signed out) - falls back to
+  // the plain coffee background if nothing has been uploaded via admin.html.
+  (async () => {
+    try {
+      const { data } = await supabase.from('app_settings').select('login_bg_url').eq('id', true).maybeSingle();
+      if (data?.login_bg_url) {
+        const el = document.getElementById('authScreen');
+        el.style.backgroundImage = `linear-gradient(rgba(30,19,13,0.72), rgba(30,19,13,0.92)), url('${data.login_bg_url}')`;
+        el.style.backgroundSize = 'cover';
+        el.style.backgroundPosition = 'center';
+      }
+    } catch (e) {}
+  })();
+
 
   const screens = { home: $('screenHome'), recent: $('screenRecent'), profile: $('screenProfile') };
   const tabBtns = document.querySelectorAll('.tabBtn');
@@ -863,7 +894,7 @@
       const data = await r.json();
       if (!r.ok) { sel.innerHTML = `<option value="">Error: ${JSON.stringify(data.error).slice(0,120)}</option>`; return; }
       const avatars = data.avatars || [];
-      if (!avatars.length) { sel.innerHTML = '<option value="">No avatars yet — create one at labs.heygen.com</option>'; return; }
+      if (!avatars.length) { sel.innerHTML = '<option value="">No avatars yet — create one at app.liveavatar.com/home</option>'; return; }
       sel.innerHTML = avatars.map(a => `<option value="${a.id}">${a.name}</option>`).join('');
       if (state.heygenAvatarId) sel.value = state.heygenAvatarId;
       sel.addEventListener('change', () => {

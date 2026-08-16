@@ -87,6 +87,16 @@
 <div id="userList">
   <h1>Pending &amp; approved users</h1>
   <div id="rows"></div>
+
+  <h1 style="margin-top:28px;">Login background</h1>
+  <div id="loginBgPreviewWrap" style="display:none; margin-bottom:12px;">
+    <img id="loginBgPreview" style="width:100%; border-radius:14px; display:block; border:1px solid var(--line);" />
+  </div>
+  <input id="loginBgFile" type="file" accept="image/png,image/jpeg,image/webp" style="display:none;" />
+  <button class="btn" id="loginBgPickBtn" style="background:rgba(255,255,255,0.1); border-color:rgba(255,255,255,0.18);">Choose image</button>
+  <button class="btn" id="loginBgUploadBtn" style="margin-top:10px; display:none;">Upload as login background</button>
+  <button class="btn" id="loginBgClearBtn" style="margin-top:10px; background:rgba(255,59,48,0.2); border-color:rgba(255,59,48,0.45);">Remove current background</button>
+  <p class="hint" id="loginBgHint"></p>
 </div>
 
 <script type="module">
@@ -126,6 +136,7 @@
 
     $('pinBox').style.display = 'none';
     $('userList').style.display = 'block';
+    loadLoginBg();
     $('rows').innerHTML = data.users.map(u => `
       <div class="userRow">
         <div>
@@ -151,6 +162,63 @@
       });
     });
   }
+
+  async function loadLoginBg(){
+    const { data } = await supabase.from('app_settings').select('login_bg_url').eq('id', true).maybeSingle();
+    const url = data?.login_bg_url;
+    if (url) {
+      $('loginBgPreview').src = url;
+      $('loginBgPreviewWrap').style.display = 'block';
+    } else {
+      $('loginBgPreviewWrap').style.display = 'none';
+    }
+  }
+
+  let pickedFile = null;
+  $('loginBgPickBtn').addEventListener('click', () => $('loginBgFile').click());
+  $('loginBgFile').addEventListener('change', () => {
+    const file = $('loginBgFile').files[0];
+    if (!file) return;
+    pickedFile = file;
+    $('loginBgPreview').src = URL.createObjectURL(file);
+    $('loginBgPreviewWrap').style.display = 'block';
+    $('loginBgUploadBtn').style.display = 'block';
+    $('loginBgHint').textContent = '';
+  });
+  $('loginBgUploadBtn').addEventListener('click', async () => {
+    if (!pickedFile) return;
+    $('loginBgHint').textContent = 'Uploading…';
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const fileExt = (pickedFile.name.split('.').pop() || 'jpg').toLowerCase();
+      const r = await fetch('/api/admin-upload-login-bg', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ imageBase64: reader.result, fileExt }),
+      });
+      const data = await r.json();
+      if (!r.ok) { $('loginBgHint').textContent = data.error; return; }
+      $('loginBgHint').textContent = 'Saved — live on the login screen now.';
+      $('loginBgUploadBtn').style.display = 'none';
+      pickedFile = null;
+      loadLoginBg();
+    };
+    reader.readAsDataURL(pickedFile);
+  });
+  $('loginBgClearBtn').addEventListener('click', async () => {
+    $('loginBgHint').textContent = 'Removing…';
+    const { data: { session } } = await supabase.auth.getSession();
+    const r = await fetch('/api/admin-upload-login-bg', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ action: 'clear' }),
+    });
+    const data = await r.json();
+    if (!r.ok) { $('loginBgHint').textContent = data.error; return; }
+    $('loginBgHint').textContent = 'Removed — login screen back to default.';
+    loadLoginBg();
+  });
 
   supabase.auth.onAuthStateChange((_event, session) => {
     if (session?.user) showPinGate();
