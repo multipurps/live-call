@@ -132,9 +132,11 @@
   /* ---------- home header: logo overlapping center, call button right (provider picker lives in Profile now) ---------- */
   #homeHeader{
     position:relative; overflow:visible;
-    display:flex; align-items:center; justify-content:flex-end;
+    display:flex; align-items:center; justify-content:space-between;
     height:44px; margin:6px 0 0;
   }
+  #newChatBtn{flex:none; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#fff;}
+  #newChatBtn svg{width:22px; height:22px; display:block;}
   #providerPicker{position:relative;}
   #providerPickerBtn{
     display:flex; align-items:center; justify-content:space-between; gap:5px; width:100%;
@@ -183,6 +185,9 @@
   .callRow .name{font-size:15px; font-weight:650;}
   .callRow .summary{font-size:12.5px; color:var(--dim); margin-top:3px;}
   .callRow .time{font-size:11.5px; color:var(--dim); white-space:nowrap;}
+  .callRow .rowRight{display:flex; align-items:center; gap:10px; flex:none;}
+  .callRow .deleteChat{flex:none; width:22px; height:22px; display:flex; align-items:center; justify-content:center; color:var(--dim);}
+  .callRow .deleteChat svg{width:16px; height:16px; display:block;}
   .emptyState{padding:60px 0; text-align:center; color:var(--dim); font-size:13.5px; line-height:1.5;}
 
   .avatarCircle{
@@ -427,6 +432,9 @@
 
     <div class="screen active" id="screenHome">
       <div id="homeHeader">
+        <button id="newChatBtn" aria-label="New chat">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </button>
         <img id="headerLogo" src="logo.png" alt="Live Call" />
 
         <button id="headerCallBtn" aria-label="Start call">
@@ -938,8 +946,13 @@
   function startNewChat(){
     currentChatId = null;
     chatMessages = [];
+    state.systemPrompt = '';
+    $('briefInput').value = '';
+    autoGrow();
+    $('homeHint').textContent = '';
     renderChatThread();
   }
+  $('newChatBtn').addEventListener('click', startNewChat);
 
   async function loadHeygenAvatars(){
     const sel = $('heygenAvatarId');
@@ -1065,17 +1078,32 @@
       const msgs = Array.isArray(c.messages) ? c.messages : [];
       const lastMsg = msgs[msgs.length - 1]?.content || '';
       return `
-      <div class="callRow" data-chat-id="${c.id}" style="cursor:pointer;">
-        <div>
+      <div class="callRow" data-chat-id="${c.id}">
+        <div style="cursor:pointer; flex:1; min-width:0;" data-open-chat-id="${c.id}">
           <div class="name">${(c.title || 'New chat').replace(/</g,'&lt;')}</div>
           <div class="summary">${lastMsg.replace(/</g,'&lt;').slice(0, 80)}</div>
         </div>
-        <div class="time">${new Date(c.updated_at).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}</div>
+        <div class="rowRight">
+          <div class="time">${new Date(c.updated_at).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}</div>
+          <button class="deleteChat" data-delete-chat-id="${c.id}" aria-label="Delete chat">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0v13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
       </div>
     `;
     }).join('');
-    list.querySelectorAll('[data-chat-id]').forEach(row => {
-      row.addEventListener('click', () => resumeChat(row.dataset.chatId, data));
+    list.querySelectorAll('[data-open-chat-id]').forEach(row => {
+      row.addEventListener('click', () => resumeChat(row.dataset.openChatId, data));
+    });
+    list.querySelectorAll('[data-delete-chat-id]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const chatId = btn.dataset.deleteChatId;
+        if (!confirm('Delete this chat?')) return;
+        await supabase.from('video_call_chats').delete().eq('id', chatId);
+        if (currentChatId === chatId) startNewChat();
+        renderRecent();
+      });
     });
   }
 
