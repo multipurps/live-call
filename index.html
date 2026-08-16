@@ -256,8 +256,11 @@
     /* inset:0 alone sizes this to the nearest transformed ancestor's box - #deviceFrame
        on desktop, the real viewport on phones (see the #deviceFrame comment above).
        Explicit 100vw/100dvh here used to override that and blow the call screen out to
-       the full browser window even inside the desktop phone frame - never set those. */
-    position:fixed; inset:0; background:var(--coffee);
+       the full browser window even inside the desktop phone frame - never set those.
+       height:var(--app-height) is a fallback for iOS WKWebView/standalone installs where
+       100dvh under-reports and leaves a gap above the home indicator - see the JS that
+       sets --app-height from window.innerHeight below. */
+    position:fixed; inset:0; height:var(--app-height, 100dvh); background:var(--coffee);
     display:none; z-index:50;
   }
   #callScreen.active{display:block;}
@@ -277,7 +280,9 @@
     padding-top:max(env(safe-area-inset-top), 10px);
     padding-left:14px; padding-right:14px;
     display:flex; justify-content:flex-start;
+    transition:opacity 0.2s;
   }
+  #callTop.hidden{opacity:0; pointer-events:none;}
   .pill{
     background:rgba(43,28,20,0.82); backdrop-filter:blur(20px);
     border:1px solid var(--line); border-radius:100px;
@@ -699,6 +704,16 @@
 
   const $ = (id) => document.getElementById(id);
 
+  // Fix for iOS WKWebView/standalone-install PWAs where 100dvh under-reports the true
+  // visible height, leaving a coffee-brown gap above the home indicator on fullscreen
+  // views like the call screen. window.innerHeight is reliable there; keep it in sync.
+  function setAppHeight(){
+    document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
+  }
+  setAppHeight();
+  window.addEventListener('resize', setAppHeight);
+  window.addEventListener('orientationchange', setAppHeight);
+
   // Admin-set login background (public read, works even signed out) - falls back to
   // the plain coffee background if nothing has been uploaded via admin.html.
   (async () => {
@@ -824,7 +839,7 @@
 
   async function persist(){
     if (!currentUser) return;
-    await supabase.from('video_call_settings').upsert({
+    const { error } = await supabase.from('video_call_settings').upsert({
       user_id: currentUser.id,
       provider: state.provider,
       system_prompt: state.systemPrompt,
@@ -839,6 +854,11 @@
       anam_api_key: state.anamApiKey,
       updated_at: new Date().toISOString(),
     });
+    if (error) {
+      console.error('persist() failed:', error);
+      $('homeHint').textContent = 'Save failed: ' + error.message;
+    }
+    return !error;
   }
 
   async function loadSettings(){
@@ -1297,8 +1317,18 @@
     liveavatarRoom.on(RoomEvent.Disconnected, () => endCall());
 
     await liveavatarRoom.connect(sessionData.livekitUrl, sessionData.livekitToken);
-    if (micStream) await liveavatarRoom.localParticipant.publishTrack(micStream.getAudioTracks()[0]);
-    else await liveavatarRoom.localParticipant.setMicrophoneEnabled(true);
+    try {
+      if (micStream) {
+        await liveavatarRoom.localParticipant.publishTrack(micStream.getAudioTracks()[0], {
+          source: Track.Source.Microphone,
+          name: 'microphone',
+        });
+      } else {
+        await liveavatarRoom.localParticipant.setMicrophoneEnabled(true);
+      }
+    } catch (e) {
+      callStatus.textContent = 'Mic publish failed: ' + (e?.message || e);
+    }
   }
 
   async function startAnam(){
@@ -1402,6 +1432,7 @@
   callScreen.addEventListener('click', (e) => {
     if (e.target.closest('#callTop') || e.target.closest('#callBottom')) return;
     callBottom.classList.toggle('hidden');
+    $('callTop').classList.toggle('hidden');
   });
 
   let muted = false;
