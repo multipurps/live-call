@@ -19,7 +19,7 @@
     --coffee-light:#2b1c14;
     --tabbar-h:44px; /* fixed content height of the tab bar, excludes safe area. Single source of truth - never let this be content-driven. */
   }
-  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; margin:0; padding:0; -webkit-text-size-adjust:100%;}
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; margin:0; padding:0; -webkit-text-size-adjust:100%; touch-action:manipulation;}
   html,body{height:100%; background:var(--coffee); overflow:hidden;}
   body{
     font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
@@ -472,6 +472,7 @@
             <div id="providerPickerMenu">
               <button data-provider="heygen" class="active">HeyGen</button>
               <button data-provider="tavus">Tavus</button>
+              <button data-provider="anam">Anam</button>
             </div>
           </div>
         </div>
@@ -501,6 +502,14 @@
         <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3c2.5 2.5 3.8 6 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-6-3.8-9s1.3-6.5 3.8-9z" stroke="currentColor" stroke-width="1.8"/></svg></div>
         <div class="cBody"><div class="cValue">Browse Tavus presets</div></div>
         <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+
+      <div class="profileCard" id="anamFields" style="display:none;">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <div class="cBody">
+          <div class="cLabel">Anam avatar</div>
+          <select class="cSelect" id="anamAvatarId"><option value="">Loading avatars…</option></select>
+        </div>
       </div>
 
       <div class="profileCard navRow" id="openApiKeys">
@@ -574,6 +583,21 @@
         </div>
         <button class="saveKeyBtn" id="saveTavusKey">Save Tavus key</button>
         <p class="hint" style="margin:8px 0 18px;">Your keys are stored on your account only and used for your own calls — never shown back to you or anyone else after saving.</p>
+
+        <div class="profileCard">
+          <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="cBody">
+            <div class="cLabel">Anam API key</div>
+            <div class="cInputRow">
+              <input class="keyInput" id="anamApiKey" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore name="anam-key-field" placeholder="Paste your Anam API key" />
+            </div>
+          </div>
+          <button class="eyeToggle" type="button" data-reveal-for="anamApiKey" aria-label="Show key">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/></svg>
+          </button>
+        </div>
+        <button class="saveKeyBtn" id="saveAnamKey">Save Anam key</button>
+        <p class="hint" style="margin:8px 0 18px;">Get this from your Anam dashboard at <b>lab.anam.ai</b>.</p>
       </div>
     </div>
 
@@ -788,8 +812,11 @@
     heygenAvatarName: '',
     tavusReplicaId: '',
     tavusReplicaName: '',
+    anamAvatarId: '',
+    anamAvatarName: '',
     heygenApiKey: '',
     tavusApiKey: '',
+    anamApiKey: '',
   };
   let currentUser = null;
   let currentChatId = null;
@@ -805,8 +832,11 @@
       heygen_avatar_name: state.heygenAvatarName,
       tavus_replica_id: state.tavusReplicaId,
       tavus_replica_name: state.tavusReplicaName,
+      anam_avatar_id: state.anamAvatarId,
+      anam_avatar_name: state.anamAvatarName,
       heygen_api_key: state.heygenApiKey,
       tavus_api_key: state.tavusApiKey,
+      anam_api_key: state.anamApiKey,
       updated_at: new Date().toISOString(),
     });
   }
@@ -820,8 +850,11 @@
       state.heygenAvatarName = data.heygen_avatar_name || '';
       state.tavusReplicaId = data.tavus_replica_id || '';
       state.tavusReplicaName = data.tavus_replica_name || '';
+      state.anamAvatarId = data.anam_avatar_id || '';
+      state.anamAvatarName = data.anam_avatar_name || '';
       state.heygenApiKey = data.heygen_api_key || '';
       state.tavusApiKey = data.tavus_api_key || '';
+      state.anamApiKey = data.anam_api_key || '';
     } else {
       await persist(); // first login — create the row
     }
@@ -829,16 +862,20 @@
     $('heygenApiKey').placeholder = state.heygenApiKey ? 'Key saved — enter a new one to replace' : 'Paste your HeyGen API key';
     $('tavusApiKey').value = '';
     $('tavusApiKey').placeholder = state.tavusApiKey ? 'Key saved — enter a new one to replace' : 'Paste your Tavus API key';
+    $('anamApiKey').value = '';
+    $('anamApiKey').placeholder = state.anamApiKey ? 'Key saved — enter a new one to replace' : 'Paste your Anam API key';
     setProviderUI(state.provider);
   }
 
   function setProviderUI(p){
     state.provider = p; persist();
-    $('providerPickerLabel').textContent = p === 'heygen' ? 'HeyGen' : 'Tavus';
+    $('providerPickerLabel').textContent = p === 'heygen' ? 'HeyGen' : p === 'tavus' ? 'Tavus' : 'Anam';
     document.querySelectorAll('#providerPickerMenu button').forEach(b => b.classList.toggle('active', b.dataset.provider === p));
     $('heygenFields').style.display = p === 'heygen' ? 'block' : 'none';
+    $('openPublicAvatars').style.display = p === 'heygen' ? 'flex' : 'none';
     $('tavusFields').style.display = p === 'tavus' ? 'block' : 'none';
     $('openTavusPresets').style.display = p === 'tavus' ? 'flex' : 'none';
+    $('anamFields').style.display = p === 'anam' ? 'block' : 'none';
   }
   $('providerPickerBtn').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -880,6 +917,15 @@
     $('tavusApiKey').value = '';
     $('tavusApiKey').placeholder = 'Key saved — enter a new one to replace';
     loadTavusReplicas();
+  });
+  $('saveAnamKey').addEventListener('click', async () => {
+    const val = $('anamApiKey').value.trim();
+    if (!val) return;
+    state.anamApiKey = val;
+    await persist();
+    $('anamApiKey').value = '';
+    $('anamApiKey').placeholder = 'Key saved — enter a new one to replace';
+    loadAnamAvatars();
   });
   document.querySelectorAll('.eyeToggle').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1066,6 +1112,29 @@
     } catch (e) { sel.innerHTML = '<option value="">Could not load replicas</option>'; }
   }
 
+  async function loadAnamAvatars(){
+    const sel = $('anamAvatarId');
+    if (!state.anamApiKey) { sel.innerHTML = '<option value="">Add your Anam API key in the API screen first</option>'; return; }
+    try {
+      const r = await fetch('/api/anam-avatars', { headers: { 'x-anam-key': state.anamApiKey } });
+      const data = await r.json();
+      if (!r.ok) { sel.innerHTML = `<option value="">Error: ${JSON.stringify(data.error).slice(0,120)}</option>`; return; }
+      const avatars = data.avatars || [];
+      const options = avatars.map(a => `<option value="${a.id}">${a.name}</option>`);
+      if (state.anamAvatarId && !avatars.some(a => a.id === state.anamAvatarId)) {
+        options.unshift(`<option value="${state.anamAvatarId}">${state.anamAvatarName || state.anamAvatarId}</option>`);
+      }
+      if (!options.length) { sel.innerHTML = '<option value="">No avatars found</option>'; return; }
+      sel.innerHTML = options.join('');
+      if (state.anamAvatarId) sel.value = state.anamAvatarId;
+      sel.addEventListener('change', () => {
+        state.anamAvatarId = sel.value;
+        state.anamAvatarName = sel.options[sel.selectedIndex]?.textContent || '';
+        persist();
+      });
+    } catch (e) { sel.innerHTML = '<option value="">Could not load avatars</option>'; }
+  }
+
   function renderProfile(){
     $('profileEmail').textContent = currentUser?.email || 'Live Call';
   }
@@ -1136,7 +1205,7 @@
 
   const callScreen = $('callScreen'), callIdle = $('callIdle'), callStatus = $('callStatus'), callBottom = $('callBottom');
   const remoteVideo = $('remoteVideo'), liveDot = $('liveDot');
-  let liveavatarRoom = null, liveavatarSessionId = null, dailyCall = null, micStream = null, audioCtx = null, callStartedAt = null;
+  let liveavatarRoom = null, liveavatarSessionId = null, dailyCall = null, anamClient = null, micStream = null, audioCtx = null, callStartedAt = null;
 
   function primeAudioSession(){
     try {
@@ -1151,13 +1220,20 @@
   }
 
   async function startCall(){
-    state.systemPrompt = $('briefInput').value.trim();
+    // Prefer whatever is still typed in the box; if it's empty (e.g. already sent as a
+    // chat message, which clears the box), fall back to what's actually in the chat.
+    const typed = $('briefInput').value.trim();
+    state.systemPrompt = typed || chatMessages.filter(m => m.role === 'user').map(m => m.content).join(' ');
     persist();
     if (!state.systemPrompt) {
       $('homeHint').textContent = 'Type what you want it to do first.';
       return;
     }
     if (state.provider === 'heygen' && !state.heygenAvatarId) {
+      $('homeHint').textContent = 'Pick an avatar first.';
+      return;
+    }
+    if (state.provider === 'anam' && !state.anamAvatarId) {
       $('homeHint').textContent = 'Pick an avatar first.';
       return;
     }
@@ -1179,7 +1255,9 @@
     }
 
     callStartedAt = Date.now();
-    if (state.provider === 'heygen') await startHeygen(); else await startTavus();
+    if (state.provider === 'heygen') await startHeygen();
+    else if (state.provider === 'anam') await startAnam();
+    else await startTavus();
   }
 
   async function startHeygen(){
@@ -1221,6 +1299,36 @@
     await liveavatarRoom.connect(sessionData.livekitUrl, sessionData.livekitToken);
     if (micStream) await liveavatarRoom.localParticipant.publishTrack(micStream.getAudioTracks()[0]);
     else await liveavatarRoom.localParticipant.setMicrophoneEnabled(true);
+  }
+
+  async function startAnam(){
+    if (!state.anamApiKey) { callStatus.textContent = 'Add your Anam API key in Profile settings first.'; return; }
+    const resp = await fetch('/api/anam-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-anam-key': state.anamApiKey },
+      body: JSON.stringify({ avatarId: state.anamAvatarId, systemPrompt: state.systemPrompt }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) { callStatus.textContent = 'Anam error: ' + JSON.stringify(data.error); return; }
+
+    const { createClient, AnamEvent } = await import('https://esm.sh/@anam-ai/js-sdk@latest');
+    anamClient = createClient(data.sessionToken);
+
+    remoteVideo.muted = false;
+    remoteVideo.volume = 1.0;
+
+    anamClient.addListener(AnamEvent.VIDEO_PLAY_STARTED, () => {
+      remoteVideo.style.display = 'block';
+      callIdle.style.display = 'none';
+      liveDot.classList.add('live');
+      callBottom.classList.remove('hidden');
+    });
+    anamClient.addListener(AnamEvent.CONNECTION_CLOSED, () => endCall());
+
+    // The Anam SDK owns #remoteVideo directly (captures its own mic + streams both
+    // audio and video into it) rather than us wiring MediaStream tracks by hand like
+    // the HeyGen/Tavus paths above.
+    await anamClient.streamToVideoElement('remoteVideo');
   }
 
   async function startTavus(){
@@ -1280,6 +1388,7 @@
       liveavatarSessionId = null;
     }
     if (dailyCall) { try { dailyCall.leave(); dailyCall.destroy(); } catch(e){} dailyCall = null; }
+    if (anamClient) { try { anamClient.stopStreaming(); } catch(e){} anamClient = null; }
     if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
     if (audioCtx) { try { audioCtx.close(); } catch(e){} audioCtx = null; }
     remoteVideo.srcObject = null;
@@ -1364,6 +1473,7 @@
     await loadSettings();
     loadHeygenAvatars();
     loadTavusReplicas();
+    loadAnamAvatars();
   }
 
   supabase.auth.onAuthStateChange((_event, session) => {
