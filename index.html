@@ -221,6 +221,11 @@
   .profileCard input.keyInput.revealed{-webkit-text-security:none;}
   .profileCard input.keyInput::placeholder{color:var(--dim); font-weight:500;}
   .profileCard .eyeToggle{flex:none; color:var(--dim); background:none; padding:4px;}
+  .saveKeyBtn{
+    width:100%; padding:11px; border-radius:12px; font-size:13.5px; font-weight:650; color:#fff;
+    background:rgba(15,157,104,0.35); backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%);
+    border:1px solid rgba(15,157,104,0.6); margin-top:-4px;
+  }
   .profileCard .eyeToggle svg{width:18px; height:18px; display:block;}
   .profileCard select.cSelect{
     background:none; border:none; outline:none; -webkit-appearance:none; appearance:none;
@@ -494,28 +499,30 @@
           <div class="cBody">
             <div class="cLabel">HeyGen API key</div>
             <div class="cInputRow">
-              <input class="keyInput" id="heygenApiKey" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore name="heygen-key-field" placeholder="Paste your HeyGen API key" />
+              <input class="keyInput" id="heygenApiKey" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore name="heygen-key-field" placeholder="Paste your HeyGen API key" />
             </div>
           </div>
           <button class="eyeToggle" type="button" data-reveal-for="heygenApiKey" aria-label="Show key">
             <svg viewBox="0 0 24 24" fill="none"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/></svg>
           </button>
         </div>
-        <p class="hint" style="margin:-6px 0 18px;">Get this from <b>app.liveavatar.com/developers</b> — your old HeyGen dashboard key will not work here, HeyGen's real-time avatar product moved to a separate platform called LiveAvatar with its own key.</p>
+        <button class="saveKeyBtn" id="saveHeygenKey">Save HeyGen key</button>
+        <p class="hint" style="margin:8px 0 18px;">Get this from <b>app.liveavatar.com/developers</b> — your old HeyGen dashboard key will not work here, HeyGen's real-time avatar product moved to a separate platform called LiveAvatar with its own key.</p>
 
         <div class="profileCard">
           <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
           <div class="cBody">
             <div class="cLabel">Tavus API key</div>
             <div class="cInputRow">
-              <input class="keyInput" id="tavusApiKey" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore name="tavus-key-field" placeholder="Paste your Tavus API key" />
+              <input class="keyInput" id="tavusApiKey" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore name="tavus-key-field" placeholder="Paste your Tavus API key" />
             </div>
           </div>
           <button class="eyeToggle" type="button" data-reveal-for="tavusApiKey" aria-label="Show key">
             <svg viewBox="0 0 24 24" fill="none"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/></svg>
           </button>
         </div>
-        <p class="hint" style="margin:-6px 0 18px;">Your keys are stored on your account only and used for your own calls — never shared.</p>
+        <button class="saveKeyBtn" id="saveTavusKey">Save Tavus key</button>
+        <p class="hint" style="margin:8px 0 18px;">Your keys are stored on your account only and used for your own calls — never shown back to you or anyone else after saving.</p>
       </div>
     </div>
 
@@ -631,21 +638,39 @@
     policy: {
       title: 'Privacy Policy',
       html: `
-        <p>Placeholder — replace with your actual policy before sharing this app with anyone outside your own testing.</p>
-        <h3>What we store</h3>
-        <p>Your email, your chosen provider and avatar/replica selections, your own API keys, and a history of your calls — all tied to your account only.</p>
+        <p>This policy explains what Live Call collects, why, and how it's protected.</p>
+        <h3>Account data</h3>
+        <p>When you sign in (Google or email), we store your email address and a unique account ID from Supabase Auth. That's the only identity data we keep.</p>
+        <h3>Your API keys</h3>
+        <p>If you add your own HeyGen or Tavus API key, it's stored against your account only, encrypted at rest by Supabase, and used solely to place your own calls through your own provider account. The app's UI never displays a saved key back to you or anyone else — you can only overwrite it with a new one.</p>
+        <h3>Call content</h3>
+        <p>Your persona briefs, chat messages, and call history are stored against your account so you can resume past chats. This data is not shared with other users. Live video/audio during a call is streamed directly between your device and your chosen provider (HeyGen or Tavus) — we don't record or store the call media itself.</p>
         <h3>What we don't do</h3>
-        <p>We don't share your API keys or call data with any other user of this app.</p>
+        <p>We don't sell your data, share it with advertisers, or share your API keys or call data with any other user of this app. We don't use your data to train any AI model.</p>
+        <h3>Third parties involved</h3>
+        <p>Supabase (auth and database), and whichever avatar provider you choose (HeyGen/LiveAvatar or Tavus) and Groq (for the pre-call chat) process data as needed to run the app — each under their own privacy terms.</p>
+        <h3>Your control</h3>
+        <p>You can delete your saved API keys at any time by saving an empty value, or contact the app owner to request full account deletion.</p>
+        <h3>Changes</h3>
+        <p>If this policy changes materially, it'll be reflected here with an updated date. Last updated: this build.</p>
       `,
     },
     terms: {
       title: 'Terms & Conditions',
       html: `
-        <p>Placeholder — replace with real terms before sharing this app with anyone outside your own testing.</p>
-        <h3>Your account</h3>
-        <p>You're responsible for the API keys you add and any usage/cost they incur on HeyGen or Tavus.</p>
+        <p>By using Live Call, you agree to the following.</p>
+        <h3>Your account and keys</h3>
+        <p>You're responsible for any API keys you add and all usage or cost they incur on HeyGen, LiveAvatar, Tavus, or any other connected provider. This app does not provide free access to those services — you must have and pay for your own account with them.</p>
         <h3>Acceptable use</h3>
-        <p>Don't use this app for anything illegal or for impersonating a real person without their consent.</p>
+        <p>You may not use this app to impersonate a real, identifiable person without their explicit consent, to harass or deceive anyone, to generate content involving minors in any sexual or exploitative context, or for any illegal purpose. Creating a fictional persona or roleplaying a scenario you've written yourself is fine; impersonating a specific real person to deceive someone else is not.</p>
+        <h3>No guarantee of availability</h3>
+        <p>This app depends on third-party providers (HeyGen/LiveAvatar, Tavus, Groq, Supabase). We don't control their uptime, pricing, or policy changes, and can't guarantee the app will always work exactly as described.</p>
+        <h3>Approval gate</h3>
+        <p>New accounts require manual approval before use. Approval can be revoked at any time at the app owner's discretion, for any reason, including suspected abuse of the acceptable use terms above.</p>
+        <h3>Liability</h3>
+        <p>This app is provided as-is, without warranty. The app owner isn't liable for costs incurred on your connected provider accounts, for content generated during calls, or for any consequence of how you choose to use the persona/roleplay features.</p>
+        <h3>Changes</h3>
+        <p>These terms may be updated as the app evolves. Continued use after a change means you accept the update.</p>
       `,
     },
   };
@@ -703,8 +728,10 @@
     } else {
       await persist(); // first login — create the row
     }
-    $('heygenApiKey').value = state.heygenApiKey;
-    $('tavusApiKey').value = state.tavusApiKey;
+    $('heygenApiKey').value = '';
+    $('heygenApiKey').placeholder = state.heygenApiKey ? 'Key saved — enter a new one to replace' : 'Paste your HeyGen API key';
+    $('tavusApiKey').value = '';
+    $('tavusApiKey').placeholder = state.tavusApiKey ? 'Key saved — enter a new one to replace' : 'Paste your Tavus API key';
     setProviderUI(state.provider);
   }
 
@@ -738,20 +765,28 @@
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
   });
   $('sendBtn').addEventListener('click', sendChatMessage);
-  $('heygenApiKey').addEventListener('change', () => {
-    state.heygenApiKey = $('heygenApiKey').value.trim();
-    persist();
+  $('saveHeygenKey').addEventListener('click', async () => {
+    const val = $('heygenApiKey').value.trim();
+    if (!val) return;
+    state.heygenApiKey = val;
+    await persist();
+    $('heygenApiKey').value = '';
+    $('heygenApiKey').placeholder = 'Key saved — enter a new one to replace';
     loadHeygenAvatars();
   });
-  $('tavusApiKey').addEventListener('change', () => {
-    state.tavusApiKey = $('tavusApiKey').value.trim();
-    persist();
+  $('saveTavusKey').addEventListener('click', async () => {
+    const val = $('tavusApiKey').value.trim();
+    if (!val) return;
+    state.tavusApiKey = val;
+    await persist();
+    $('tavusApiKey').value = '';
+    $('tavusApiKey').placeholder = 'Key saved — enter a new one to replace';
     loadTavusReplicas();
   });
   document.querySelectorAll('.eyeToggle').forEach(btn => {
     btn.addEventListener('click', () => {
       const input = $(btn.dataset.revealFor);
-      input.classList.toggle('revealed');
+      input.type = input.type === 'password' ? 'text' : 'password';
     });
   });
 
