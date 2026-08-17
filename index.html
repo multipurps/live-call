@@ -18,6 +18,7 @@
     --coffee:#1e130d;
     --coffee-light:#2b1c14;
     --tabbar-h:44px; /* fixed content height of the tab bar, excludes safe area. Single source of truth - never let this be content-driven. */
+    --sidebar-w:88px; /* desktop-only left rail width, replaces --tabbar-h's role on wide screens */
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; margin:0; padding:0; -webkit-text-size-adjust:100%; touch-action:manipulation;}
   /* iOS standalone/home-screen web apps have a well-documented quirk: the page content
@@ -42,14 +43,37 @@
      #deviceFrame a transform makes it the containing block for all fixed descendants -
      no need to touch any of their position:fixed rules individually. ---------- */
   @media (min-width:701px){
-    body{background:#0e0b08; display:flex; align-items:center; justify-content:center;}
+    body{background:#0e0b08; display:block;}
     #deviceFrame{
-      width:430px; height:min(932px, 94vh); flex:none;
+      width:100%; height:100vh; height:100dvh; flex:none;
       transform:translateZ(0);
-      border-radius:36px; overflow:hidden;
-      box-shadow:0 40px 100px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.06);
+      border-radius:0; overflow:hidden; box-shadow:none;
     }
+    #sidebar{display:flex;}
+    #tabBar{display:none;}
+    #app{left:var(--sidebar-w);}
+    #homeInputBar{left:calc(var(--sidebar-w) + 24px); bottom:24px;}
+    .subScreen{left:var(--sidebar-w);}
+    .screen{padding-bottom:40px;}
   }
+
+  /* ---------- desktop sidebar: WhatsApp-Desktop-style left rail, replaces the bottom
+     tab bar entirely on wide screens. Hidden by default (mobile); the media query above
+     switches it on. Reuses .tabBtn's class/data-tab wiring so no extra JS is needed -
+     the existing showTab() click handler already binds to every .tabBtn on the page. ---------- */
+  #sidebar{
+    display:none; flex-direction:column; align-items:stretch;
+    position:fixed; left:0; top:0; bottom:0; width:var(--sidebar-w); z-index:10;
+    background:#1e130d; border-right:1px solid rgba(255,255,255,0.14);
+    padding-top:max(env(safe-area-inset-top), 22px);
+    gap:4px;
+  }
+  #sidebar .tabBtn{
+    flex:none; height:64px; gap:5px;
+    border-radius:0;
+  }
+  #sidebar .tabBtn.active{background:rgba(255,255,255,0.06);}
+  #sidebar .tabBtn svg{width:20px; height:20px;}
 
   .subScreen{
     position:fixed; inset:0; z-index:50; background:var(--coffee);
@@ -438,6 +462,21 @@
     <div id="authSubtitle">Your account is created — an admin needs to approve it before you can start calls. Check back soon.</div>
     <button id="pendingSignOut" style="width:100%; padding:13px; border-radius:12px; background:var(--panel); color:#fff; font-weight:600; font-size:14px; border:1px solid var(--line);">Sign out</button>
   </div>
+</div>
+
+<div id="sidebar">
+  <button class="tabBtn active" data-tab="home">
+    <svg viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M2.33537 7.87495C1.79491 9.00229 1.98463 10.3208 2.36407 12.9579L2.64284 14.8952C3.13025 18.2827 3.37396 19.9764 4.54903 20.9882C5.72409 22 7.44737 22 10.8939 22H13.1061C16.5526 22 18.2759 22 19.451 20.9882C20.626 19.9764 20.8697 18.2827 21.3572 14.8952L21.6359 12.9579C22.0154 10.3208 22.2051 9.00229 21.6646 7.87495C21.1242 6.7476 19.9738 6.06234 17.6731 4.69181L16.2882 3.86687C14.199 2.62229 13.1543 2 12 2C10.8457 2 9.80104 2.62229 7.71175 3.86687L6.32691 4.69181C4.02619 6.06234 2.87583 6.7476 2.33537 7.87495ZM8.2501 17.9998C8.2501 17.5856 8.58589 17.2498 9.0001 17.2498H15.0001C15.4143 17.2498 15.7501 17.5856 15.7501 17.9998C15.7501 18.414 15.4143 18.7498 15.0001 18.7498H9.0001C8.58589 18.7498 8.2501 18.414 8.2501 17.9998Z" fill="currentColor"/></svg>
+    Home
+  </button>
+  <button class="tabBtn" data-tab="recent">
+    <svg viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M22 12c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2s10 4.477 10 10zm-4.581 3.324a1 1 0 0 0-.525-1.313L13 12.341V6.5a1 1 0 0 0-2 0v6.17c0 .6.357 1.143.909 1.379l4.197 1.8a1 1 0 0 0 1.313-.525z" fill="currentColor"/></svg>
+    Recent
+  </button>
+  <button class="tabBtn" data-tab="profile">
+    <svg viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M6.75 6.5C6.75 3.6005 9.1005 1.25 12 1.25C14.8995 1.25 17.25 3.6005 17.25 6.5C17.25 9.3995 14.8995 11.75 12 11.75C9.1005 11.75 6.75 9.3995 6.75 6.5Z" fill="currentColor"/><path fill-rule="evenodd" clip-rule="evenodd" d="M4.25 18.5714C4.25 15.6325 6.63249 13.25 9.57143 13.25H14.4286C17.3675 13.25 19.75 15.6325 19.75 18.5714C19.75 20.8792 17.8792 22.75 15.5714 22.75H8.42857C6.12081 22.75 4.25 20.8792 4.25 18.5714Z" fill="currentColor"/></svg>
+    Profile
+  </button>
 </div>
 
 <div id="app">
