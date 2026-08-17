@@ -1,10 +1,17 @@
+import { getServiceClient, getAuthedUserId } from '../lib/supabaseAdmin.js';
+import { getProviderKey } from '../lib/keys.js';
+
 // Creates a Tavus persona (with the given system prompt) and a conversation, returns conversation_url.
-// The Tavus API key comes from the signed-in user's own settings (stored in Supabase, sent
-// by the client on each request) - NOT a shared Vercel environment variable.
+// The Tavus API key is looked up server-side from the signed-in user's own encrypted
+// Vault secret - never trusted from a client-sent header.
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
-  const apiKey = req.headers['x-tavus-key'];
+  const supabase = getServiceClient();
+  const userId = await getAuthedUserId(req, supabase);
+  if (!userId) return res.status(401).json({ error: 'Not signed in' });
+
+  const apiKey = await getProviderKey(supabase, userId, 'tavus');
   if (!apiKey) return res.status(400).json({ error: 'No Tavus API key set. Add yours in Profile settings.' });
 
   const { systemPrompt, replicaId, greeting } = req.body || {};

@@ -1,10 +1,13 @@
+import { getServiceClient, getAuthedUserId } from '../lib/supabaseAdmin.js';
+import { getProviderKey } from '../lib/keys.js';
+
 // Starts a LiveAvatar (HeyGen's real-time avatar product - a separate platform from
 // the old HeyGen Interactive Avatar API, with its own key from app.liveavatar.com/developers)
 // session for the signed-in user's own avatar and system prompt.
 //
-// The API key comes from the signed-in user's own settings (stored in Supabase, sent by
-// the client on each request) - NOT a shared Vercel environment variable. This means every
-// user burns their own LiveAvatar credits, never the app owner's.
+// The API key is looked up server-side from the signed-in user's own encrypted Vault
+// secret - never trusted from a client-sent header, never a shared Vercel environment
+// variable. This means every user burns their own LiveAvatar credits, never the app owner's.
 //
 // Flow: create a short-lived Context from the caller's system prompt -> mint a FULL-mode
 // session token against the chosen avatar + that context -> start the session to get the
@@ -12,7 +15,11 @@
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
-  const apiKey = req.headers['x-heygen-key'];
+  const supabase = getServiceClient();
+  const userId = await getAuthedUserId(req, supabase);
+  if (!userId) return res.status(401).json({ error: 'Not signed in' });
+
+  const apiKey = await getProviderKey(supabase, userId, 'heygen');
   if (!apiKey) return res.status(400).json({ error: 'No LiveAvatar API key set. Add yours in Profile settings.' });
 
   const { avatarId, systemPrompt } = req.body || {};

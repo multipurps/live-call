@@ -563,6 +563,30 @@
         </div>
       </div>
 
+      <div class="profileCard navRow" id="openAvatarUpload" style="display:none;">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 8a2 2 0 0 1 2-2h1.5l1-1.5h7l1 1.5H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.2" stroke="currentColor" stroke-width="1.8"/></svg></div>
+        <div class="cBody"><div class="cValue">Add your own avatar photo</div><div class="hint" id="avatarUploadStatus" style="margin:2px 0 0;"></div></div>
+        <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <input type="file" id="avatarPhotoInput" accept="image/png,image/jpeg,image/webp" style="display:none;" />
+
+      <div class="profileCard" id="anamVoiceFields" style="display:none;">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <div class="cBody">
+          <div class="cLabel">Anam voice</div>
+          <select class="cSelect" id="anamVoiceId"><option value="">Loading voices…</option></select>
+        </div>
+      </div>
+
+      <div class="profileCard" id="voiceRecordCard" style="display:none;">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <div class="cBody">
+          <div class="cValue">Clone your voice</div>
+          <div class="hint" id="voiceRecordStatus" style="margin:2px 0 0;">10–30s of clear speech, quiet room, no music.</div>
+        </div>
+        <button class="saveKeyBtn" id="voiceRecordBtn" style="width:auto; padding:9px 16px; margin:0;">Record</button>
+      </div>
+
       <div class="profileCard navRow" id="openApiKeys">
         <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div class="cBody"><div class="cValue">API</div></div>
@@ -750,6 +774,15 @@
 
   const $ = (id) => document.getElementById(id);
 
+  // Every provider-facing API call authenticates as the signed-in user instead of
+  // trusting a client-held plaintext key (see /lib/keys.js + /api/keys.js) - this
+  // is the one shared way every fetch() proves who it is.
+  async function authHeader(){
+    const { data } = await supabase.auth.getSession();
+    const token = data?.session?.access_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
   // Fix for iOS WKWebView/standalone-install PWAs where 100dvh under-reports the true
   // visible height, leaving a coffee-brown gap above the home indicator on fullscreen
   // views like the call screen. window.innerHeight is reliable there; keep it in sync.
@@ -875,9 +908,14 @@
     tavusReplicaName: '',
     anamAvatarId: '',
     anamAvatarName: '',
-    heygenApiKey: '',
-    tavusApiKey: '',
-    anamApiKey: '',
+    anamVoiceId: '',
+    anamVoiceName: '',
+    // Booleans only, never the plaintext - the real keys live encrypted in Supabase
+    // Vault and never leave the server after the moment they're first saved (see
+    // /api/keys.js, /lib/keys.js). Populated by loadKeyStatus() below.
+    heygenKeySet: false,
+    tavusKeySet: false,
+    anamKeySet: false,
   };
   let currentUser = null;
   let currentChatId = null;
@@ -895,9 +933,8 @@
       tavus_replica_name: state.tavusReplicaName,
       anam_avatar_id: state.anamAvatarId,
       anam_avatar_name: state.anamAvatarName,
-      heygen_api_key: state.heygenApiKey,
-      tavus_api_key: state.tavusApiKey,
-      anam_api_key: state.anamApiKey,
+      anam_voice_id: state.anamVoiceId,
+      anam_voice_name: state.anamVoiceName,
       updated_at: new Date().toISOString(),
     });
     if (error) {
@@ -905,6 +942,20 @@
       $('homeHint').textContent = 'Save failed: ' + error.message;
     }
     return !error;
+  }
+
+  async function loadKeyStatus(){
+    try {
+      const r = await fetch('/api/keys', { headers: await authHeader() });
+      const data = await r.json();
+      if (!r.ok) return;
+      state.heygenKeySet = !!data.heygen;
+      state.tavusKeySet = !!data.tavus;
+      state.anamKeySet = !!data.anam;
+    } catch (e) { /* leave as false - UI just shows "paste your key" */ }
+    $('heygenApiKey').placeholder = state.heygenKeySet ? 'Key saved — enter a new one to replace' : 'Paste your HeyGen API key';
+    $('tavusApiKey').placeholder = state.tavusKeySet ? 'Key saved — enter a new one to replace' : 'Paste your Tavus API key';
+    $('anamApiKey').placeholder = state.anamKeySet ? 'Key saved — enter a new one to replace' : 'Paste your Anam API key';
   }
 
   async function loadSettings(){
@@ -918,18 +969,15 @@
       state.tavusReplicaName = data.tavus_replica_name || '';
       state.anamAvatarId = data.anam_avatar_id || '';
       state.anamAvatarName = data.anam_avatar_name || '';
-      state.heygenApiKey = data.heygen_api_key || '';
-      state.tavusApiKey = data.tavus_api_key || '';
-      state.anamApiKey = data.anam_api_key || '';
+      state.anamVoiceId = data.anam_voice_id || '';
+      state.anamVoiceName = data.anam_voice_name || '';
     } else {
       await persist(); // first login — create the row
     }
     $('heygenApiKey').value = '';
-    $('heygenApiKey').placeholder = state.heygenApiKey ? 'Key saved — enter a new one to replace' : 'Paste your HeyGen API key';
     $('tavusApiKey').value = '';
-    $('tavusApiKey').placeholder = state.tavusApiKey ? 'Key saved — enter a new one to replace' : 'Paste your Tavus API key';
     $('anamApiKey').value = '';
-    $('anamApiKey').placeholder = state.anamApiKey ? 'Key saved — enter a new one to replace' : 'Paste your Anam API key';
+    await loadKeyStatus();
     setProviderUI(state.provider);
   }
 
@@ -942,6 +990,9 @@
     $('tavusFields').style.display = p === 'tavus' ? 'block' : 'none';
     $('openTavusPresets').style.display = p === 'tavus' ? 'flex' : 'none';
     $('anamFields').style.display = p === 'anam' ? 'block' : 'none';
+    $('openAvatarUpload').style.display = p === 'anam' ? 'flex' : 'none';
+    $('anamVoiceFields').style.display = p === 'anam' ? 'block' : 'none';
+    $('voiceRecordCard').style.display = p === 'anam' ? 'flex' : 'none';
   }
   $('providerPickerBtn').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -966,33 +1017,32 @@
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
   });
   $('sendBtn').addEventListener('click', sendChatMessage);
-  $('saveHeygenKey').addEventListener('click', async () => {
-    const val = $('heygenApiKey').value.trim();
+  async function saveProviderKey(provider, inputId, btnId, onSaved){
+    const input = $(inputId);
+    const val = input.value.trim();
     if (!val) return;
-    state.heygenApiKey = val;
-    await persist();
-    $('heygenApiKey').value = '';
-    $('heygenApiKey').placeholder = 'Key saved — enter a new one to replace';
-    loadHeygenAvatars();
-  });
-  $('saveTavusKey').addEventListener('click', async () => {
-    const val = $('tavusApiKey').value.trim();
-    if (!val) return;
-    state.tavusApiKey = val;
-    await persist();
-    $('tavusApiKey').value = '';
-    $('tavusApiKey').placeholder = 'Key saved — enter a new one to replace';
-    loadTavusReplicas();
-  });
-  $('saveAnamKey').addEventListener('click', async () => {
-    const val = $('anamApiKey').value.trim();
-    if (!val) return;
-    state.anamApiKey = val;
-    await persist();
-    $('anamApiKey').value = '';
-    $('anamApiKey').placeholder = 'Key saved — enter a new one to replace';
-    loadAnamAvatars();
-  });
+    const btn = $(btnId);
+    const originalText = btn.textContent;
+    btn.textContent = 'Saving…'; btn.disabled = true;
+    try {
+      const r = await fetch('/api/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+        body: JSON.stringify({ provider, key: val }),
+      });
+      const data = await r.json();
+      if (!r.ok) { $('homeHint').textContent = 'Key save failed: ' + JSON.stringify(data.error); return; }
+      state[provider + 'KeySet'] = true;
+      input.value = '';
+      input.placeholder = 'Key saved — enter a new one to replace';
+      if (onSaved) onSaved();
+    } finally {
+      btn.textContent = originalText; btn.disabled = false;
+    }
+  }
+  $('saveHeygenKey').addEventListener('click', () => saveProviderKey('heygen', 'heygenApiKey', 'saveHeygenKey', loadHeygenAvatars));
+  $('saveTavusKey').addEventListener('click', () => saveProviderKey('tavus', 'tavusApiKey', 'saveTavusKey', loadTavusReplicas));
+  $('saveAnamKey').addEventListener('click', () => saveProviderKey('anam', 'anamApiKey', 'saveAnamKey', () => { loadAnamAvatars(); loadAnamVoices(); }));
   document.querySelectorAll('.eyeToggle').forEach(btn => {
     btn.addEventListener('click', () => {
       const input = $(btn.dataset.revealFor);
@@ -1069,8 +1119,9 @@
 
   async function loadHeygenAvatars(){
     const sel = $('heygenAvatarId');
+    if (!state.heygenKeySet) { sel.innerHTML = '<option value="">Add your LiveAvatar API key in the API screen first</option>'; return; }
     try {
-      const r = await fetch('/api/heygen-avatars', { headers: { 'x-heygen-key': state.heygenApiKey } });
+      const r = await fetch('/api/heygen-avatars?type=private', { headers: await authHeader() });
       const data = await r.json();
       if (!r.ok) { sel.innerHTML = `<option value="">Error: ${JSON.stringify(data.error).slice(0,120)}</option>`; return; }
       const avatars = data.avatars || [];
@@ -1093,10 +1144,10 @@
   }
   async function loadPublicHeygenAvatars(){
     const list = $('publicAvatarsList');
-    if (!state.heygenApiKey) { list.innerHTML = '<div class="emptyState">Add your LiveAvatar API key in the API screen first.</div>'; return; }
+    if (!state.heygenKeySet) { list.innerHTML = '<div class="emptyState">Add your LiveAvatar API key in the API screen first.</div>'; return; }
     list.innerHTML = '<div class="emptyState">Loading…</div>';
     try {
-      const r = await fetch('/api/heygen-public-avatars', { headers: { 'x-heygen-key': state.heygenApiKey } });
+      const r = await fetch('/api/heygen-avatars?type=public', { headers: await authHeader() });
       const data = await r.json();
       if (!r.ok) { list.innerHTML = `<div class="emptyState">Error: ${JSON.stringify(data.error).slice(0,160)}</div>`; return; }
       const avatars = data.avatars || [];
@@ -1125,10 +1176,10 @@
   }
   async function loadTavusPresets(){
     const list = $('tavusPresetsList');
-    if (!state.tavusApiKey) { list.innerHTML = '<div class="emptyState">Add your Tavus API key in the API screen first.</div>'; return; }
+    if (!state.tavusKeySet) { list.innerHTML = '<div class="emptyState">Add your Tavus API key in the API screen first.</div>'; return; }
     list.innerHTML = '<div class="emptyState">Loading…</div>';
     try {
-      const r = await fetch('/api/tavus-presets', { headers: { 'x-tavus-key': state.tavusApiKey } });
+      const r = await fetch('/api/tavus-replicas?type=system', { headers: await authHeader() });
       const data = await r.json();
       if (!r.ok) { list.innerHTML = `<div class="emptyState">Error: ${JSON.stringify(data.error).slice(0,160)}</div>`; return; }
       const presets = data.presets || [];
@@ -1157,8 +1208,9 @@
   }
   async function loadTavusReplicas(){
     const sel = $('tavusReplicaId');
+    if (!state.tavusKeySet) { sel.innerHTML = '<option value="">Add your Tavus API key in the API screen first</option>'; return; }
     try {
-      const r = await fetch('/api/tavus-replicas', { headers: { 'x-tavus-key': state.tavusApiKey } });
+      const r = await fetch('/api/tavus-replicas', { headers: await authHeader() });
       const data = await r.json();
       if (!r.ok) { sel.innerHTML = `<option value="">Error: ${JSON.stringify(data.error).slice(0,120)}</option>`; return; }
       const replicas = data.replicas || [];
@@ -1180,9 +1232,9 @@
 
   async function loadAnamAvatars(){
     const sel = $('anamAvatarId');
-    if (!state.anamApiKey) { sel.innerHTML = '<option value="">Add your Anam API key in the API screen first</option>'; return; }
+    if (!state.anamKeySet) { sel.innerHTML = '<option value="">Add your Anam API key in the API screen first</option>'; return; }
     try {
-      const r = await fetch('/api/anam', { headers: { 'x-anam-key': state.anamApiKey } });
+      const r = await fetch('/api/anam?resource=avatars', { headers: await authHeader() });
       const data = await r.json();
       if (!r.ok) { sel.innerHTML = `<option value="">Error: ${JSON.stringify(data.error).slice(0,120)}</option>`; return; }
       const avatars = data.avatars || [];
@@ -1200,6 +1252,150 @@
       });
     } catch (e) { sel.innerHTML = '<option value="">Could not load avatars</option>'; }
   }
+
+  async function loadAnamVoices(){
+    const sel = $('anamVoiceId');
+    if (!sel) return;
+    if (!state.anamKeySet) { sel.innerHTML = '<option value="">Add your Anam API key in the API screen first</option>'; return; }
+    try {
+      const r = await fetch('/api/anam?resource=voices', { headers: await authHeader() });
+      const data = await r.json();
+      if (!r.ok) { sel.innerHTML = `<option value="">Error: ${JSON.stringify(data.error).slice(0,120)}</option>`; return; }
+      const voices = data.voices || [];
+      const options = voices.map(v => `<option value="${v.id}">${v.name}</option>`);
+      if (state.anamVoiceId && !voices.some(v => v.id === state.anamVoiceId)) {
+        options.unshift(`<option value="${state.anamVoiceId}">${state.anamVoiceName || state.anamVoiceId}</option>`);
+      }
+      sel.innerHTML = '<option value="">Default voice</option>' + options.join('');
+      if (state.anamVoiceId) sel.value = state.anamVoiceId;
+      sel.addEventListener('change', () => {
+        state.anamVoiceId = sel.value;
+        state.anamVoiceName = sel.options[sel.selectedIndex]?.textContent || '';
+        persist();
+      });
+    } catch (e) { sel.innerHTML = '<option value="">Could not load voices</option>'; }
+  }
+
+
+  // ---------------------------------------------------------------- Anam custom avatar photo
+  $('openAvatarUpload').addEventListener('click', () => $('avatarPhotoInput').click());
+  $('avatarPhotoInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    e.target.value = ''; // allow picking the same file again later
+    if (!file) return;
+    const statusEl = $('avatarUploadStatus');
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      statusEl.textContent = 'Use a PNG, JPEG, or WEBP photo.'; return;
+    }
+    if (file.size > 4.5 * 1024 * 1024) {
+      statusEl.textContent = 'Photo is too large — 4.5MB max.'; return;
+    }
+    if (!state.anamKeySet) { statusEl.textContent = 'Add your Anam API key first.'; return; }
+    try {
+      statusEl.textContent = 'Uploading photo…';
+      const ext = file.type.split('/')[1];
+      const path = `avatars/${currentUser.id}/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('user-uploads').upload(path, file, { contentType: file.type, upsert: true });
+      if (upErr) { statusEl.textContent = 'Upload failed: ' + upErr.message; return; }
+      const { data: pub } = supabase.storage.from('user-uploads').getPublicUrl(path);
+
+      statusEl.textContent = 'Creating your avatar…';
+      const r = await fetch('/api/anam', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+        body: JSON.stringify({ action: 'upload-avatar', imageUrl: pub.publicUrl, displayName: `${currentUser.email}'s avatar` }),
+      });
+      const data = await r.json();
+      if (!r.ok) { statusEl.textContent = 'Anam error: ' + JSON.stringify(data.error).slice(0, 140); return; }
+
+      state.anamAvatarId = data.id;
+      state.anamAvatarName = data.name;
+      await persist();
+      statusEl.textContent = 'Saved — ' + data.name;
+      loadAnamAvatars();
+    } catch (err) {
+      statusEl.textContent = 'Failed: ' + (err.message || err);
+    }
+  });
+
+  // ---------------------------------------------------------------- Anam voice cloning
+  let voiceRecorder = null, voiceChunks = [], voiceTimer = null, voiceSeconds = 0;
+  const VOICE_MAX_SECONDS = 30;
+
+  function setVoiceRecordUI(recording){
+    $('voiceRecordBtn').textContent = recording ? 'Stop' : 'Record';
+  }
+
+  $('voiceRecordBtn').addEventListener('click', () => {
+    if (voiceRecorder && voiceRecorder.state === 'recording') stopVoiceRecording();
+    else startVoiceRecording();
+  });
+
+  async function startVoiceRecording(){
+    const statusEl = $('voiceRecordStatus');
+    if (!state.anamKeySet) { statusEl.textContent = 'Add your Anam API key first.'; return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      voiceChunks = [];
+      voiceRecorder = new MediaRecorder(stream);
+      voiceRecorder.ondataavailable = (e) => { if (e.data.size > 0) voiceChunks.push(e.data); };
+      voiceRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        clearInterval(voiceTimer);
+        setVoiceRecordUI(false);
+        const blob = new Blob(voiceChunks, { type: voiceRecorder.mimeType || 'audio/webm' });
+        await uploadVoiceClip(blob);
+      };
+      voiceRecorder.start();
+      voiceSeconds = 0;
+      setVoiceRecordUI(true);
+      statusEl.textContent = `Recording… ${voiceSeconds}s`;
+      voiceTimer = setInterval(() => {
+        voiceSeconds++;
+        statusEl.textContent = `Recording… ${voiceSeconds}s`;
+        if (voiceSeconds >= VOICE_MAX_SECONDS) stopVoiceRecording();
+      }, 1000);
+    } catch (e) {
+      statusEl.textContent = 'Microphone permission is required.';
+    }
+  }
+
+  function stopVoiceRecording(){
+    if (voiceRecorder && voiceRecorder.state !== 'inactive') voiceRecorder.stop();
+  }
+
+  async function uploadVoiceClip(blob){
+    const statusEl = $('voiceRecordStatus');
+    statusEl.textContent = 'Uploading…';
+    try {
+      const urlResp = await fetch('/api/anam', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+        body: JSON.stringify({ action: 'voice-upload-url' }),
+      });
+      const urlData = await urlResp.json();
+      if (!urlResp.ok) { statusEl.textContent = 'Error: ' + JSON.stringify(urlData.error).slice(0, 140); return; }
+
+      await fetch(urlData.uploadUrl, { method: 'PUT', headers: { 'Content-Type': blob.type }, body: blob });
+
+      const createResp = await fetch('/api/anam', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+        body: JSON.stringify({ action: 'create-voice', audioKey: urlData.audioKey, displayName: `${currentUser.email}'s voice` }),
+      });
+      const createData = await createResp.json();
+      if (!createResp.ok) { statusEl.textContent = 'Error: ' + JSON.stringify(createData.error).slice(0, 140); return; }
+
+      state.anamVoiceId = createData.id;
+      state.anamVoiceName = createData.name;
+      await persist();
+      statusEl.textContent = 'Saved — ' + createData.name;
+      loadAnamVoices();
+    } catch (err) {
+      statusEl.textContent = 'Upload failed: ' + (err.message || err);
+    }
+  }
+
 
   function renderProfile(){
     $('profileEmail').textContent = currentUser?.email || 'Live Call';
@@ -1331,10 +1527,10 @@
     // its own platform (app.liveavatar.com) with its own key and its own API, separate
     // from the old HeyGen Interactive Avatar API. The saved "HeyGen API key" is a
     // LiveAvatar key (see the hint on the API key screen).
-    if (!state.heygenApiKey) { callStatus.textContent = 'Add your LiveAvatar API key in Profile settings first.'; return; }
+    if (!state.heygenKeySet) { callStatus.textContent = 'Add your LiveAvatar API key in Profile settings first.'; return; }
     const sessionResp = await fetch('/api/heygen-token', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-heygen-key': state.heygenApiKey },
+      headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({ avatarId: state.heygenAvatarId, systemPrompt: state.systemPrompt }),
     });
     const sessionData = await sessionResp.json();
@@ -1378,11 +1574,11 @@
   }
 
   async function startAnam(){
-    if (!state.anamApiKey) { callStatus.textContent = 'Add your Anam API key in Profile settings first.'; return; }
+    if (!state.anamKeySet) { callStatus.textContent = 'Add your Anam API key in Profile settings first.'; return; }
     const resp = await fetch('/api/anam', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-anam-key': state.anamApiKey },
-      body: JSON.stringify({ avatarId: state.anamAvatarId, systemPrompt: state.systemPrompt }),
+      headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+      body: JSON.stringify({ action: 'session', avatarId: state.anamAvatarId, voiceId: state.anamVoiceId, systemPrompt: state.systemPrompt }),
     });
     const data = await resp.json();
     if (!resp.ok) { callStatus.textContent = 'Anam error: ' + JSON.stringify(data.error); return; }
@@ -1408,10 +1604,10 @@
   }
 
   async function startTavus(){
-    if (!state.tavusApiKey) { callStatus.textContent = 'Add your Tavus API key in Profile settings first.'; return; }
+    if (!state.tavusKeySet) { callStatus.textContent = 'Add your Tavus API key in Profile settings first.'; return; }
     const resp = await fetch('/api/tavus-conversation', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-tavus-key': state.tavusApiKey },
+      headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
       body: JSON.stringify({ systemPrompt: state.systemPrompt, replicaId: state.tavusReplicaId || undefined }),
     });
     const data = await resp.json();
@@ -1456,11 +1652,16 @@
     }
     if (liveavatarRoom) { try { liveavatarRoom.disconnect(); } catch(e){} liveavatarRoom = null; }
     if (liveavatarSessionId) {
-      fetch('/api/heygen-stop-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-heygen-key': state.heygenApiKey },
-        body: JSON.stringify({ sessionId: liveavatarSessionId }),
-      }).catch(() => {});
+      const sid = liveavatarSessionId;
+      (async () => {
+        try {
+          await fetch('/api/heygen-stop-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+            body: JSON.stringify({ sessionId: sid }),
+          });
+        } catch (e) {}
+      })();
       liveavatarSessionId = null;
     }
     if (dailyCall) { try { dailyCall.leave(); dailyCall.destroy(); } catch(e){} dailyCall = null; }
@@ -1551,6 +1752,7 @@
     loadHeygenAvatars();
     loadTavusReplicas();
     loadAnamAvatars();
+    loadAnamVoices();
   }
 
   supabase.auth.onAuthStateChange((_event, session) => {

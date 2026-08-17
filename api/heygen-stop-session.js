@@ -1,9 +1,16 @@
+import { getServiceClient, getAuthedUserId } from '../lib/supabaseAdmin.js';
+import { getProviderKey } from '../lib/keys.js';
+
 // Stops a LiveAvatar session on call end so the user's session (and billing) actually
 // closes instead of idling out. Best-effort - called from the client's endCall() cleanup.
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
-  const apiKey = req.headers['x-heygen-key'];
+  const supabase = getServiceClient();
+  const userId = await getAuthedUserId(req, supabase);
+  if (!userId) return res.status(401).json({ error: 'Not signed in' });
+
+  const apiKey = await getProviderKey(supabase, userId, 'heygen');
   if (!apiKey) return res.status(400).json({ error: 'No LiveAvatar API key set.' });
 
   const { sessionId } = req.body || {};
