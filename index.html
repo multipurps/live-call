@@ -555,37 +555,13 @@
         <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
 
-      <div class="profileCard" id="anamFields" style="display:none;">
+      <div class="profileCard navRow" id="openAnamAvatarScreen" style="display:none;">
         <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
-        <div class="cBody">
-          <div class="cLabel">Anam avatar</div>
-          <select class="cSelect" id="anamAvatarId"><option value="">Loading avatars…</option></select>
-        </div>
-      </div>
-
-      <div class="profileCard navRow" id="openAvatarUpload" style="display:none;">
-        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 8a2 2 0 0 1 2-2h1.5l1-1.5h7l1 1.5H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.2" stroke="currentColor" stroke-width="1.8"/></svg></div>
-        <div class="cBody"><div class="cValue">Add your own avatar photo</div><div class="hint" id="avatarUploadStatus" style="margin:2px 0 0;"></div></div>
+        <div class="cBody"><div class="cValue">Avatar</div><div class="hint" id="anamAvatarSummary" style="margin:2px 0 0;"></div></div>
         <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
       <input type="file" id="avatarPhotoInput" accept="image/png,image/jpeg,image/webp" style="display:none;" />
-
-      <div class="profileCard" id="anamVoiceFields" style="display:none;">
-        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
-        <div class="cBody">
-          <div class="cLabel">Anam voice</div>
-          <select class="cSelect" id="anamVoiceId"><option value="">Loading voices…</option></select>
-        </div>
-      </div>
-
-      <div class="profileCard" id="voiceRecordCard" style="display:none;">
-        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
-        <div class="cBody">
-          <div class="cValue">Clone your voice</div>
-          <div class="hint" id="voiceRecordStatus" style="margin:2px 0 0;">10–30s of clear speech, quiet room, no music.</div>
-        </div>
-        <button class="saveKeyBtn" id="voiceRecordBtn" style="width:auto; padding:9px 16px; margin:0;">Record</button>
-      </div>
+      <input type="file" id="voiceFileInput" accept="audio/*" style="display:none;" />
 
       <div class="profileCard navRow" id="openApiKeys">
         <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
@@ -642,7 +618,8 @@
           </button>
         </div>
         <button class="saveKeyBtn" id="saveHeygenKey">Save HeyGen key</button>
-        <p class="hint" style="margin:8px 0 18px;">Get this from <b>app.liveavatar.com/developers</b> — your old HeyGen dashboard key will not work here, HeyGen's real-time avatar product moved to a separate platform called LiveAvatar with its own key.</p>
+        <p class="hint" id="heygenKeyStatus" style="margin:8px 0 4px; min-height:16px;"></p>
+        <p class="hint" style="margin:0 0 18px;">Get this from <a href="https://app.liveavatar.com/developers" target="_blank" rel="noopener" style="color:inherit; text-decoration:underline;">app.liveavatar.com/developers</a> — your old HeyGen dashboard key will not work here, HeyGen's real-time avatar product moved to a separate platform called LiveAvatar with its own key.</p>
 
         <div class="profileCard">
           <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
@@ -657,7 +634,8 @@
           </button>
         </div>
         <button class="saveKeyBtn" id="saveTavusKey">Save Tavus key</button>
-        <p class="hint" style="margin:8px 0 18px;">Your keys are stored on your account only and used for your own calls — never shown back to you or anyone else after saving.</p>
+        <p class="hint" id="tavusKeyStatus" style="margin:8px 0 4px; min-height:16px;"></p>
+        <p class="hint" style="margin:0 0 18px;">Your keys are stored on your account only and used for your own calls — never shown back to you or anyone else after saving.</p>
 
         <div class="profileCard">
           <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
@@ -672,7 +650,8 @@
           </button>
         </div>
         <button class="saveKeyBtn" id="saveAnamKey">Save Anam key</button>
-        <p class="hint" style="margin:8px 0 18px;">Get this from your Anam dashboard at <b>lab.anam.ai</b>.</p>
+        <p class="hint" id="anamKeyStatus" style="margin:8px 0 4px; min-height:16px;"></p>
+        <p class="hint" style="margin:0 0 18px;">Get this from your Anam dashboard at <a href="https://lab.anam.ai/api-keys" target="_blank" rel="noopener" style="color:inherit; text-decoration:underline;">lab.anam.ai/api-keys</a> — opens in your browser, not inside this app, so paste it back here after copying.</p>
       </div>
     </div>
 
@@ -699,6 +678,50 @@
       <div class="subScreenBody">
         <p class="hint" style="margin:0 0 16px; text-align:left;">Pick any replica from Tavus's stock preset library. This sets your replica without needing one of your own.</p>
         <div id="tavusPresetsList"></div>
+      </div>
+    </div>
+
+    <div id="anamAvatarScreen" class="subScreen">
+      <div class="subScreenHeader">
+        <button class="backBtn" id="closeAnamAvatarScreen" aria-label="Back">
+          <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="subScreenTitle">Avatar</div>
+      </div>
+      <div class="subScreenBody">
+        <div class="profileCard">
+          <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+          <div class="cBody">
+            <div class="cLabel">Avatar</div>
+            <select class="cSelect" id="anamAvatarId"><option value="">Loading avatars…</option></select>
+          </div>
+        </div>
+
+        <div class="profileCard navRow" id="openAvatarUpload">
+          <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 8a2 2 0 0 1 2-2h1.5l1-1.5h7l1 1.5H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.2" stroke="currentColor" stroke-width="1.8"/></svg></div>
+          <div class="cBody"><div class="cValue">Add your own avatar photo</div><div class="hint" id="avatarUploadStatus" style="margin:2px 0 0;"></div></div>
+          <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+
+        <div class="profileCard" style="margin-top:22px;">
+          <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+          <div class="cBody">
+            <div class="cLabel">Voice</div>
+            <select class="cSelect" id="anamVoiceId"><option value="">Loading voices…</option></select>
+          </div>
+        </div>
+
+        <div class="profileCard">
+          <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+          <div class="cBody">
+            <div class="cValue">Clone your voice</div>
+            <div class="hint" id="voiceRecordStatus" style="margin:2px 0 0;">10–30s of clear speech, quiet room, no music.</div>
+          </div>
+          <div style="display:flex; gap:8px; flex:none;">
+            <button class="saveKeyBtn" id="voiceRecordBtn" style="width:auto; padding:9px 14px; margin:0;">Record</button>
+            <button class="saveKeyBtn" id="voiceUploadBtn" style="width:auto; padding:9px 14px; margin:0; background:var(--panel);">Upload</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -989,10 +1012,8 @@
     $('openPublicAvatars').style.display = p === 'heygen' ? 'flex' : 'none';
     $('tavusFields').style.display = p === 'tavus' ? 'block' : 'none';
     $('openTavusPresets').style.display = p === 'tavus' ? 'flex' : 'none';
-    $('anamFields').style.display = p === 'anam' ? 'block' : 'none';
-    $('openAvatarUpload').style.display = p === 'anam' ? 'flex' : 'none';
-    $('anamVoiceFields').style.display = p === 'anam' ? 'block' : 'none';
-    $('voiceRecordCard').style.display = p === 'anam' ? 'flex' : 'none';
+    $('openAnamAvatarScreen').style.display = p === 'anam' ? 'flex' : 'none';
+    if (p === 'anam') updateAnamAvatarSummary();
   }
   $('providerPickerBtn').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -1020,10 +1041,12 @@
   async function saveProviderKey(provider, inputId, btnId, onSaved){
     const input = $(inputId);
     const val = input.value.trim();
+    const statusEl = $(provider + 'KeyStatus');
     if (!val) return;
     const btn = $(btnId);
     const originalText = btn.textContent;
     btn.textContent = 'Saving…'; btn.disabled = true;
+    if (statusEl) statusEl.textContent = '';
     try {
       const r = await fetch('/api/keys', {
         method: 'POST',
@@ -1031,11 +1054,17 @@
         body: JSON.stringify({ provider, key: val }),
       });
       const data = await r.json();
-      if (!r.ok) { $('homeHint').textContent = 'Key save failed: ' + JSON.stringify(data.error); return; }
+      if (!r.ok) {
+        if (statusEl) statusEl.textContent = '✗ Save failed: ' + (data.error?.message || JSON.stringify(data.error));
+        return;
+      }
       state[provider + 'KeySet'] = true;
       input.value = '';
       input.placeholder = 'Key saved — enter a new one to replace';
+      if (statusEl) statusEl.textContent = '✓ Saved';
       if (onSaved) onSaved();
+    } catch (e) {
+      if (statusEl) statusEl.textContent = '✗ Save failed: ' + (e.message || e);
     } finally {
       btn.textContent = originalText; btn.disabled = false;
     }
@@ -1249,6 +1278,7 @@
         state.anamAvatarId = sel.value;
         state.anamAvatarName = sel.options[sel.selectedIndex]?.textContent || '';
         persist();
+        updateAnamAvatarSummary();
       });
     } catch (e) { sel.innerHTML = '<option value="">Could not load avatars</option>'; }
   }
@@ -1272,10 +1302,28 @@
         state.anamVoiceId = sel.value;
         state.anamVoiceName = sel.options[sel.selectedIndex]?.textContent || '';
         persist();
+        updateAnamAvatarSummary();
       });
     } catch (e) { sel.innerHTML = '<option value="">Could not load voices</option>'; }
   }
 
+
+  // ---------------------------------------------------------------- Anam avatar subscreen
+  function updateAnamAvatarSummary(){
+    const parts = [];
+    if (state.anamAvatarName) parts.push(state.anamAvatarName);
+    if (state.anamVoiceName) parts.push(state.anamVoiceName);
+    $('anamAvatarSummary').textContent = parts.join(' · ') || 'Not set';
+  }
+  $('openAnamAvatarScreen').addEventListener('click', () => {
+    $('anamAvatarScreen').classList.add('active');
+    loadAnamAvatars();
+    loadAnamVoices();
+  });
+  $('closeAnamAvatarScreen').addEventListener('click', () => {
+    $('anamAvatarScreen').classList.remove('active');
+    updateAnamAvatarSummary();
+  });
 
   // ---------------------------------------------------------------- Anam custom avatar photo
   $('openAvatarUpload').addEventListener('click', () => $('avatarPhotoInput').click());
@@ -1313,6 +1361,7 @@
       await persist();
       statusEl.textContent = 'Saved — ' + data.name;
       loadAnamAvatars();
+      updateAnamAvatarSummary();
     } catch (err) {
       statusEl.textContent = 'Failed: ' + (err.message || err);
     }
@@ -1391,10 +1440,22 @@
       await persist();
       statusEl.textContent = 'Saved — ' + createData.name;
       loadAnamVoices();
+      updateAnamAvatarSummary();
     } catch (err) {
       statusEl.textContent = 'Upload failed: ' + (err.message || err);
     }
   }
+
+  $('voiceUploadBtn').addEventListener('click', () => $('voiceFileInput').click());
+  $('voiceFileInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    const statusEl = $('voiceRecordStatus');
+    if (!state.anamKeySet) { statusEl.textContent = 'Add your Anam API key first.'; return; }
+    if (file.size > 4.5 * 1024 * 1024) { statusEl.textContent = 'Audio file is too large — 4.5MB max.'; return; }
+    await uploadVoiceClip(file);
+  });
 
 
   function renderProfile(){
