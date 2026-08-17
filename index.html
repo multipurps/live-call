@@ -20,11 +20,18 @@
     --tabbar-h:44px; /* fixed content height of the tab bar, excludes safe area. Single source of truth - never let this be content-driven. */
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; margin:0; padding:0; -webkit-text-size-adjust:100%; touch-action:manipulation;}
-  html,body{height:100%; background:var(--coffee); overflow:hidden;}
+  /* iOS standalone/home-screen web apps have a well-documented quirk: the page content
+     effectively gets shifted up by env(safe-area-inset-top), which pushes a gap of that
+     same height into view at the BOTTOM (above the home indicator) unless the document's
+     own height explicitly compensates for it. min-height:calc(100% + safe-area-inset-top)
+     plus -webkit-fill-available (which measures the true rendered viewport rather than
+     dvh's occasionally-wrong standalone-mode value) together are the standard fix. */
+  html{height:100%; min-height:calc(100% + env(safe-area-inset-top)); min-height:-webkit-fill-available;}
+  body{background:var(--coffee); overflow:hidden;}
   body{
     font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
     color:#fff;
-    position:fixed; inset:0; width:100vw; height:100dvh;
+    position:fixed; inset:0; width:100vw; height:100dvh; height:-webkit-fill-available;
   }
   button{-webkit-appearance:none; appearance:none; border:0; cursor:pointer; font-family:inherit; color:#fff; background:none;}
 

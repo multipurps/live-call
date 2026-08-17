@@ -51,7 +51,17 @@ export default async function handler(req, res) {
             avatarId,
             voiceId: DEFAULT_VOICE_ID,
             llmId: DEFAULT_LLM_ID,
-            systemPrompt: systemPrompt || 'You are a helpful, friendly assistant on a live video call.',
+            // Anam's default behavior is to open the call with its own auto-generated
+            // greeting, unrelated to systemPrompt - which is exactly what read as "going
+            // off context" the moment the call connected. skipGreeting keeps it silent
+            // until the user speaks first, so its very first reply is already grounded
+            // in both systemPrompt and whatever the user actually says. The prompt itself
+            // is also wrapped with an explicit stay-on-task instruction rather than sent
+            // as raw free text, since a bare instruction can drift into small talk.
+            systemPrompt: systemPrompt
+              ? `You are on a live video call with one job: ${systemPrompt}. Stay focused on this the entire call - don't drift into unrelated small talk or generic chit-chat.`
+              : 'You are a helpful, friendly assistant on a live video call.',
+            skipGreeting: true,
           },
         }),
       });
