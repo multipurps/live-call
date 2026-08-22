@@ -342,6 +342,7 @@
   }
   #authScreen{
     position:fixed; inset:0; z-index:100; background:var(--coffee);
+    height:var(--app-height, 100dvh);
     display:flex; align-items:center; justify-content:center; padding:28px;
   }
   #authScreen.hidden{display:none;}
@@ -823,7 +824,7 @@
       const { data } = await supabase.from('app_settings').select('login_bg_url').eq('id', true).maybeSingle();
       if (data?.login_bg_url) {
         const el = document.getElementById('authScreen');
-        el.style.backgroundImage = `linear-gradient(rgba(30,19,13,0.72), rgba(30,19,13,0.92)), url('${data.login_bg_url}')`;
+        el.style.backgroundImage = `linear-gradient(rgba(30,19,13,0.32), rgba(30,19,13,0.55)), url('${data.login_bg_url}')`;
         el.style.backgroundSize = 'cover';
         el.style.backgroundPosition = 'center';
       }
