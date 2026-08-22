@@ -32,7 +32,13 @@
   body{
     font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
     color:#fff;
-    position:fixed; inset:0; width:100vw; height:100dvh; height:-webkit-fill-available;
+    /* position:relative (not fixed) deliberately - iOS WKWebView appears to cap
+       position:fixed boxes to a shorter "layout viewport" even when an explicit
+       larger height is set on them. body gets its real height written directly
+       via JS (setAppHeight below) instead, and #authScreen/#callScreen are
+       position:absolute against this element rather than fixed against the
+       viewport, to route around that cap entirely. */
+    position:relative; width:100vw; height:100dvh; height:-webkit-fill-available;
   }
   button{-webkit-appearance:none; appearance:none; border:0; cursor:pointer; font-family:inherit; color:#fff; background:none;}
 
@@ -291,7 +297,7 @@
        height:var(--app-height) is a fallback for iOS WKWebView/standalone installs where
        100dvh under-reports and leaves a gap above the home indicator - see the JS that
        sets --app-height from window.innerHeight below. */
-    position:fixed; inset:0; height:var(--app-height, 100dvh); background:var(--coffee);
+    position:absolute; inset:0; height:var(--app-height, 100dvh); background:var(--coffee);
     display:none; z-index:50;
   }
   #callScreen.active{display:block;}
@@ -341,7 +347,7 @@
     background:#ff3b30; display:flex; align-items:center; justify-content:center;
   }
   #authScreen{
-    position:fixed; inset:0; z-index:100; background:var(--coffee);
+    position:absolute; inset:0; z-index:100; background:var(--coffee);
     height:var(--app-height, 100dvh);
     display:flex; align-items:center; justify-content:center; padding:28px;
   }
@@ -815,6 +821,7 @@
   function setAppHeight(){
     const h = Math.max(window.innerHeight, window.screen.height || 0);
     document.documentElement.style.setProperty('--app-height', h + 'px');
+    document.body.style.height = h + 'px';
   }
   setAppHeight();
   window.addEventListener('resize', setAppHeight);
