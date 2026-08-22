@@ -119,11 +119,13 @@ export default async function handler(req, res) {
     }
 
     if (action === 'voice-upload-url') {
+      const { filename, contentType } = req.body || {};
+      if (!filename || !contentType) return res.status(400).json({ error: 'filename and contentType are required' });
       try {
         const r = await fetch('https://api.anam.ai/v1/voices/presigned-upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeaders },
-          body: JSON.stringify({}),
+          body: JSON.stringify({ filename, contentType }),
         });
         const { data, raw } = await parseJsonSafe(r);
         if (!data) {

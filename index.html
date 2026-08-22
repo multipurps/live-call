@@ -1343,7 +1343,7 @@
     try {
       statusEl.textContent = 'Uploading photo…';
       const ext = file.type.split('/')[1];
-      const path = `avatars/${currentUser.id}/${Date.now()}.${ext}`;
+      const path = `${currentUser.id}/avatars/${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from('user-uploads').upload(path, file, { contentType: file.type, upsert: true });
       if (upErr) { statusEl.textContent = 'Upload failed: ' + upErr.message; return; }
       const { data: pub } = supabase.storage.from('user-uploads').getPublicUrl(path);
@@ -1418,15 +1418,22 @@
     const statusEl = $('voiceRecordStatus');
     statusEl.textContent = 'Uploading…';
     try {
+      // A recorded Blob has no filename (only File objects from a file input do) - derive
+      // one from its mime type since Anam's presigned-upload endpoint requires both.
+      const contentType = blob.type || 'audio/webm';
+      const ext = (blob.name && blob.name.includes('.')) ? blob.name.split('.').pop()
+        : (contentType.split('/')[1] || 'webm').split(';')[0];
+      const filename = blob.name || `voice-${Date.now()}.${ext}`;
+
       const urlResp = await fetch('/api/anam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
-        body: JSON.stringify({ action: 'voice-upload-url' }),
+        body: JSON.stringify({ action: 'voice-upload-url', filename, contentType }),
       });
       const urlData = await urlResp.json();
       if (!urlResp.ok) { statusEl.textContent = 'Error: ' + JSON.stringify(urlData.error).slice(0, 140); return; }
 
-      await fetch(urlData.uploadUrl, { method: 'PUT', headers: { 'Content-Type': blob.type }, body: blob });
+      await fetch(urlData.uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: blob });
 
       const createResp = await fetch('/api/anam', {
         method: 'POST',
