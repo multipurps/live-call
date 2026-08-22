@@ -807,15 +807,37 @@
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
-  // Fix for iOS WKWebView/standalone-install PWAs where 100dvh under-reports the true
-  // visible height, leaving a coffee-brown gap above the home indicator on fullscreen
-  // views like the call screen. window.innerHeight is reliable there; keep it in sync.
+  // Fix for iOS WKWebView/standalone-install PWAs where 100dvh (and even
+  // window.innerHeight in some builds) under-reports the true visible height,
+  // leaving a coffee-brown gap above the home indicator on fullscreen views.
+  // screen.height is the true physical screen size in CSS px and isn't subject
+  // to that under-report - take whichever of the two is larger as the real height.
   function setAppHeight(){
-    document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
+    const h = Math.max(window.innerHeight, window.screen.height || 0);
+    document.documentElement.style.setProperty('--app-height', h + 'px');
   }
   setAppHeight();
   window.addEventListener('resize', setAppHeight);
   window.addEventListener('orientationchange', setAppHeight);
+
+  // Temporary on-screen diagnostic in case the fix above still isn't enough -
+  // remove once the gap is confirmed gone. Tap the "Live Call" logo 5x to show it.
+  const saProbe = document.createElement('div');
+  saProbe.style.cssText = 'position:fixed; bottom:0; height:0; padding-bottom:env(safe-area-inset-bottom); visibility:hidden;';
+  document.body.appendChild(saProbe);
+
+  let logoTapCount = 0, logoTapTimer = null;
+  document.getElementById('authLogo')?.addEventListener('click', () => {
+    logoTapCount++;
+    clearTimeout(logoTapTimer);
+    logoTapTimer = setTimeout(() => { logoTapCount = 0; }, 1500);
+    if (logoTapCount >= 5) {
+      logoTapCount = 0;
+      const vv = window.visualViewport;
+      const safeBottom = getComputedStyle(saProbe).paddingBottom;
+      alert(`innerHeight: ${window.innerHeight}\nscreen.height: ${window.screen.height}\nvisualViewport.height: ${vv ? vv.height : 'n/a'}\nsafe-area-inset-bottom: ${safeBottom}\ndevicePixelRatio: ${window.devicePixelRatio}\nstandalone: ${window.navigator.standalone}`);
+    }
+  });
 
   // Admin-set login background (public read, works even signed out) - falls back to
   // the plain coffee background if nothing has been uploaded via admin.html.
