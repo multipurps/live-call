@@ -224,8 +224,20 @@
   .callRow .summary{font-size:12.5px; color:var(--dim); margin-top:3px;}
   .callRow .time{font-size:11.5px; color:var(--dim); white-space:nowrap;}
   .callRow .rowRight{display:flex; align-items:center; gap:10px; flex:none;}
-  .callRow .deleteChat{flex:none; width:22px; height:22px; display:flex; align-items:center; justify-content:center; color:var(--dim);}
-  .callRow .deleteChat svg{width:16px; height:16px; display:block;}
+  .kebabBtn{flex:none; width:26px; height:26px; display:flex; align-items:center; justify-content:center; color:var(--dim); border-radius:8px;}
+  .kebabBtn:active{background:rgba(255,255,255,0.08);}
+  .kebabBtn svg{width:18px; height:18px; display:block;}
+  .actionMenu{
+    position:fixed; z-index:200; min-width:180px;
+    background:#2b1c14; border:1px solid var(--line); border-radius:14px;
+    padding:6px; box-shadow:0 12px 32px rgba(0,0,0,0.5);
+    display:flex; flex-direction:column;
+  }
+  .actionMenu button{
+    text-align:left; padding:11px 12px; border-radius:9px; font-size:14px; color:#fff; font-weight:550;
+  }
+  .actionMenu button:active{background:rgba(255,255,255,0.08);}
+  .actionMenu button.danger{color:#ff6b5b;}
   .emptyState{padding:60px 0; text-align:center; color:var(--dim); font-size:13.5px; line-height:1.5;}
 
   .avatarCircle{
@@ -702,6 +714,9 @@
             <div class="cLabel">Avatar</div>
             <select class="cSelect" id="anamAvatarId"><option value="">Loading avatars…</option></select>
           </div>
+          <button class="kebabBtn" id="anamAvatarMenuBtn" aria-label="Avatar options">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="6" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="18" r="1.6" fill="currentColor"/></svg>
+          </button>
         </div>
 
         <div class="profileCard navRow" id="openAvatarUpload">
@@ -716,6 +731,9 @@
             <div class="cLabel">Voice</div>
             <select class="cSelect" id="anamVoiceId"><option value="">Loading voices…</option></select>
           </div>
+          <button class="kebabBtn" id="anamVoiceMenuBtn" aria-label="Voice options">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="6" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="18" r="1.6" fill="currentColor"/></svg>
+          </button>
         </div>
 
         <div class="profileCard">
@@ -803,6 +821,37 @@
   // thing Supabase's own SDK keeps in localStorage — everything else below reads/writes Supabase.
 
   const $ = (id) => document.getElementById(id);
+
+  // Reusable "•••" action menu - a small dismissible popover anchored near the button
+  // that opened it. Used for Recent chat's overflow menu and Avatar/Voice delete,
+  // instead of a bare trash-can icon sitting exposed in the row.
+  let openMenuEl = null;
+  function closeActionMenu(){
+    if (openMenuEl) { openMenuEl.remove(); openMenuEl = null; }
+    document.removeEventListener('click', closeActionMenu, true);
+  }
+  function openActionMenu(anchorBtn, items){
+    closeActionMenu();
+    const rect = anchorBtn.getBoundingClientRect();
+    const menu = document.createElement('div');
+    menu.className = 'actionMenu';
+    menu.innerHTML = items.map((it, i) => `<button data-i="${i}"${it.danger ? ' class="danger"' : ''}>${it.label}</button>`).join('');
+    document.body.appendChild(menu);
+    const menuW = menu.offsetWidth || 180;
+    let left = rect.right - menuW;
+    if (left < 8) left = 8;
+    menu.style.left = left + 'px';
+    menu.style.top = (rect.bottom + 6) + 'px';
+    items.forEach((it, i) => {
+      menu.querySelector(`[data-i="${i}"]`).addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeActionMenu();
+        it.onClick();
+      });
+    });
+    openMenuEl = menu;
+    setTimeout(() => document.addEventListener('click', closeActionMenu, true), 0);
+  }
 
   // Every provider-facing API call authenticates as the signed-in user instead of
   // trusting a client-held plaintext key (see /lib/keys.js + /api/keys.js) - this
@@ -1355,6 +1404,50 @@
     updateAnamAvatarSummary();
   });
 
+  $('anamAvatarMenuBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!state.anamAvatarId) return;
+    openActionMenu($('anamAvatarMenuBtn'), [{
+      label: 'Delete this avatar',
+      danger: true,
+      onClick: async () => {
+        if (!confirm(`Delete "${state.anamAvatarName || 'this avatar'}" from your Anam account? This can't be undone.`)) return;
+        const r = await fetch(`/api/anam?type=avatar&id=${encodeURIComponent(state.anamAvatarId)}`, {
+          method: 'DELETE',
+          headers: await authHeader(),
+        });
+        const data = await r.json();
+        if (!r.ok) { alert('Delete failed: ' + JSON.stringify(data.error)); return; }
+        state.anamAvatarId = ''; state.anamAvatarName = '';
+        await persist();
+        loadAnamAvatars();
+        updateAnamAvatarSummary();
+      },
+    }]);
+  });
+
+  $('anamVoiceMenuBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!state.anamVoiceId) return;
+    openActionMenu($('anamVoiceMenuBtn'), [{
+      label: 'Delete this voice',
+      danger: true,
+      onClick: async () => {
+        if (!confirm(`Delete "${state.anamVoiceName || 'this voice'}" from your Anam account? This can't be undone.`)) return;
+        const r = await fetch(`/api/anam?type=voice&id=${encodeURIComponent(state.anamVoiceId)}`, {
+          method: 'DELETE',
+          headers: await authHeader(),
+        });
+        const data = await r.json();
+        if (!r.ok) { alert('Delete failed: ' + JSON.stringify(data.error)); return; }
+        state.anamVoiceId = ''; state.anamVoiceName = '';
+        await persist();
+        loadAnamVoices();
+        updateAnamAvatarSummary();
+      },
+    }]);
+  });
+
   // ---------------------------------------------------------------- Anam custom avatar photo
   $('openAvatarUpload').addEventListener('click', () => $('avatarPhotoInput').click());
   $('avatarPhotoInput').addEventListener('change', async (e) => {
@@ -1528,8 +1621,8 @@
         </div>
         <div class="rowRight">
           <div class="time">${new Date(c.updated_at).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}</div>
-          <button class="deleteChat" data-delete-chat-id="${c.id}" aria-label="Delete chat">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0v13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <button class="kebabBtn" data-menu-chat-id="${c.id}" aria-label="Chat options">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="6" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="18" r="1.6" fill="currentColor"/></svg>
           </button>
         </div>
       </div>
@@ -1538,14 +1631,20 @@
     list.querySelectorAll('[data-open-chat-id]').forEach(row => {
       row.addEventListener('click', () => resumeChat(row.dataset.openChatId, data));
     });
-    list.querySelectorAll('[data-delete-chat-id]').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
+    list.querySelectorAll('[data-menu-chat-id]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const chatId = btn.dataset.deleteChatId;
-        if (!confirm('Delete this chat?')) return;
-        await supabase.from('video_call_chats').delete().eq('id', chatId);
-        if (currentChatId === chatId) startNewChat();
-        renderRecent();
+        const chatId = btn.dataset.menuChatId;
+        openActionMenu(btn, [{
+          label: 'Delete chat',
+          danger: true,
+          onClick: async () => {
+            if (!confirm('Delete this chat?')) return;
+            await supabase.from('video_call_chats').delete().eq('id', chatId);
+            if (currentChatId === chatId) startNewChat();
+            renderRecent();
+          },
+        }]);
       });
     });
   }
