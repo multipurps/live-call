@@ -409,17 +409,24 @@
 </head>
 <body>
 
-<div id="debugBar" style="display:none; position:fixed; top:0; left:0; right:0; background:#ff3b30; color:#fff; font-size:11px; padding:8px 12px; z-index:999; white-space:pre-wrap; word-break:break-all;"></div>
+<div id="debugBar" style="display:none; position:fixed; left:14px; right:14px; bottom:calc(env(safe-area-inset-bottom, 0px) + 14px); background:#2b1c14; color:#fff; font-size:12.5px; line-height:1.4; padding:12px 14px; border-radius:14px; border:1px solid rgba(255,255,255,0.14); box-shadow:0 12px 32px rgba(0,0,0,0.5); z-index:999; max-height:120px; overflow-y:auto;"></div>
 <script>
-  window.onerror = function(msg, src, line, col, err){
+  // Something went wrong, shown as a small dismissible card instead of a raw red
+  // debug-console bar across the status bar - still surfaces the real error (needed
+  // for debugging) but doesn't look like a leftover dev tool in a shipped app.
+  function showErrorToast(text){
     const bar = document.getElementById('debugBar');
     bar.style.display = 'block';
-    bar.textContent = 'JS ERROR: ' + msg + ' (line ' + line + ')';
+    bar.innerHTML = '<div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">'
+      + '<div style="opacity:0.85;">Something went wrong. ' + text.replace(/</g,'&lt;') + '</div>'
+      + '<button onclick="this.closest(\'#debugBar\').style.display=\'none\'" style="flex:none; color:#fff; opacity:0.6; font-size:16px; line-height:1; background:none; border:0;">✕</button>'
+      + '</div>';
+  }
+  window.onerror = function(msg, src, line, col, err){
+    showErrorToast(msg + ' (line ' + line + ')');
   };
   window.addEventListener('unhandledrejection', function(e){
-    const bar = document.getElementById('debugBar');
-    bar.style.display = 'block';
-    bar.textContent = 'PROMISE ERROR: ' + (e.reason?.message || e.reason);
+    showErrorToast(e.reason?.message || e.reason);
   });
   // Poll instead of a single check: a slow network (auth + approval + settings + avatar
   // list, all sequential) can easily blow past a one-shot timer even when the app is
@@ -869,8 +876,14 @@
   // to that under-report - take whichever of the two is larger as the real height.
   function setAppHeight(){
     const h = Math.max(window.innerHeight, window.screen.height || 0);
-    document.documentElement.style.setProperty('--app-height', h + 'px');
-    document.body.style.height = h + 'px';
+    const px = h + 'px';
+    // Guard against a feedback loop: setting body.style.height can itself trigger
+    // another 'resize' in some WKWebView builds, which would re-run this and set the
+    // same value again forever - this is what caused the "Maximum call stack size
+    // exceeded" crash. Skip the write entirely when nothing actually changed.
+    if (document.body.style.height === px) return;
+    document.documentElement.style.setProperty('--app-height', px);
+    document.body.style.height = px;
   }
   setAppHeight();
   window.addEventListener('resize', setAppHeight);
@@ -1243,11 +1256,11 @@
       if (!options.length) { sel.innerHTML = '<option value="">No avatars yet — create one at app.liveavatar.com/home</option>'; return; }
       sel.innerHTML = options.join('');
       if (state.heygenAvatarId) sel.value = state.heygenAvatarId;
-      sel.addEventListener('change', () => {
+      sel.onchange = () => {
         state.heygenAvatarId = sel.value;
         state.heygenAvatarName = sel.options[sel.selectedIndex]?.textContent || '';
         persist();
-      });
+      };
     } catch (e) { sel.innerHTML = '<option value="">Could not load avatars</option>'; }
   }
   async function loadPublicHeygenAvatars(){
@@ -1330,11 +1343,11 @@
       }
       sel.innerHTML = '<option value="">Use account default</option>' + options.join('');
       if (state.tavusReplicaId) sel.value = state.tavusReplicaId;
-      sel.addEventListener('change', () => {
+      sel.onchange = () => {
         state.tavusReplicaId = sel.value;
         state.tavusReplicaName = sel.options[sel.selectedIndex]?.textContent || '';
         persist();
-      });
+      };
     } catch (e) { sel.innerHTML = '<option value="">Could not load replicas</option>'; }
   }
 
@@ -1353,12 +1366,12 @@
       if (!options.length) { sel.innerHTML = '<option value="">No avatars found</option>'; return; }
       sel.innerHTML = options.join('');
       if (state.anamAvatarId) sel.value = state.anamAvatarId;
-      sel.addEventListener('change', () => {
+      sel.onchange = () => {
         state.anamAvatarId = sel.value;
         state.anamAvatarName = sel.options[sel.selectedIndex]?.textContent || '';
         persist();
         updateAnamAvatarSummary();
-      });
+      };
     } catch (e) { sel.innerHTML = '<option value="">Could not load avatars</option>'; }
   }
 
@@ -1377,12 +1390,12 @@
       }
       sel.innerHTML = '<option value="">Default voice</option>' + options.join('');
       if (state.anamVoiceId) sel.value = state.anamVoiceId;
-      sel.addEventListener('change', () => {
+      sel.onchange = () => {
         state.anamVoiceId = sel.value;
         state.anamVoiceName = sel.options[sel.selectedIndex]?.textContent || '';
         persist();
         updateAnamAvatarSummary();
-      });
+      };
     } catch (e) { sel.innerHTML = '<option value="">Could not load voices</option>'; }
   }
 
@@ -1550,7 +1563,7 @@
       const urlResp = await fetch('/api/anam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
-        body: JSON.stringify({ action: 'voice-upload-url', filename, contentType }),
+        body: JSON.stringify({ action: 'voice-upload-url', filename, contentType, fileSize: blob.size }),
       });
       const urlData = await urlResp.json();
       if (!urlResp.ok) { statusEl.textContent = 'Error: ' + JSON.stringify(urlData.error).slice(0, 140); return; }
