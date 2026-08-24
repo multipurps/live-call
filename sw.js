@@ -1,4 +1,4 @@
-const CACHE = 'live-call-v3';
+const CACHE = 'live-call-v4';
 const SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -26,4 +26,21 @@ self.addEventListener('fetch', (e) => {
         .catch(() => caches.match(e.request))
     );
   }
+});
+
+self.addEventListener('push', (e) => {
+  let data = { title: 'Live Call', body: 'New announcement' };
+  try { data = e.data.json(); } catch (err) {}
+  e.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: './icon-192.png',
+      badge: './icon-192.png',
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil(clients.openWindow('./index.html'));
 });
