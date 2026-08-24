@@ -97,6 +97,12 @@
   <button class="btn" id="loginBgUploadBtn" style="margin-top:10px; display:none;">Upload as login background</button>
   <button class="btn" id="loginBgClearBtn" style="margin-top:10px; background:rgba(255,59,48,0.2); border-color:rgba(255,59,48,0.45);">Remove current background</button>
   <p class="hint" id="loginBgHint"></p>
+
+  <h1 style="margin-top:28px;">Send announcement</h1>
+  <div class="field"><label>Title</label><input id="announceTitle" type="text" placeholder="e.g. New feature" /></div>
+  <div class="field"><label>Message</label><input id="announceBody" type="text" placeholder="What's the announcement?" /></div>
+  <button class="btn" id="announceSendBtn">Push to all users</button>
+  <p class="hint" id="announceHint"></p>
 </div>
 
 <script type="module">
@@ -218,6 +224,23 @@
     if (!r.ok) { $('loginBgHint').textContent = data.error; return; }
     $('loginBgHint').textContent = 'Removed — login screen back to default.';
     loadLoginBg();
+  });
+
+  $('announceSendBtn').addEventListener('click', async () => {
+    const title = $('announceTitle').value.trim();
+    const body = $('announceBody').value.trim();
+    if (!title || !body) { $('announceHint').textContent = 'Fill in both fields.'; return; }
+    $('announceHint').textContent = 'Sending…';
+    const { data: { session } } = await supabase.auth.getSession();
+    const r = await fetch('/api/send-announcement', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ title, body }),
+    });
+    const data = await r.json();
+    if (!r.ok) { $('announceHint').textContent = data.error; return; }
+    $('announceHint').textContent = `Sent to ${data.sent} of ${data.total} subscribed users.`;
+    $('announceTitle').value = ''; $('announceBody').value = '';
   });
 
   supabase.auth.onAuthStateChange((_event, session) => {
