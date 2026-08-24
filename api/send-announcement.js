@@ -26,6 +26,9 @@ export default async function handler(req, res) {
   const { title, body } = req.body || {};
   if (!title || !body) return res.status(400).json({ error: 'title and body are required' });
 
+  await supabase.from('announcements').insert({ title, body });
+
+
   webpush.setVapidDetails(vapidSubject, vapidPublic, vapidPrivate);
 
   const { data: subs, error: subsErr } = await supabase.from('push_subscriptions').select('*');
