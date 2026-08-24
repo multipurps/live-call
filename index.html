@@ -886,7 +886,10 @@
     document.body.style.height = px;
   }
   setAppHeight();
-  window.addEventListener('resize', setAppHeight);
+  // Deliberately NOT listening on 'resize' - on mobile that also fires every time the
+  // keyboard opens/closes while typing, which would reflow body's explicit height and
+  // visibly shift the whole page around. orientationchange (portrait/landscape) is the
+  // only real case this needs to react to; screen.height never changes for the keyboard.
   window.addEventListener('orientationchange', setAppHeight);
 
   // Temporary on-screen diagnostic in case the fix above still isn't enough -

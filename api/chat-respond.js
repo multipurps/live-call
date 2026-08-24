@@ -32,7 +32,8 @@ the conversation once you've set it unless the topic clearly changes.`;
         model: 'openai/gpt-oss-120b',
         messages: [{ role: 'system', content: systemPrompt }, ...messages],
         temperature: 0.7,
-        max_tokens: 150,
+        max_completion_tokens: 600,
+        reasoning_effort: 'low',
         response_format: {
           type: 'json_schema',
           json_schema: {

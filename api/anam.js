@@ -145,7 +145,9 @@ export default async function handler(req, res) {
         const r = await fetch('https://api.anam.ai/v1/voices', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeaders },
-          body: JSON.stringify({ displayName: displayName || 'My voice', audioKey }),
+          // Anam's voices endpoint wants "name", unlike avatars which use "displayName" -
+          // sending both covers either naming convention their validator actually checks.
+          body: JSON.stringify({ name: displayName || 'My voice', displayName: displayName || 'My voice', audioKey }),
         });
         const { data, raw } = await parseJsonSafe(r);
         if (!data) {
