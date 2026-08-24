@@ -651,7 +651,6 @@
             </button>
             <div id="providerPickerMenu">
               <button data-provider="heygen" class="active">HeyGen</button>
-              <button data-provider="tavus">Tavus</button>
               <button data-provider="anam">Anam</button>
             </div>
           </div>
@@ -671,19 +670,6 @@
         <div class="cBody"><div class="cValue">Browse public avatars</div></div>
         <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
-      <div class="profileCard" id="tavusFields" style="display:none;">
-        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
-        <div class="cBody">
-          <div class="cLabel">Tavus replica</div>
-          <select class="cSelect" id="tavusReplicaId"><option value="">Loading your replicas…</option></select>
-        </div>
-      </div>
-      <div class="profileCard navRow" id="openTavusPresets" style="display:none;">
-        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3c2.5 2.5 3.8 6 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-6-3.8-9s1.3-6.5 3.8-9z" stroke="currentColor" stroke-width="1.8"/></svg></div>
-        <div class="cBody"><div class="cValue">Browse Tavus presets</div></div>
-        <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-
       <div class="profileCard navRow" id="openAnamAvatarScreen" style="display:none;">
         <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
         <div class="cBody"><div class="cValue">Avatar</div><div class="hint" id="anamAvatarSummary" style="margin:2px 0 0;"></div></div>
@@ -764,22 +750,6 @@
         <div class="profileCard">
           <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
           <div class="cBody">
-            <div class="cLabel">Tavus API key</div>
-            <div class="cInputRow">
-              <input class="keyInput" id="tavusApiKey" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore name="tavus-key-field" placeholder="Paste your Tavus API key" />
-            </div>
-          </div>
-          <button class="eyeToggle" type="button" data-reveal-for="tavusApiKey" aria-label="Show key">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/></svg>
-          </button>
-        </div>
-        <button class="saveKeyBtn" id="saveTavusKey">Save Tavus key</button>
-        <p class="hint" id="tavusKeyStatus" style="margin:8px 0 4px; min-height:16px;"></p>
-        <p class="hint" style="margin:0 0 18px;">Your keys are stored on your account only and used for your own calls — never shown back to you or anyone else after saving.</p>
-
-        <div class="profileCard">
-          <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-          <div class="cBody">
             <div class="cLabel">Anam API key</div>
             <div class="cInputRow">
               <input class="keyInput" id="anamApiKey" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore name="anam-key-field" placeholder="Paste your Anam API key" />
@@ -805,19 +775,6 @@
       <div class="subScreenBody">
         <p class="hint" style="margin:0 0 16px; text-align:left;">Pick any avatar from LiveAvatar's public directory. This sets your avatar without needing one of your own.</p>
         <div id="publicAvatarsList"></div>
-      </div>
-    </div>
-
-    <div id="tavusPresetsScreen" class="subScreen">
-      <div class="subScreenHeader">
-        <button class="backBtn" id="closeTavusPresets" aria-label="Back">
-          <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-        <div class="subScreenTitle">Tavus presets</div>
-      </div>
-      <div class="subScreenBody">
-        <p class="hint" style="margin:0 0 16px; text-align:left;">Pick any replica from Tavus's stock preset library. This sets your replica without needing one of your own.</p>
-        <div id="tavusPresetsList"></div>
       </div>
     </div>
 
@@ -1056,15 +1013,13 @@
 
   $('openPublicAvatars').addEventListener('click', () => { $('publicAvatarsScreen').classList.add('active'); loadPublicHeygenAvatars(); });
   $('closePublicAvatars').addEventListener('click', () => $('publicAvatarsScreen').classList.remove('active'));
-  $('openTavusPresets').addEventListener('click', () => { $('tavusPresetsScreen').classList.add('active'); loadTavusPresets(); });
-  $('closeTavusPresets').addEventListener('click', () => $('tavusPresetsScreen').classList.remove('active'));
 
   const infoContent = {
     faq: {
       title: 'FAQ',
       html: `
         <h3>Which providers can I use?</h3>
-        <p>HeyGen and Tavus. Pick the active one in Profile, and add your own API key for it under the API screen — each user brings their own key, so your calls are billed to your own account, never anyone else's.</p>
+        <p>HeyGen and Anam. Pick the active one in Profile, and add your own API key for it under the API screen — each user brings their own key, so your calls are billed to your own account, never anyone else's.</p>
         <h3>Why does it say my HeyGen key is invalid?</h3>
         <p>HeyGen's real-time avatar product moved to a separate platform called LiveAvatar. Your old HeyGen dashboard key won't work — get a new one from app.liveavatar.com/developers.</p>
         <h3>Where do I manage my avatar or replica?</h3>
@@ -1077,7 +1032,7 @@
       title: 'About',
       html: `
         <h3>Live Call</h3>
-        <p>A lightweight way to start a real-time video call with an AI avatar, powered by your own HeyGen or Tavus account.</p>
+        <p>A lightweight way to start a real-time video call with an AI avatar, powered by your own HeyGen or Anam account.</p>
         <h3>Built for iPhone</h3>
         <p>Live Call is a Progressive Web App — add it to your home screen for the full experience.</p>
       `,
@@ -1089,13 +1044,13 @@
         <h3>Account data</h3>
         <p>When you sign in (Google or email), we store your email address and a unique account ID from Supabase Auth. That's the only identity data we keep.</p>
         <h3>Your API keys</h3>
-        <p>If you add your own HeyGen or Tavus API key, it's stored against your account only, encrypted at rest by Supabase, and used solely to place your own calls through your own provider account. The app's UI never displays a saved key back to you or anyone else — you can only overwrite it with a new one.</p>
+        <p>If you add your own HeyGen or Anam API key, it's stored encrypted in Supabase Vault, never in plaintext, and used solely to place your own calls through your own provider account. The app's UI never displays a saved key back to you or anyone else — you can only overwrite it with a new one.</p>
         <h3>Call content</h3>
-        <p>Your persona briefs, chat messages, and call history are stored against your account so you can resume past chats. This data is not shared with other users. Live video/audio during a call is streamed directly between your device and your chosen provider (HeyGen or Tavus) — we don't record or store the call media itself.</p>
+        <p>Your persona briefs, chat messages, and call history are stored against your account so you can resume past chats. This data is not shared with other users. Live video/audio during a call is streamed directly between your device and your chosen provider (HeyGen or Anam) — we don't record or store the call media itself.</p>
         <h3>What we don't do</h3>
         <p>We don't sell your data, share it with advertisers, or share your API keys or call data with any other user of this app. We don't use your data to train any AI model.</p>
         <h3>Third parties involved</h3>
-        <p>Supabase (auth and database), and whichever avatar provider you choose (HeyGen/LiveAvatar or Tavus) and Groq (for the pre-call chat) process data as needed to run the app — each under their own privacy terms.</p>
+        <p>Supabase (auth and database), and whichever avatar provider you choose (HeyGen/LiveAvatar or Anam) and Groq (for the pre-call chat) process data as needed to run the app — each under their own privacy terms.</p>
         <h3>Your control</h3>
         <p>You can delete your saved API keys at any time by saving an empty value, or contact the app owner to request full account deletion.</p>
         <h3>Changes</h3>
@@ -1107,11 +1062,11 @@
       html: `
         <p>By using Live Call, you agree to the following.</p>
         <h3>Your account and keys</h3>
-        <p>You're responsible for any API keys you add and all usage or cost they incur on HeyGen, LiveAvatar, Tavus, or any other connected provider. This app does not provide free access to those services — you must have and pay for your own account with them.</p>
+        <p>You're responsible for any API keys you add and all usage or cost they incur on HeyGen, LiveAvatar, Anam, or any other connected provider. This app does not provide free access to those services — you must have and pay for your own account with them.</p>
         <h3>Acceptable use</h3>
         <p>You may not use this app to impersonate a real, identifiable person without their explicit consent, to harass or deceive anyone, to generate content involving minors in any sexual or exploitative context, or for any illegal purpose. Creating a fictional persona or roleplaying a scenario you've written yourself is fine; impersonating a specific real person to deceive someone else is not.</p>
         <h3>No guarantee of availability</h3>
-        <p>This app depends on third-party providers (HeyGen/LiveAvatar, Tavus, Groq, Supabase). We don't control their uptime, pricing, or policy changes, and can't guarantee the app will always work exactly as described.</p>
+        <p>This app depends on third-party providers (HeyGen/LiveAvatar, Anam, Groq, Supabase). We don't control their uptime, pricing, or policy changes, and can't guarantee the app will always work exactly as described.</p>
         <h3>Approval gate</h3>
         <p>New accounts require manual approval before use. Approval can be revoked at any time at the app owner's discretion, for any reason, including suspected abuse of the acceptable use terms above.</p>
         <h3>Liability</h3>
@@ -1136,8 +1091,6 @@
     systemPrompt: '',
     heygenAvatarId: '',
     heygenAvatarName: '',
-    tavusReplicaId: '',
-    tavusReplicaName: '',
     anamAvatarId: '',
     anamAvatarName: '',
     anamVoiceId: '',
@@ -1150,7 +1103,6 @@
     // Vault and never leave the server after the moment they're first saved (see
     // /api/keys.js, /lib/keys.js). Populated by loadKeyStatus() below.
     heygenKeySet: false,
-    tavusKeySet: false,
     anamKeySet: false,
   };
   let currentUser = null;
@@ -1165,8 +1117,6 @@
       system_prompt: state.systemPrompt,
       heygen_avatar_id: state.heygenAvatarId,
       heygen_avatar_name: state.heygenAvatarName,
-      tavus_replica_id: state.tavusReplicaId,
-      tavus_replica_name: state.tavusReplicaName,
       anam_avatar_id: state.anamAvatarId,
       anam_avatar_name: state.anamAvatarName,
       anam_voice_id: state.anamVoiceId,
@@ -1190,11 +1140,9 @@
       const data = await r.json();
       if (!r.ok) return;
       state.heygenKeySet = !!data.heygen;
-      state.tavusKeySet = !!data.tavus;
       state.anamKeySet = !!data.anam;
     } catch (e) { /* leave as false - UI just shows "paste your key" */ }
     $('heygenApiKey').placeholder = state.heygenKeySet ? 'Key saved — enter a new one to replace' : 'Paste your HeyGen API key';
-    $('tavusApiKey').placeholder = state.tavusKeySet ? 'Key saved — enter a new one to replace' : 'Paste your Tavus API key';
     $('anamApiKey').placeholder = state.anamKeySet ? 'Key saved — enter a new one to replace' : 'Paste your Anam API key';
   }
 
@@ -1205,8 +1153,6 @@
       state.systemPrompt = data.system_prompt || '';
       state.heygenAvatarId = data.heygen_avatar_id || '';
       state.heygenAvatarName = data.heygen_avatar_name || '';
-      state.tavusReplicaId = data.tavus_replica_id || '';
-      state.tavusReplicaName = data.tavus_replica_name || '';
       state.anamAvatarId = data.anam_avatar_id || '';
       state.anamAvatarName = data.anam_avatar_name || '';
       state.anamVoiceId = data.anam_voice_id || '';
@@ -1219,7 +1165,6 @@
       await persist(); // first login — create the row
     }
     $('heygenApiKey').value = '';
-    $('tavusApiKey').value = '';
     $('anamApiKey').value = '';
     $('profileName').value = state.displayName;
     $('profileCountry').value = state.country;
@@ -1281,12 +1226,10 @@
 
   function setProviderUI(p){
     state.provider = p; persist();
-    $('providerPickerLabel').textContent = p === 'heygen' ? 'HeyGen' : p === 'tavus' ? 'Tavus' : 'Anam';
+    $('providerPickerLabel').textContent = p === 'heygen' ? 'HeyGen' : 'Anam';
     document.querySelectorAll('#providerPickerMenu button').forEach(b => b.classList.toggle('active', b.dataset.provider === p));
     $('heygenFields').style.display = p === 'heygen' ? 'block' : 'none';
     $('openPublicAvatars').style.display = p === 'heygen' ? 'flex' : 'none';
-    $('tavusFields').style.display = p === 'tavus' ? 'block' : 'none';
-    $('openTavusPresets').style.display = p === 'tavus' ? 'flex' : 'none';
     $('openAnamAvatarScreen').style.display = p === 'anam' ? 'flex' : 'none';
     if (p === 'anam') updateAnamAvatarSummary();
   }
@@ -1345,7 +1288,6 @@
     }
   }
   $('saveHeygenKey').addEventListener('click', () => saveProviderKey('heygen', 'heygenApiKey', 'saveHeygenKey', loadHeygenAvatars));
-  $('saveTavusKey').addEventListener('click', () => saveProviderKey('tavus', 'tavusApiKey', 'saveTavusKey', loadTavusReplicas));
   $('saveAnamKey').addEventListener('click', () => saveProviderKey('anam', 'anamApiKey', 'saveAnamKey', () => { loadAnamAvatars(); loadAnamVoices(); }));
   document.querySelectorAll('.eyeToggle').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1477,61 +1419,6 @@
         });
       });
     } catch (e) { list.innerHTML = '<div class="emptyState">Could not load public avatars.</div>'; }
-  }
-  async function loadTavusPresets(){
-    const list = $('tavusPresetsList');
-    if (!state.tavusKeySet) { list.innerHTML = '<div class="emptyState">Add your Tavus API key in the API screen first.</div>'; return; }
-    list.innerHTML = '<div class="emptyState">Loading…</div>';
-    try {
-      const r = await fetch('/api/tavus-replicas?type=system', { headers: await authHeader() });
-      const data = await r.json();
-      if (!r.ok) { list.innerHTML = `<div class="emptyState">Error: ${JSON.stringify(data.error).slice(0,160)}</div>`; return; }
-      const presets = data.presets || [];
-      if (!presets.length) { list.innerHTML = '<div class="emptyState">No presets found.</div>'; return; }
-      list.innerHTML = presets.map(p => `
-        <button class="publicAvatarRow${p.id === state.tavusReplicaId ? ' selected' : ''}" data-replica-id="${p.id}" data-replica-name="${p.name.replace(/"/g,'&quot;')}">
-          ${p.preview_url ? `<video class="paThumb" src="${p.preview_url}" autoplay muted loop playsinline></video>` : '<div class="paThumb"></div>'}
-          <div class="paName">${p.name.replace(/</g,'&lt;')}</div>
-        </button>
-      `).join('');
-      list.querySelectorAll('[data-replica-id]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          state.tavusReplicaId = btn.dataset.replicaId;
-          state.tavusReplicaName = btn.dataset.replicaName;
-          persist();
-          const sel = $('tavusReplicaId');
-          if (sel && ![...sel.options].some(o => o.value === state.tavusReplicaId)) {
-            sel.insertAdjacentHTML('afterbegin', `<option value="${state.tavusReplicaId}">${btn.dataset.replicaName}</option>`);
-          }
-          if (sel) sel.value = state.tavusReplicaId;
-          list.querySelectorAll('.publicAvatarRow').forEach(row => row.classList.toggle('selected', row.dataset.replicaId === state.tavusReplicaId));
-          $('tavusPresetsScreen').classList.remove('active');
-        });
-      });
-    } catch (e) { list.innerHTML = '<div class="emptyState">Could not load Tavus presets.</div>'; }
-  }
-  async function loadTavusReplicas(){
-    const sel = $('tavusReplicaId');
-    if (!state.tavusKeySet) { sel.innerHTML = '<option value="">Add your Tavus API key in the API screen first</option>'; return; }
-    try {
-      const r = await fetch('/api/tavus-replicas', { headers: await authHeader() });
-      const data = await r.json();
-      if (!r.ok) { sel.innerHTML = `<option value="">Error: ${JSON.stringify(data.error).slice(0,120)}</option>`; return; }
-      const replicas = data.replicas || [];
-      const options = replicas.map(r => `<option value="${r.id}">${r.name}${r.status ? ' — ' + r.status : ''}</option>`);
-      // Same fix as HeyGen: keep a saved selection visible even if it came from
-      // Browse Tavus Presets (a system replica) rather than the user's own replicas.
-      if (state.tavusReplicaId && !replicas.some(r => r.id === state.tavusReplicaId)) {
-        options.unshift(`<option value="${state.tavusReplicaId}">${state.tavusReplicaName || state.tavusReplicaId}</option>`);
-      }
-      sel.innerHTML = '<option value="">Use account default</option>' + options.join('');
-      if (state.tavusReplicaId) sel.value = state.tavusReplicaId;
-      sel.onchange = () => {
-        state.tavusReplicaId = sel.value;
-        state.tavusReplicaName = sel.options[sel.selectedIndex]?.textContent || '';
-        persist();
-      };
-    } catch (e) { sel.innerHTML = '<option value="">Could not load replicas</option>'; }
   }
 
   async function loadAnamAvatars(){
@@ -1907,7 +1794,7 @@
 
   const callScreen = $('callScreen'), callIdle = $('callIdle'), callStatus = $('callStatus'), callBottom = $('callBottom');
   const remoteVideo = $('remoteVideo'), liveDot = $('liveDot');
-  let liveavatarRoom = null, liveavatarSessionId = null, dailyCall = null, anamClient = null, micStream = null, audioCtx = null, callStartedAt = null;
+  let liveavatarRoom = null, liveavatarSessionId = null, anamClient = null, micStream = null, audioCtx = null, callStartedAt = null;
 
   function primeAudioSession(){
     try {
@@ -1958,8 +1845,7 @@
 
     callStartedAt = Date.now();
     if (state.provider === 'heygen') await startHeygen();
-    else if (state.provider === 'anam') await startAnam();
-    else await startTavus();
+    else await startAnam();
   }
 
   async function startHeygen(){
@@ -2039,7 +1925,7 @@
 
     // The Anam SDK owns #remoteVideo directly (captures its own mic + streams both
     // audio and video into it) rather than us wiring MediaStream tracks by hand like
-    // the HeyGen/Tavus paths above.
+    // the HeyGen path above.
     await anamClient.streamToVideoElement('remoteVideo');
   }
 
@@ -2047,44 +1933,6 @@
   function promptWithLanguage(){
     if (!state.language || state.language === 'en') return state.systemPrompt;
     return `Speak only in ${LANGUAGE_NAMES[state.language] || state.language} for this entire call, regardless of what language the brief below is written in. ${state.systemPrompt}`;
-  }
-
-  async function startTavus(){
-    if (!state.tavusKeySet) { callStatus.textContent = 'Add your Tavus API key in Profile settings first.'; return; }
-    const resp = await fetch('/api/tavus-conversation', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
-      body: JSON.stringify({ systemPrompt: promptWithLanguage(), replicaId: state.tavusReplicaId || undefined }),
-    });
-    const data = await resp.json();
-    if (!resp.ok) { callStatus.textContent = 'Tavus error: ' + JSON.stringify(data.error); return; }
-
-    const { default: Daily } = await import('https://esm.sh/@daily-co/daily-js@latest');
-    dailyCall = Daily.createCallObject();
-
-    // Create the output stream ONCE, up front, and only ever addTrack to this same object.
-    // Reassigning video.srcObject each time a track arrives is what was breaking audio —
-    // Safari doesn't reliably pick up a re-assigned MediaStream mid-call, only tracks
-    // added to an already-attached stream.
-    const outStream = new MediaStream();
-    remoteVideo.srcObject = outStream;
-    remoteVideo.muted = false;
-    remoteVideo.volume = 1.0;
-
-    dailyCall.on('track-started', (ev) => {
-      if (ev.participant?.local) return; // don't render our own mic/camera back to ourselves
-      outStream.addTrack(ev.track);
-      remoteVideo.play().catch(() => {});
-      if (ev.track.kind === 'video') {
-        remoteVideo.style.display = 'block';
-        callIdle.style.display = 'none';
-        liveDot.classList.add('live');
-        callBottom.classList.remove('hidden');
-      }
-    });
-    dailyCall.on('left-meeting', () => endCall());
-
-    await dailyCall.join({ url: data.conversation_url, videoSource: false, audioSource: micStream ? micStream.getAudioTracks()[0] : true });
   }
 
   function endCall(){
@@ -2110,7 +1958,6 @@
       })();
       liveavatarSessionId = null;
     }
-    if (dailyCall) { try { dailyCall.leave(); dailyCall.destroy(); } catch(e){} dailyCall = null; }
     if (anamClient) { try { anamClient.stopStreaming(); } catch(e){} anamClient = null; }
     if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
     if (audioCtx) { try { audioCtx.close(); } catch(e){} audioCtx = null; }
@@ -2196,7 +2043,6 @@
     authScreen.classList.add('hidden');
     await loadSettings();
     loadHeygenAvatars();
-    loadTavusReplicas();
     loadAnamAvatars();
     loadAnamVoices();
   }
