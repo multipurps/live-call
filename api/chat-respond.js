@@ -33,7 +33,22 @@ the conversation once you've set it unless the topic clearly changes.`;
         messages: [{ role: 'system', content: systemPrompt }, ...messages],
         temperature: 0.7,
         max_tokens: 150,
-        response_format: { type: 'json_object' },
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'chat_reply',
+            strict: true,
+            schema: {
+              type: 'object',
+              properties: {
+                reply: { type: 'string' },
+                title: { type: 'string' },
+              },
+              required: ['reply', 'title'],
+              additionalProperties: false,
+            },
+          },
+        },
       }),
     });
     const data = await r.json();
