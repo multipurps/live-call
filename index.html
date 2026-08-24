@@ -276,6 +276,23 @@
     color:#fff; font-size:15px; font-weight:600; font-family:inherit; padding:0;
     -webkit-text-security:disc;
   }
+  .plainInput{
+    width:100%; background:none; border:none; outline:none;
+    color:#fff; font-size:15px; font-weight:600; font-family:inherit; padding:0;
+  }
+  .plainInput::placeholder{color:var(--dim); font-weight:500;}
+  .profileHeaderRow{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+  #notifBellBtn{position:relative; background:var(--panel); border:1px solid var(--line); border-radius:12px; width:38px; height:38px; display:flex; align-items:center; justify-content:center; color:#fff;}
+  .notifDot{position:absolute; top:7px; right:7px; width:8px; height:8px; border-radius:50%; background:var(--accent); border:1.5px solid var(--coffee);}
+  .profilePill{
+    display:flex; align-items:center; gap:12px; background:var(--panel); border:1px solid var(--line);
+    border-radius:18px; padding:12px 16px; margin-bottom:22px;
+  }
+  .profilePill .avatarCircle{width:48px; height:48px; margin:0;}
+  .profilePill .profileName{font-size:16px; margin:0;}
+  .profileSub{font-size:12px; color:var(--dim); margin-top:2px;}
+  .sectionLabel{font-size:12px; font-weight:700; color:var(--dim); text-transform:uppercase; letter-spacing:0.04em; margin:22px 0 8px 4px;}
+  .sectionLabel:first-of-type{margin-top:0;}
   .profileCard input.keyInput.revealed{-webkit-text-security:none;}
   .profileCard input.keyInput::placeholder{color:var(--dim); font-weight:500;}
   .profileCard .eyeToggle{flex:none; color:var(--dim); background:none; padding:4px;}
@@ -535,17 +552,30 @@
     </div>
 
     <div class="screen" id="screenProfile">
-      <h1 class="pageTitle">Profile</h1>
-      <div class="avatarCircle" id="profileInitial">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M6.75 6.5C6.75 3.6005 9.1005 1.25 12 1.25C14.8995 1.25 17.25 3.6005 17.25 6.5C17.25 9.3995 14.8995 11.75 12 11.75C9.1005 11.75 6.75 9.3995 6.75 6.5Z" fill="currentColor"/><path fill-rule="evenodd" clip-rule="evenodd" d="M4.25 18.5714C4.25 15.6325 6.63249 13.25 9.57143 13.25H14.4286C17.3675 13.25 19.75 15.6325 19.75 18.5714C19.75 20.8792 17.8792 22.75 15.5714 22.75H8.42857C6.12081 22.75 4.25 20.8792 4.25 18.5714Z" fill="currentColor"/></svg>
+      <div class="profileHeaderRow">
+        <h1 class="pageTitle" style="margin:0;">Profile</h1>
+        <button id="notifBellBtn" aria-label="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" width="22" height="22"><path d="M9 18h6M12 3a5 5 0 0 0-5 5c0 4-2 5-2 6h14c0-1-2-2-2-6a5 5 0 0 0-5-5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          <span id="notifDot" class="notifDot" style="display:none;"></span>
+        </button>
       </div>
-      <div class="profileName" id="profileEmail">Live Call</div>
 
+      <div class="profilePill">
+        <div class="avatarCircle" id="profileInitial">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M6.75 6.5C6.75 3.6005 9.1005 1.25 12 1.25C14.8995 1.25 17.25 3.6005 17.25 6.5C17.25 9.3995 14.8995 11.75 12 11.75C9.1005 11.75 6.75 9.3995 6.75 6.5Z" fill="currentColor"/><path fill-rule="evenodd" clip-rule="evenodd" d="M4.25 18.5714C4.25 15.6325 6.63249 13.25 9.57143 13.25H14.4286C17.3675 13.25 19.75 15.6325 19.75 18.5714C19.75 20.8792 17.8792 22.75 15.5714 22.75H8.42857C6.12081 22.75 4.25 20.8792 4.25 18.5714Z" fill="currentColor"/></svg>
+        </div>
+        <div>
+          <div class="profileName" id="profileEmail">Live Call</div>
+          <div class="profileSub" id="profileSub">Complete your profile</div>
+        </div>
+      </div>
+
+      <div class="sectionLabel">Profile</div>
       <div class="profileCard">
         <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M20 21c0-3.87-3.58-7-8-7s-8 3.13-8 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="7" r="4" stroke="currentColor" stroke-width="1.8"/></svg></div>
         <div class="cBody">
           <div class="cLabel">Your name</div>
-          <input class="keyInput" id="profileName" type="text" autocomplete="off" placeholder="What should we call you?" />
+          <input class="plainInput" id="profileName" type="text" autocomplete="off" placeholder="What should we call you?" />
         </div>
       </div>
       <div class="profileCard">
@@ -590,8 +620,8 @@
           </select>
         </div>
       </div>
-      <button class="saveKeyBtn" id="saveProfileBtn">Save profile</button>
 
+      <div class="sectionLabel">App</div>
       <div class="profileCard">
         <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M9 18h6M12 3a5 5 0 0 0-5 5c0 4-2 5-2 6h14c0-1-2-2-2-6a5 5 0 0 0-5-5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
         <div class="cBody">
@@ -600,7 +630,6 @@
         </div>
         <button class="saveKeyBtn" id="enableNotifsBtn" style="width:auto; padding:8px 14px; margin:0;">Enable</button>
       </div>
-
       <div class="profileCard">
         <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
         <div class="cBody">
@@ -611,6 +640,7 @@
         </div>
       </div>
 
+      <div class="sectionLabel">Avatar</div>
       <div class="profileCard">
         <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3L4 8l8 5 8-5-8-5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 12l8 5 8-5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 16l8 5 8-5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
         <div class="cBody">
@@ -662,6 +692,7 @@
       <input type="file" id="avatarPhotoInput" accept="image/png,image/jpeg,image/webp" style="display:none;" />
       <input type="file" id="voiceFileInput" accept="audio/*,.m4a,.mp3,.wav,.aac,.caf,.mp4" style="display:none;" />
 
+      <div class="sectionLabel">Account</div>
       <div class="profileCard navRow" id="openApiKeys">
         <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
         <div class="cBody"><div class="cValue">API</div></div>
@@ -694,6 +725,16 @@
       <div class="profileCard signOutCard" id="signOutBtn" style="margin-top:14px;">
         <div class="cValue">Sign out</div>
       </div>
+    </div>
+
+    <div id="notificationsScreen" class="subScreen">
+      <div class="subScreenHeader">
+        <button class="backBtn" id="closeNotifications" aria-label="Back">
+          <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="subScreenTitle">Notifications</div>
+      </div>
+      <div class="subScreenBody" id="notificationsList"></div>
     </div>
 
     <div id="apiKeysScreen" class="subScreen">
@@ -1187,19 +1228,56 @@
     await loadKeyStatus();
     setProviderUI(state.provider);
     updateNotifStatus();
+    checkForNewAnnouncements();
+    renderProfile();
   }
 
-  $('saveProfileBtn').addEventListener('click', async () => {
+  $('profileName').addEventListener('blur', async () => {
     state.displayName = $('profileName').value.trim();
-    state.country = $('profileCountry').value;
-    state.language = $('profileLanguage').value;
     await persist();
     renderProfile();
+  });
+  $('profileCountry').addEventListener('change', async () => {
+    state.country = $('profileCountry').value;
+    await persist();
+  });
+  $('profileLanguage').addEventListener('change', async () => {
+    state.language = $('profileLanguage').value;
+    await persist();
   });
   $('profileTheme').addEventListener('change', async () => {
     state.theme = $('profileTheme').value;
     await persist();
   });
+
+  $('notifBellBtn').addEventListener('click', () => { $('notificationsScreen').classList.add('active'); loadAnnouncements(); });
+  $('closeNotifications').addEventListener('click', () => $('notificationsScreen').classList.remove('active'));
+
+  async function loadAnnouncements(){
+    const { data } = await supabase.from('announcements').select('*').order('created_at', { ascending: false }).limit(30);
+    const list = $('notificationsList');
+    if (!data || !data.length) { list.innerHTML = '<div class="emptyState">No announcements yet.</div>'; return; }
+    list.innerHTML = data.map(a => `
+      <div class="profileCard" style="align-items:flex-start;">
+        <div class="cBody">
+          <div class="cLabel" style="color:#fff; font-weight:700; margin-bottom:4px;">${a.title.replace(/</g,'&lt;')}</div>
+          <div style="font-size:13.5px; color:var(--dim); line-height:1.4;">${a.body.replace(/</g,'&lt;')}</div>
+          <div style="font-size:11px; color:var(--dim); margin-top:6px;">${new Date(a.created_at).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}</div>
+        </div>
+      </div>
+    `).join('');
+    const last = data[0]?.created_at;
+    if (last && last !== localStorage.getItem('lastSeenAnnouncement')) {
+      $('notifDot').style.display = 'block';
+    }
+    localStorage.setItem('lastSeenAnnouncement', last);
+    $('notifDot').style.display = 'none';
+  }
+  async function checkForNewAnnouncements(){
+    const { data } = await supabase.from('announcements').select('created_at').order('created_at', { ascending: false }).limit(1);
+    const latest = data?.[0]?.created_at;
+    if (latest && latest !== localStorage.getItem('lastSeenAnnouncement')) $('notifDot').style.display = 'block';
+  }
 
   function setProviderUI(p){
     state.provider = p; persist();
@@ -1708,6 +1786,7 @@
 
   function renderProfile(){
     $('profileEmail').textContent = state.displayName || 'Add your name';
+    $('profileSub').textContent = state.displayName ? (currentUser?.email || '') : 'Complete your profile below';
   }
 
   // ---------- push notifications ----------
