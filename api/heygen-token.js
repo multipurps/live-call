@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   const apiKey = await getProviderKey(supabase, userId, 'heygen');
   if (!apiKey) return res.status(400).json({ error: 'No LiveAvatar API key set. Add yours in Profile settings.' });
 
-  const { avatarId, systemPrompt } = req.body || {};
+  const { avatarId, systemPrompt, language } = req.body || {};
   if (!avatarId) return res.status(400).json({ error: 'avatarId is required' });
 
   const headers = { 'Content-Type': 'application/json', 'X-API-KEY': apiKey };
@@ -59,7 +59,7 @@ export default async function handler(req, res) {
         is_sandbox: false,
         video_settings: { quality: 'high', encoding: 'H264' },
         interactivity_type: 'CONVERSATIONAL',
-        avatar_persona: { context_id: contextId, language: 'en' },
+        avatar_persona: { context_id: contextId, language: language || 'en' },
       }),
     });
     const tokenData = await tokenResp.json();
