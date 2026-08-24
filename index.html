@@ -20,7 +20,8 @@
     --tabbar-h:44px; /* fixed content height of the tab bar, excludes safe area. Single source of truth - never let this be content-driven. */
     --sidebar-w:88px; /* desktop-only left rail width, replaces --tabbar-h's role on wide screens */
   }
-  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; margin:0; padding:0; -webkit-text-size-adjust:100%; touch-action:manipulation;}
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; margin:0; padding:0; -webkit-text-size-adjust:100%; touch-action:manipulation; scrollbar-width:none; -ms-overflow-style:none;}
+  *::-webkit-scrollbar{display:none; width:0; height:0;}
   /* iOS standalone/home-screen web apps have a well-documented quirk: the page content
      effectively gets shifted up by env(safe-area-inset-top), which pushes a gap of that
      same height into view at the BOTTOM (above the home indicator) unless the document's
@@ -111,7 +112,9 @@
     padding-left:18px; padding-right:18px;
     padding-bottom:110px; /* keeps content clear of the floating dock, not the dock itself */
     display:none;
+    scrollbar-width:none; -ms-overflow-style:none;
   }
+  .screen::-webkit-scrollbar{display:none; width:0; height:0;}
   .screen.active{display:block;}
 
   /* ---------- bottom tab nav: flush to true screen edge, no safe-area padding (explicit user choice, accepts gesture-zone tap risk) ---------- */
@@ -537,6 +540,76 @@
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M6.75 6.5C6.75 3.6005 9.1005 1.25 12 1.25C14.8995 1.25 17.25 3.6005 17.25 6.5C17.25 9.3995 14.8995 11.75 12 11.75C9.1005 11.75 6.75 9.3995 6.75 6.5Z" fill="currentColor"/><path fill-rule="evenodd" clip-rule="evenodd" d="M4.25 18.5714C4.25 15.6325 6.63249 13.25 9.57143 13.25H14.4286C17.3675 13.25 19.75 15.6325 19.75 18.5714C19.75 20.8792 17.8792 22.75 15.5714 22.75H8.42857C6.12081 22.75 4.25 20.8792 4.25 18.5714Z" fill="currentColor"/></svg>
       </div>
       <div class="profileName" id="profileEmail">Live Call</div>
+
+      <div class="profileCard">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M20 21c0-3.87-3.58-7-8-7s-8 3.13-8 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="7" r="4" stroke="currentColor" stroke-width="1.8"/></svg></div>
+        <div class="cBody">
+          <div class="cLabel">Your name</div>
+          <input class="keyInput" id="profileName" type="text" autocomplete="off" placeholder="What should we call you?" />
+        </div>
+      </div>
+      <div class="profileCard">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" stroke="currentColor" stroke-width="1.8"/></svg></div>
+        <div class="cBody">
+          <div class="cLabel">Region / country</div>
+          <select class="cSelect" id="profileCountry">
+            <option value="">Select…</option>
+            <option value="NG">Nigeria</option>
+            <option value="US">United States</option>
+            <option value="GB">United Kingdom</option>
+            <option value="CA">Canada</option>
+            <option value="GH">Ghana</option>
+            <option value="ZA">South Africa</option>
+            <option value="KE">Kenya</option>
+            <option value="IN">India</option>
+            <option value="AU">Australia</option>
+            <option value="DE">Germany</option>
+            <option value="FR">France</option>
+            <option value="BR">Brazil</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="profileCard">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h9M8 4v3M8 7c0 4-1.5 7-5 9M6 12c1 1.5 3 2.5 5 3M14 21l4-9 4 9M15.5 18h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+        <div class="cBody">
+          <div class="cLabel">Avatar's language</div>
+          <select class="cSelect" id="profileLanguage">
+            <option value="en">English</option>
+            <option value="es">Spanish</option>
+            <option value="fr">French</option>
+            <option value="pt">Portuguese</option>
+            <option value="de">German</option>
+            <option value="ha">Hausa</option>
+            <option value="yo">Yoruba</option>
+            <option value="ig">Igbo</option>
+            <option value="sw">Swahili</option>
+            <option value="ar">Arabic</option>
+            <option value="hi">Hindi</option>
+            <option value="zh">Chinese</option>
+          </select>
+        </div>
+      </div>
+      <button class="saveKeyBtn" id="saveProfileBtn">Save profile</button>
+
+      <div class="profileCard">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M9 18h6M12 3a5 5 0 0 0-5 5c0 4-2 5-2 6h14c0-1-2-2-2-6a5 5 0 0 0-5-5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
+        <div class="cBody">
+          <div class="cLabel">Notifications</div>
+          <div style="font-size:13px; color:var(--dim);" id="notifStatus">Not enabled</div>
+        </div>
+        <button class="saveKeyBtn" id="enableNotifsBtn" style="width:auto; padding:8px 14px; margin:0;">Enable</button>
+      </div>
+
+      <div class="profileCard">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+        <div class="cBody">
+          <div class="cLabel">Theme</div>
+          <select class="cSelect" id="profileTheme">
+            <option value="coffee-emerald">Coffee &amp; Emerald</option>
+          </select>
+        </div>
+      </div>
 
       <div class="profileCard">
         <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3L4 8l8 5 8-5-8-5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 12l8 5 8-5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 16l8 5 8-5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
@@ -1028,6 +1101,10 @@
     anamAvatarName: '',
     anamVoiceId: '',
     anamVoiceName: '',
+    displayName: '',
+    country: '',
+    language: 'en',
+    theme: 'coffee-emerald',
     // Booleans only, never the plaintext - the real keys live encrypted in Supabase
     // Vault and never leave the server after the moment they're first saved (see
     // /api/keys.js, /lib/keys.js). Populated by loadKeyStatus() below.
@@ -1053,6 +1130,10 @@
       anam_avatar_name: state.anamAvatarName,
       anam_voice_id: state.anamVoiceId,
       anam_voice_name: state.anamVoiceName,
+      display_name: state.displayName,
+      country: state.country,
+      language: state.language,
+      theme: state.theme,
       updated_at: new Date().toISOString(),
     });
     if (error) {
@@ -1089,15 +1170,36 @@
       state.anamAvatarName = data.anam_avatar_name || '';
       state.anamVoiceId = data.anam_voice_id || '';
       state.anamVoiceName = data.anam_voice_name || '';
+      state.displayName = data.display_name || '';
+      state.country = data.country || '';
+      state.language = data.language || 'en';
+      state.theme = data.theme || 'coffee-emerald';
     } else {
       await persist(); // first login — create the row
     }
     $('heygenApiKey').value = '';
     $('tavusApiKey').value = '';
     $('anamApiKey').value = '';
+    $('profileName').value = state.displayName;
+    $('profileCountry').value = state.country;
+    $('profileLanguage').value = state.language;
+    $('profileTheme').value = state.theme;
     await loadKeyStatus();
     setProviderUI(state.provider);
+    updateNotifStatus();
   }
+
+  $('saveProfileBtn').addEventListener('click', async () => {
+    state.displayName = $('profileName').value.trim();
+    state.country = $('profileCountry').value;
+    state.language = $('profileLanguage').value;
+    await persist();
+    renderProfile();
+  });
+  $('profileTheme').addEventListener('change', async () => {
+    state.theme = $('profileTheme').value;
+    await persist();
+  });
 
   function setProviderUI(p){
     state.provider = p; persist();
@@ -1605,8 +1707,54 @@
 
 
   function renderProfile(){
-    $('profileEmail').textContent = currentUser?.email || 'Live Call';
+    $('profileEmail').textContent = state.displayName || 'Add your name';
   }
+
+  // ---------- push notifications ----------
+  const VAPID_PUBLIC_KEY = 'BERe9PaZxK_8m5HY4fqmzJrDcjXd5jDrcgrV8GTiiWC_HXWVKXM-li-jHId_oJ9CE73EYlxTQPhlAOlG_4NdgHw';
+  function urlBase64ToUint8Array(base64String){
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(base64);
+    return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+  }
+  async function updateNotifStatus(){
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      $('notifStatus').textContent = 'Not supported on this browser';
+      $('enableNotifsBtn').style.display = 'none';
+      return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      $('notifStatus').textContent = 'Enabled';
+      $('enableNotifsBtn').style.display = 'none';
+    } else {
+      $('notifStatus').textContent = 'Not enabled';
+      $('enableNotifsBtn').style.display = 'inline-block';
+    }
+  }
+  $('enableNotifsBtn').addEventListener('click', async () => {
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { $('notifStatus').textContent = 'Permission denied'; return; }
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+      const { data: { session } } = await supabase.auth.getSession();
+      await fetch('/api/save-push-subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+        body: JSON.stringify({ subscription: sub.toJSON() }),
+      });
+      updateNotifStatus();
+    } catch (e) {
+      $('notifStatus').textContent = 'Could not enable — try again';
+    }
+  });
+
 
   async function addHistory(entry){
     if (!currentUser) return;
@@ -1744,7 +1892,7 @@
     const sessionResp = await fetch('/api/heygen-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
-      body: JSON.stringify({ avatarId: state.heygenAvatarId, systemPrompt: state.systemPrompt }),
+      body: JSON.stringify({ avatarId: state.heygenAvatarId, systemPrompt: state.systemPrompt, language: state.language }),
     });
     const sessionData = await sessionResp.json();
     if (!sessionResp.ok) { callStatus.textContent = 'LiveAvatar error: ' + JSON.stringify(sessionData.error); return; }
@@ -1791,7 +1939,7 @@
     const resp = await fetch('/api/anam', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
-      body: JSON.stringify({ action: 'session', avatarId: state.anamAvatarId, voiceId: state.anamVoiceId, systemPrompt: state.systemPrompt }),
+      body: JSON.stringify({ action: 'session', avatarId: state.anamAvatarId, voiceId: state.anamVoiceId, systemPrompt: promptWithLanguage() }),
     });
     const data = await resp.json();
     if (!resp.ok) { callStatus.textContent = 'Anam error: ' + JSON.stringify(data.error); return; }
@@ -1816,12 +1964,18 @@
     await anamClient.streamToVideoElement('remoteVideo');
   }
 
+  const LANGUAGE_NAMES = { en:'English', es:'Spanish', fr:'French', pt:'Portuguese', de:'German', ha:'Hausa', yo:'Yoruba', ig:'Igbo', sw:'Swahili', ar:'Arabic', hi:'Hindi', zh:'Chinese' };
+  function promptWithLanguage(){
+    if (!state.language || state.language === 'en') return state.systemPrompt;
+    return `Speak only in ${LANGUAGE_NAMES[state.language] || state.language} for this entire call, regardless of what language the brief below is written in. ${state.systemPrompt}`;
+  }
+
   async function startTavus(){
     if (!state.tavusKeySet) { callStatus.textContent = 'Add your Tavus API key in Profile settings first.'; return; }
     const resp = await fetch('/api/tavus-conversation', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
-      body: JSON.stringify({ systemPrompt: state.systemPrompt, replicaId: state.tavusReplicaId || undefined }),
+      body: JSON.stringify({ systemPrompt: promptWithLanguage(), replicaId: state.tavusReplicaId || undefined }),
     });
     const data = await resp.json();
     if (!resp.ok) { callStatus.textContent = 'Tavus error: ' + JSON.stringify(data.error); return; }
