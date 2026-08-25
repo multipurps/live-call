@@ -20,6 +20,22 @@
     --tabbar-h:76px; /* total footprint of the floating tab bar (its own bottom gap + height) - used only to float the brief input bar above it. Single source of truth - never let this be content-driven. */
     --sidebar-w:88px; /* desktop-only left rail width, replaces --tabbar-h's role on wide screens */
   }
+  [data-theme="midnight-cyan"]{
+    --accent:#22e5e5;
+    --panel:#1f2a3a;
+    --line: rgba(180,220,255,0.14);
+    --dim: rgba(190,220,255,0.55);
+    --coffee:#0d1420;
+    --coffee-light:#182233;
+  }
+  [data-theme="forest-gold"]{
+    --accent:#e8a916;
+    --panel:#173324;
+    --line: rgba(230,200,120,0.14);
+    --dim: rgba(230,210,160,0.55);
+    --coffee:#0c2318;
+    --coffee-light:#123120;
+  }
   *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; margin:0; padding:0; -webkit-text-size-adjust:100%; touch-action:manipulation; scrollbar-width:none; -ms-overflow-style:none;}
   *::-webkit-scrollbar{display:none; width:0; height:0;}
   /* iOS standalone/home-screen web apps have a well-documented quirk: the page content
@@ -117,6 +133,8 @@
   }
   .screen::-webkit-scrollbar{display:none; width:0; height:0;}
   .screen.active{display:block;}
+  .screen.fadeIn{animation:screenFadeIn 0.28s ease both;}
+  @keyframes screenFadeIn{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);}}
 
   /* ---------- bottom tab nav: flush to true screen edge, no safe-area padding (explicit user choice, accepts gesture-zone tap risk) ---------- */
   #tabBar{
@@ -130,12 +148,29 @@
     border:1px solid rgba(255,255,255,0.14);
     box-shadow:0 12px 30px rgba(0,0,0,0.45);
   }
+  #tabGlider{
+    position:absolute; top:6px; left:6px; width:52px; height:44px; border-radius:16px;
+    background:rgba(255,255,255,0.12);
+    backdrop-filter:blur(14px) saturate(180%); -webkit-backdrop-filter:blur(14px) saturate(180%);
+    border:1px solid rgba(255,255,255,0.16);
+    transition:transform 0.32s cubic-bezier(0.34, 1.4, 0.64, 1);
+    z-index:0; pointer-events:none;
+  }
   .tabBtn{
+    position:relative; z-index:1;
     flex:none; width:52px; height:44px; display:flex; align-items:center; justify-content:center;
     color:var(--dim); border-radius:16px;
+    transition:color 0.2s;
   }
-  .tabBtn.active{color:#fff; background:rgba(255,255,255,0.10);}
+  .tabBtn.active{color:#fff;}
   .tabBtn svg{width:20px; height:20px;}
+  .tabAvatarRing{
+    width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    overflow:hidden; box-sizing:border-box; transition:box-shadow 0.2s;
+  }
+  .tabBtn.active .tabAvatarRing{box-shadow:0 0 0 2px var(--accent);}
+  .tabAvatarRing img{width:100%; height:100%; object-fit:cover;}
+  .tabAvatarRing svg{width:16px; height:16px;}
 
   /* ---------- brief input: floats free above the tab nav, own pill, not attached to anything ---------- */
   #homeInputBar{
@@ -296,6 +331,13 @@
   .profilePill .avatarCircle{width:48px; height:48px; margin:0;}
   .profilePill .profileName{font-size:16px; margin:0;}
   .profileSub{font-size:12px; color:var(--dim); margin-top:2px;}
+  .profileCardCenter{display:flex; flex-direction:column; align-items:center; margin-bottom:22px;}
+  .avatarUploadBtn{position:relative; border:0; padding:0; cursor:pointer; overflow:visible;}
+  .avatarUploadBtn img{width:100%; height:100%; object-fit:cover; border-radius:50%;}
+  .avatarUploadBadge{
+    position:absolute; bottom:-2px; right:-2px; width:26px; height:26px; border-radius:50%;
+    background:var(--accent); border:2.5px solid var(--coffee); display:flex; align-items:center; justify-content:center;
+  }
   .sectionLabel{font-size:12px; font-weight:700; color:var(--dim); text-transform:uppercase; letter-spacing:0.04em; margin:22px 0 8px 4px;}
   .sectionLabel:first-of-type{margin-top:0;}
   .profileCard input.keyInput.revealed{-webkit-text-security:none;}
@@ -594,14 +636,18 @@
         </button>
       </div>
 
-      <div class="profilePill">
-        <div class="avatarCircle" id="profileInitial">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M6.75 6.5C6.75 3.6005 9.1005 1.25 12 1.25C14.8995 1.25 17.25 3.6005 17.25 6.5C17.25 9.3995 14.8995 11.75 12 11.75C9.1005 11.75 6.75 9.3995 6.75 6.5Z" fill="currentColor"/><path fill-rule="evenodd" clip-rule="evenodd" d="M4.25 18.5714C4.25 15.6325 6.63249 13.25 9.57143 13.25H14.4286C17.3675 13.25 19.75 15.6325 19.75 18.5714C19.75 20.8792 17.8792 22.75 15.5714 22.75H8.42857C6.12081 22.75 4.25 20.8792 4.25 18.5714Z" fill="currentColor"/></svg>
-        </div>
-        <div>
-          <div class="profileName" id="profileEmail">Live Call</div>
-          <div class="profileSub" id="profileSub">Complete your profile</div>
-        </div>
+      <div class="profileCardCenter">
+        <button class="avatarCircle avatarUploadBtn" id="profilePhotoBtn" aria-label="Change profile photo">
+          <img id="profilePhotoImg" style="display:none;" />
+          <svg id="profilePhotoDefault" width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M6.75 6.5C6.75 3.6005 9.1005 1.25 12 1.25C14.8995 1.25 17.25 3.6005 17.25 6.5C17.25 9.3995 14.8995 11.75 12 11.75C9.1005 11.75 6.75 9.3995 6.75 6.5Z" fill="currentColor"/><path fill-rule="evenodd" clip-rule="evenodd" d="M4.25 18.5714C4.25 15.6325 6.63249 13.25 9.57143 13.25H14.4286C17.3675 13.25 19.75 15.6325 19.75 18.5714C19.75 20.8792 17.8792 22.75 15.5714 22.75H8.42857C6.12081 22.75 4.25 20.8792 4.25 18.5714Z" fill="currentColor"/></svg>
+          <span class="avatarUploadBadge">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 13.5V17a1 1 0 0 0 1 1h3.5L18.5 8a1.5 1.5 0 0 0 0-2.1l-1.4-1.4a1.5 1.5 0 0 0-2.1 0L5 14.5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+        </button>
+        <input type="file" id="profilePhotoInput" accept="image/*" style="display:none;" />
+        <div class="profileName" id="profileEmail" style="text-align:center;">Live Call</div>
+        <div class="profileSub" id="profileSub" style="text-align:center;">Complete your profile</div>
+        <p class="hint" id="photoUploadHint"></p>
       </div>
 
       <div class="sectionLabel">Profile</div>
@@ -662,6 +708,8 @@
           <div class="cLabel">Theme</div>
           <select class="cSelect" id="profileTheme">
             <option value="coffee-emerald">Coffee &amp; Emerald</option>
+            <option value="midnight-cyan">Midnight &amp; Cyan</option>
+            <option value="forest-gold">Forest &amp; Gold</option>
           </select>
         </div>
       </div>
@@ -874,6 +922,7 @@
   </div>
 
   <div id="tabBar">
+    <div id="tabGlider"></div>
     <button class="tabBtn active" data-tab="home" aria-label="Home">
       <svg viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M2.33537 7.87495C1.79491 9.00229 1.98463 10.3208 2.36407 12.9579L2.64284 14.8952C3.13025 18.2827 3.37396 19.9764 4.54903 20.9882C5.72409 22 7.44737 22 10.8939 22H13.1061C16.5526 22 18.2759 22 19.451 20.9882C20.626 19.9764 20.8697 18.2827 21.3572 14.8952L21.6359 12.9579C22.0154 10.3208 22.2051 9.00229 21.6646 7.87495C21.1242 6.7476 19.9738 6.06234 17.6731 4.69181L16.2882 3.86687C14.199 2.62229 13.1543 2 12 2C10.8457 2 9.80104 2.62229 7.71175 3.86687L6.32691 4.69181C4.02619 6.06234 2.87583 6.7476 2.33537 7.87495ZM8.2501 17.9998C8.2501 17.5856 8.58589 17.2498 9.0001 17.2498H15.0001C15.4143 17.2498 15.7501 17.5856 15.7501 17.9998C15.7501 18.414 15.4143 18.7498 15.0001 18.7498H9.0001C8.58589 18.7498 8.2501 18.414 8.2501 17.9998Z" fill="currentColor"/></svg>
     </button>
@@ -881,7 +930,10 @@
       <svg viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M22 12c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2s10 4.477 10 10zm-4.581 3.324a1 1 0 0 0-.525-1.313L13 12.341V6.5a1 1 0 0 0-2 0v6.17c0 .6.357 1.143.909 1.379l4.197 1.8a1 1 0 0 0 1.313-.525z" fill="currentColor"/></svg>
     </button>
     <button class="tabBtn" data-tab="profile" aria-label="Profile">
-      <svg viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M6.75 6.5C6.75 3.6005 9.1005 1.25 12 1.25C14.8995 1.25 17.25 3.6005 17.25 6.5C17.25 9.3995 14.8995 11.75 12 11.75C9.1005 11.75 6.75 9.3995 6.75 6.5Z" fill="currentColor"/><path fill-rule="evenodd" clip-rule="evenodd" d="M4.25 18.5714C4.25 15.6325 6.63249 13.25 9.57143 13.25H14.4286C17.3675 13.25 19.75 15.6325 19.75 18.5714C19.75 20.8792 17.8792 22.75 15.5714 22.75H8.42857C6.12081 22.75 4.25 20.8792 4.25 18.5714Z" fill="currentColor"/></svg>
+      <span class="tabAvatarRing">
+        <img id="tabProfileImg" style="display:none;" />
+        <svg id="tabProfileDefault" viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M6.75 6.5C6.75 3.6005 9.1005 1.25 12 1.25C14.8995 1.25 17.25 3.6005 17.25 6.5C17.25 9.3995 14.8995 11.75 12 11.75C9.1005 11.75 6.75 9.3995 6.75 6.5Z" fill="currentColor"/><path fill-rule="evenodd" clip-rule="evenodd" d="M4.25 18.5714C4.25 15.6325 6.63249 13.25 9.57143 13.25H14.4286C17.3675 13.25 19.75 15.6325 19.75 18.5714C19.75 20.8792 17.8792 22.75 15.5714 22.75H8.42857C6.12081 22.75 4.25 20.8792 4.25 18.5714Z" fill="currentColor"/></svg>
+      </span>
     </button>
   </div>
 </div>
@@ -1022,14 +1074,35 @@
 
   const screens = { home: $('screenHome'), recent: $('screenRecent'), profile: $('screenProfile') };
   const tabBtns = document.querySelectorAll('.tabBtn');
+  function moveTabGlider(name){
+    const glider = $('tabGlider');
+    const btn = document.querySelector(`#tabBar .tabBtn[data-tab="${name}"]`);
+    if (!glider || !btn) return;
+    const barRect = $('tabBar').getBoundingClientRect();
+    const btnRect = btn.getBoundingClientRect();
+    if (btnRect.width === 0) return; // tab bar hidden (desktop mode) - nothing to move
+    glider.style.transform = `translateX(${btnRect.left - barRect.left - 6}px)`;
+  }
   function showTab(name){
-    Object.entries(screens).forEach(([k, el]) => el.classList.toggle('active', k === name));
+    const nextEl = screens[name];
+    Object.entries(screens).forEach(([k, el]) => {
+      if (k === name) return;
+      el.classList.remove('active');
+    });
+    if (nextEl) {
+      nextEl.classList.add('fadeIn');
+      nextEl.classList.add('active');
+      requestAnimationFrame(() => nextEl.classList.remove('fadeIn'));
+    }
     tabBtns.forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+    moveTabGlider(name);
     $('homeInputBar').classList.toggle('visible', name === 'home');
     if (name === 'recent') renderRecent();
     if (name === 'profile') renderProfile();
   }
   tabBtns.forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+  window.addEventListener('resize', () => moveTabGlider(document.querySelector('#tabBar .tabBtn.active')?.dataset.tab || 'home'));
+  setTimeout(() => moveTabGlider('home'), 50);
 
   $('openApiKeys').addEventListener('click', () => $('apiKeysScreen').classList.add('active'));
   $('closeApiKeys').addEventListener('click', () => $('apiKeysScreen').classList.remove('active'));
@@ -1122,6 +1195,7 @@
     country: '',
     language: 'en',
     theme: 'coffee-emerald',
+    avatarUrl: '',
     // Booleans only, never the plaintext - the real keys live encrypted in Supabase
     // Vault and never leave the server after the moment they're first saved (see
     // /api/keys.js, /lib/keys.js). Populated by loadKeyStatus() below.
@@ -1148,6 +1222,7 @@
       country: state.country,
       language: state.language,
       theme: state.theme,
+      avatar_url: state.avatarUrl,
       updated_at: new Date().toISOString(),
     });
     if (error) {
@@ -1184,6 +1259,8 @@
       state.country = data.country || '';
       state.language = data.language || 'en';
       state.theme = data.theme || 'coffee-emerald';
+      state.avatarUrl = data.avatar_url || '';
+      applyTheme();
     } else {
       await persist(); // first login — create the row
     }
@@ -1213,8 +1290,12 @@
     state.language = $('profileLanguage').value;
     await persist();
   });
+  function applyTheme(){
+    document.documentElement.setAttribute('data-theme', state.theme === 'coffee-emerald' ? '' : state.theme);
+  }
   $('profileTheme').addEventListener('change', async () => {
     state.theme = $('profileTheme').value;
+    applyTheme();
     await persist();
   });
 
@@ -1697,6 +1778,37 @@
   function renderProfile(){
     $('profileEmail').textContent = state.displayName || 'Add your name';
     $('profileSub').textContent = state.displayName ? (currentUser?.email || '') : 'Complete your profile below';
+    if (state.avatarUrl) {
+      $('profilePhotoImg').src = state.avatarUrl;
+      $('profilePhotoImg').style.display = 'block';
+      $('profilePhotoDefault').style.display = 'none';
+    } else {
+      $('profilePhotoImg').style.display = 'none';
+      $('profilePhotoDefault').style.display = 'block';
+    }
+    updateTabBarAvatar();
+  }
+
+  $('profilePhotoBtn').addEventListener('click', () => $('profilePhotoInput').click());
+  $('profilePhotoInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file || !currentUser) return;
+    $('photoUploadHint').textContent = 'Uploading…';
+    const path = `${currentUser.id}/profile.${file.name.split('.').pop()}`;
+    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, cacheControl: '3600' });
+    if (upErr) { $('photoUploadHint').textContent = 'Upload failed: ' + upErr.message; return; }
+    const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+    state.avatarUrl = pub.publicUrl + '?t=' + Date.now();
+    await persist();
+    renderProfile();
+    $('photoUploadHint').textContent = '';
+  });
+
+  function updateTabBarAvatar(){
+    const img = $('tabProfileImg'), fallback = $('tabProfileDefault');
+    if (!img) return;
+    if (state.avatarUrl) { img.src = state.avatarUrl; img.style.display = 'block'; fallback.style.display = 'none'; }
+    else { img.style.display = 'none'; fallback.style.display = 'block'; }
   }
 
   // ---------- push notifications ----------
