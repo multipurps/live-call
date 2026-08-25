@@ -434,8 +434,37 @@
 </head>
 <body>
 
+<div id="installGate" style="display:none; position:fixed; inset:0; z-index:99999; background:var(--coffee); flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:32px;">
+  <img src="logo.png" alt="" style="width:64px; height:64px; margin-bottom:20px;" />
+  <div style="font-size:22px; font-weight:700; margin-bottom:10px;">Add Live Call to your Home Screen</div>
+  <div style="font-size:15px; color:var(--dim); line-height:1.5; max-width:340px; margin-bottom:28px;">This app only works when installed — it needs to run full-screen, not inside a browser tab.</div>
+  <div id="installGateStepsIOS" style="display:none; text-align:left; max-width:320px; font-size:14.5px; line-height:1.7; color:#fff;">
+    <div>1. Tap the <b>Share</b> icon <svg viewBox="0 0 24 24" fill="none" style="width:16px; height:16px; vertical-align:-2px;"><path d="M12 3v12m0-12l-4 4m4-4l4 4M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> in Safari's toolbar</div>
+    <div>2. Scroll down and tap <b>Add to Home Screen</b></div>
+    <div>3. Tap <b>Add</b>, then open Live Call from your Home Screen</div>
+  </div>
+  <div id="installGateStepsGeneric" style="display:none; text-align:left; max-width:320px; font-size:14.5px; line-height:1.7; color:#fff;">
+    <div>1. Open the browser menu</div>
+    <div>2. Tap <b>Add to Home screen</b> or <b>Install app</b></div>
+    <div>3. Open Live Call from your Home Screen</div>
+  </div>
+</div>
 <div id="debugBar" style="display:none; position:fixed; left:14px; right:14px; bottom:calc(env(safe-area-inset-bottom, 0px) + 14px); background:#2b1c14; color:#fff; font-size:12.5px; line-height:1.4; padding:12px 14px; border-radius:14px; border:1px solid rgba(255,255,255,0.14); box-shadow:0 12px 32px rgba(0,0,0,0.5); z-index:999; max-height:120px; overflow-y:auto;"></div>
 <script>
+  // Hard gate: the app must never render inside a plain browser tab, only when
+  // installed to the Home Screen and launched standalone. Runs first, before
+  // anything else, and just stops here if it fails the check.
+  (function enforceStandalone(){
+    const isStandalone = window.navigator.standalone === true
+      || window.matchMedia('(display-mode: standalone)').matches;
+    if (isStandalone) return;
+    const gate = document.getElementById('installGate');
+    gate.style.display = 'flex';
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    document.getElementById(isIOS ? 'installGateStepsIOS' : 'installGateStepsGeneric').style.display = 'block';
+    document.documentElement.style.overflow = 'hidden';
+  })();
+
   // Something went wrong, shown as a small dismissible card instead of a raw red
   // debug-console bar across the status bar - still surfaces the real error (needed
   // for debugging) but doesn't look like a leftover dev tool in a shipped app.
@@ -627,14 +656,6 @@
       </div>
 
       <div class="sectionLabel">App</div>
-      <div class="profileCard">
-        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M9 18h6M12 3a5 5 0 0 0-5 5c0 4-2 5-2 6h14c0-1-2-2-2-6a5 5 0 0 0-5-5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
-        <div class="cBody">
-          <div class="cLabel">Notifications</div>
-          <div style="font-size:13px; color:var(--dim);" id="notifStatus">Not enabled</div>
-        </div>
-        <button class="saveKeyBtn" id="enableNotifsBtn" style="width:auto; padding:8px 14px; margin:0;">Enable</button>
-      </div>
       <div class="profileCard">
         <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
         <div class="cBody">
@@ -1174,7 +1195,7 @@
     $('profileTheme').value = state.theme;
     await loadKeyStatus();
     setProviderUI(state.provider);
-    updateNotifStatus();
+    ensureNotificationsEnabled();
     checkForNewAnnouncements();
     renderProfile();
   }
@@ -1686,42 +1707,30 @@
     const raw = atob(base64);
     return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
   }
-  async function updateNotifStatus(){
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      $('notifStatus').textContent = 'Not supported on this browser';
-      $('enableNotifsBtn').style.display = 'none';
-      return;
-    }
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.getSubscription();
-    if (sub) {
-      $('notifStatus').textContent = 'Enabled';
-      $('enableNotifsBtn').style.display = 'none';
-    } else {
-      $('notifStatus').textContent = 'Not enabled';
-      $('enableNotifsBtn').style.display = 'inline-block';
-    }
-  }
-  $('enableNotifsBtn').addEventListener('click', async () => {
+  // Notifications have no manual toggle in Profile - they're important enough that we
+  // just enable them ourselves the moment someone signs in, silently. If permission was
+  // already denied at the OS level we can't re-prompt (browsers block that) and just
+  // leave it; if it's still undecided, this triggers the native permission prompt.
+  async function ensureNotificationsEnabled(){
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
     try {
-      const perm = await Notification.requestPermission();
-      if (perm !== 'granted') { $('notifStatus').textContent = 'Permission denied'; return; }
       const reg = await navigator.serviceWorker.ready;
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) return; // already enabled
+      if (Notification.permission === 'denied') return; // can't re-prompt, nothing to do
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') return;
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
       });
-      const { data: { session } } = await supabase.auth.getSession();
       await fetch('/api/save-push-subscription', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
         body: JSON.stringify({ subscription: sub.toJSON() }),
       });
-      updateNotifStatus();
-    } catch (e) {
-      $('notifStatus').textContent = 'Could not enable — try again';
-    }
-  });
+    } catch (e) { console.error('ensureNotificationsEnabled failed:', e); }
+  }
 
 
   async function addHistory(entry){
