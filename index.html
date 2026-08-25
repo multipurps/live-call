@@ -20,6 +20,7 @@
     --coffee-rgb:30,19,13;
     --coffee-light:#2b1c14;
     --coffee-light-rgb:43,28,20;
+    --icon-color:#f2e6d3;
     --tabbar-h:76px; /* total footprint of the floating tab bar (its own bottom gap + height) - used only to float the brief input bar above it. Single source of truth - never let this be content-driven. */
     --sidebar-w:88px; /* desktop-only left rail width, replaces --tabbar-h's role on wide screens */
   }
@@ -33,6 +34,7 @@
     --coffee-rgb:13,20,32;
     --coffee-light:#182233;
     --coffee-light-rgb:24,34,51;
+    --icon-color: var(--accent);
   }
   [data-theme="forest-gold"]{
     --accent:#e8a916;
@@ -44,6 +46,7 @@
     --coffee-rgb:12,35,24;
     --coffee-light:#123120;
     --coffee-light-rgb:18,49,32;
+    --icon-color: var(--accent);
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; margin:0; padding:0; -webkit-text-size-adjust:100%; touch-action:manipulation; scrollbar-width:none; -ms-overflow-style:none;}
   *::-webkit-scrollbar{display:none; width:0; height:0;}
@@ -168,10 +171,10 @@
   .tabBtn{
     position:relative; z-index:1;
     flex:none; width:52px; height:44px; display:flex; align-items:center; justify-content:center;
-    color:var(--dim); border-radius:16px;
+    color:var(--icon-color); border-radius:16px;
     transition:color 0.2s;
   }
-  .tabBtn.active{color:#fff;}
+  .tabBtn.active{color:var(--icon-color);}
   .tabBtn svg{width:20px; height:20px;}
   .tabAvatarRing{
     width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center;
@@ -225,7 +228,7 @@
     height:44px; margin:6px 0 0; padding-bottom:6px;
     background:var(--coffee);
   }
-  #newChatBtn{flex:none; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:#fff;}
+  #newChatBtn{flex:none; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:var(--icon-color);}
   #newChatBtn svg{width:22px; height:22px; display:block;}
   #providerPicker{position:relative;}
   #providerPickerBtn{
@@ -306,7 +309,7 @@
   }
   .profileCard .cIcon{
     width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.07);
-    display:flex; align-items:center; justify-content:center; flex:none; color:var(--dim);
+    display:flex; align-items:center; justify-content:center; flex:none; color:var(--icon-color);
   }
   .profileCard .cIcon svg{width:18px; height:18px;}
   .profileCard .cBody{flex:1; min-width:0;}
@@ -331,7 +334,7 @@
   }
   .plainInput::placeholder{color:var(--dim); font-weight:500;}
   .profileHeaderRow{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
-  #notifBellBtn{position:relative; background:var(--panel); border:1px solid var(--line); border-radius:12px; width:38px; height:38px; display:flex; align-items:center; justify-content:center; color:#fff;}
+  #notifBellBtn{position:relative; background:var(--panel); border:1px solid var(--line); border-radius:12px; width:38px; height:38px; display:flex; align-items:center; justify-content:center; color:var(--icon-color);}
   .notifDot{position:absolute; top:7px; right:7px; width:8px; height:8px; border-radius:50%; background:var(--accent); border:1.5px solid var(--coffee);}
   .profilePill{
     display:flex; align-items:center; gap:12px; background:var(--panel); border:1px solid var(--line);
@@ -1804,9 +1807,9 @@
     if (!file || !currentUser) return;
     $('photoUploadHint').textContent = 'Uploading…';
     const path = `${currentUser.id}/profile.${file.name.split('.').pop()}`;
-    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, cacheControl: '3600' });
+    const { error: upErr } = await supabase.storage.from('user-uploads').upload(path, file, { upsert: true, cacheControl: '3600' });
     if (upErr) { $('photoUploadHint').textContent = 'Upload failed: ' + upErr.message; return; }
-    const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+    const { data: pub } = supabase.storage.from('user-uploads').getPublicUrl(path);
     state.avatarUrl = pub.publicUrl + '?t=' + Date.now();
     await persist();
     renderProfile();
