@@ -17,7 +17,7 @@
     --dim: rgba(255,230,210,0.55);
     --coffee:#1e130d;
     --coffee-light:#2b1c14;
-    --tabbar-h:44px; /* fixed content height of the tab bar, excludes safe area. Single source of truth - never let this be content-driven. */
+    --tabbar-h:76px; /* total footprint of the floating tab bar (its own bottom gap + height) - used only to float the brief input bar above it. Single source of truth - never let this be content-driven. */
     --sidebar-w:88px; /* desktop-only left rail width, replaces --tabbar-h's role on wide screens */
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color: transparent; margin:0; padding:0; -webkit-text-size-adjust:100%; touch-action:manipulation; scrollbar-width:none; -ms-overflow-style:none;}
@@ -77,6 +77,7 @@
   }
   #sidebar .tabBtn{
     flex:none; height:64px; gap:5px;
+    flex-direction:column; font-size:10px; line-height:1.15; font-weight:600;
     border-radius:0;
   }
   #sidebar .tabBtn.active{background:rgba(255,255,255,0.06);}
@@ -119,18 +120,22 @@
 
   /* ---------- bottom tab nav: flush to true screen edge, no safe-area padding (explicit user choice, accepts gesture-zone tap risk) ---------- */
   #tabBar{
-    position:fixed; left:0; right:0; bottom:0; z-index:10;
-    height:var(--tabbar-h);
-    display:flex;
-    background:#1e130d;
-    border-top:1px solid rgba(255,255,255,0.14);
+    position:fixed; left:50%; bottom:20px; transform:translateX(-50%); z-index:10;
+    display:flex; align-items:center; gap:2px;
+    padding:6px;
+    border-radius:22px;
+    background:rgba(43,28,20,0.55);
+    backdrop-filter:blur(20px) saturate(180%);
+    -webkit-backdrop-filter:blur(20px) saturate(180%);
+    border:1px solid rgba(255,255,255,0.14);
+    box-shadow:0 12px 30px rgba(0,0,0,0.45);
   }
   .tabBtn{
-    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
-    color:var(--dim); font-size:10px; line-height:1.15; font-weight:600;
+    flex:none; width:52px; height:44px; display:flex; align-items:center; justify-content:center;
+    color:var(--dim); border-radius:16px;
   }
-  .tabBtn.active{color:#fff;}
-  .tabBtn svg{width:18px; height:18px;}
+  .tabBtn.active{color:#fff; background:rgba(255,255,255,0.10);}
+  .tabBtn svg{width:20px; height:20px;}
 
   /* ---------- brief input: floats free above the tab nav, own pill, not attached to anything ---------- */
   #homeInputBar{
@@ -555,7 +560,7 @@
       <div class="profileHeaderRow">
         <h1 class="pageTitle" style="margin:0;">Profile</h1>
         <button id="notifBellBtn" aria-label="Notifications">
-          <svg viewBox="0 0 24 24" fill="none" width="22" height="22"><path d="M9 18h6M12 3a5 5 0 0 0-5 5c0 4-2 5-2 6h14c0-1-2-2-2-6a5 5 0 0 0-5-5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" width="22" height="22" xmlns="http://www.w3.org/2000/svg"><g id="notification-bell-line"><path fill-rule="evenodd" clip-rule="evenodd" d="M14.802 19.8317C15.4184 19.7699 15.8349 20.4242 15.5437 20.9539C15.3385 21.3271 15.0493 21.6529 14.7029 21.9197C14.3496 22.1918 13.9397 22.4006 13.5 22.5408C13.0601 22.6812 12.593 22.7522 12.1242 22.7522C11.6554 22.7522 11.1883 22.6812 10.7484 22.5408C10.3087 22.4006 9.89883 22.1918 9.54556 21.9197C9.1991 21.6529 8.90988 21.3271 8.70472 20.9539C8.41354 20.4242 8.83002 19.7699 9.44644 19.8317C9.63869 19.851 11.1433 19.9981 12.1242 19.9981C13.1051 19.9981 14.6097 19.851 14.802 19.8317Z" fill="currentColor"/><path fill-rule="evenodd" clip-rule="evenodd" d="M15.7423 1.98737C13.4465 0.967602 10.7932 1.00445 8.52901 2.08755C6.27704 3.16478 4.85335 5.3744 4.85335 7.79233L4.85335 9.06596C4.85335 10.1981 4.55987 11.3124 3.99943 12.3082L3.77239 12.7115C2.37502 15.1943 3.90274 18.2653 6.79044 18.7783C10.3154 19.4046 13.93 19.4046 17.455 18.7783L17.6156 18.7498C20.465 18.2435 22.0525 15.29 20.8335 12.7632L20.5681 12.213C20.1236 11.2918 19.8934 10.2885 19.8934 9.27297L19.8934 8.0096C19.8934 5.4622 18.3532 3.14707 15.9475 2.07851L15.7423 1.98737ZM9.74805 13.998C9.33383 13.998 8.99805 14.3338 8.99805 14.748C8.99805 15.1623 9.33383 15.498 9.74805 15.498L14.748 15.498C15.1623 15.498 15.498 15.1623 15.498 14.748C15.498 14.3338 15.1623 13.998 14.748 13.998L9.74805 13.998Z" fill="currentColor"/></g></svg>
           <span id="notifDot" class="notifDot" style="display:none;"></span>
         </button>
       </div>
@@ -848,17 +853,14 @@
   </div>
 
   <div id="tabBar">
-    <button class="tabBtn active" data-tab="home">
+    <button class="tabBtn active" data-tab="home" aria-label="Home">
       <svg viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M2.33537 7.87495C1.79491 9.00229 1.98463 10.3208 2.36407 12.9579L2.64284 14.8952C3.13025 18.2827 3.37396 19.9764 4.54903 20.9882C5.72409 22 7.44737 22 10.8939 22H13.1061C16.5526 22 18.2759 22 19.451 20.9882C20.626 19.9764 20.8697 18.2827 21.3572 14.8952L21.6359 12.9579C22.0154 10.3208 22.2051 9.00229 21.6646 7.87495C21.1242 6.7476 19.9738 6.06234 17.6731 4.69181L16.2882 3.86687C14.199 2.62229 13.1543 2 12 2C10.8457 2 9.80104 2.62229 7.71175 3.86687L6.32691 4.69181C4.02619 6.06234 2.87583 6.7476 2.33537 7.87495ZM8.2501 17.9998C8.2501 17.5856 8.58589 17.2498 9.0001 17.2498H15.0001C15.4143 17.2498 15.7501 17.5856 15.7501 17.9998C15.7501 18.414 15.4143 18.7498 15.0001 18.7498H9.0001C8.58589 18.7498 8.2501 18.414 8.2501 17.9998Z" fill="currentColor"/></svg>
-      Home
     </button>
-    <button class="tabBtn" data-tab="recent">
+    <button class="tabBtn" data-tab="recent" aria-label="Recent">
       <svg viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M22 12c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2s10 4.477 10 10zm-4.581 3.324a1 1 0 0 0-.525-1.313L13 12.341V6.5a1 1 0 0 0-2 0v6.17c0 .6.357 1.143.909 1.379l4.197 1.8a1 1 0 0 0 1.313-.525z" fill="currentColor"/></svg>
-      Recent
     </button>
-    <button class="tabBtn" data-tab="profile">
+    <button class="tabBtn" data-tab="profile" aria-label="Profile">
       <svg viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M6.75 6.5C6.75 3.6005 9.1005 1.25 12 1.25C14.8995 1.25 17.25 3.6005 17.25 6.5C17.25 9.3995 14.8995 11.75 12 11.75C9.1005 11.75 6.75 9.3995 6.75 6.5Z" fill="currentColor"/><path fill-rule="evenodd" clip-rule="evenodd" d="M4.25 18.5714C4.25 15.6325 6.63249 13.25 9.57143 13.25H14.4286C17.3675 13.25 19.75 15.6325 19.75 18.5714C19.75 20.8792 17.8792 22.75 15.5714 22.75H8.42857C6.12081 22.75 4.25 20.8792 4.25 18.5714Z" fill="currentColor"/></svg>
-      Profile
     </button>
   </div>
 </div>
