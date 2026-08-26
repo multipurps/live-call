@@ -359,6 +359,20 @@
     background:var(--accent); border:2.5px solid var(--coffee); display:flex; align-items:center; justify-content:center;
   }
   .sectionLabel{font-size:12px; font-weight:700; color:var(--dim); text-transform:uppercase; letter-spacing:0.04em; margin:22px 0 8px 4px;}
+  .pillActionBtn{
+    flex:1; padding:14px; border-radius:16px; font-weight:650; font-size:14.5px; text-align:center;
+    background:var(--accent); color:#fff;
+  }
+  .pillActionBtn--ghost{background:var(--panel); border:1px solid var(--line);}
+  .previewRow{
+    display:flex; align-items:center; gap:13px; margin-top:14px; padding:12px 16px;
+    background:var(--coffee-light); border-radius:18px;
+  }
+  .playCircleBtn{
+    flex:none; width:46px; height:46px; border-radius:50%;
+    background:var(--accent); color:#fff; font-size:16px;
+    display:flex; align-items:center; justify-content:center;
+  }
   .sectionLabel:first-of-type{margin-top:0;}
   .profileCard input.keyInput.revealed{-webkit-text-security:none;}
   .profileCard input.keyInput::placeholder{color:var(--dim); font-weight:500;}
@@ -908,17 +922,16 @@
           </button>
         </div>
 
-        <div class="profileCard">
-          <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
-          <div class="cBody">
-            <div class="cValue">Clone your voice</div>
-            <div class="hint" id="voiceRecordStatus" style="margin:2px 0 0;">10–30s of clear speech, quiet room, no music.</div>
-          </div>
-          <div style="display:flex; gap:8px; flex:none;">
-            <button class="saveKeyBtn" id="voicePreviewBtn" style="width:auto; padding:9px 14px; margin:0; background:var(--panel); display:none;" aria-label="Play preview">▶</button>
-            <button class="saveKeyBtn" id="voiceRecordBtn" style="width:auto; padding:9px 14px; margin:0;">Record</button>
-            <button class="saveKeyBtn" id="voiceUploadBtn" style="width:auto; padding:9px 14px; margin:0; background:var(--panel);">Upload</button>
-          </div>
+        <div class="sectionLabel" style="margin-top:24px;">Clone your voice</div>
+        <p class="hint" id="voiceRecordStatus" style="margin:0 0 14px; text-align:left;">10–30s of clear speech, quiet room, no music.</p>
+        <div style="display:flex; gap:10px;">
+          <button class="pillActionBtn" id="voiceRecordBtn">Record</button>
+          <button class="pillActionBtn pillActionBtn--ghost" id="voiceUploadBtn">Upload</button>
+        </div>
+
+        <div class="previewRow" id="voicePreviewRow" style="display:none;">
+          <button class="playCircleBtn" id="voicePreviewBtn" aria-label="Play preview">▶</button>
+          <div class="hint" style="margin:0;">Preview your cloned voice</div>
         </div>
         <audio id="voicePreviewAudio" style="display:none;"></audio>
       </div>
@@ -1683,7 +1696,7 @@
       const r = await fetch('/api/anam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
-        body: JSON.stringify({ action: 'upload-avatar', imageUrl: pub.publicUrl, displayName: `${currentUser.email}'s avatar` }),
+        body: JSON.stringify({ action: 'upload-avatar', imageUrl: pub.publicUrl, displayName: (state.displayName ? `${state.displayName}'s avatar` : 'My avatar') }),
       });
       const data = await r.json();
       if (!r.ok) { statusEl.textContent = 'Anam error: ' + JSON.stringify(data.error).slice(0, 140); return; }
@@ -1748,7 +1761,7 @@
   async function uploadVoiceClip(blob){
     const statusEl = $('voiceRecordStatus');
     statusEl.textContent = 'Uploading…';
-    $('voicePreviewBtn').style.display = 'none';
+    $('voicePreviewRow').style.display = 'none';
     try {
       // A recorded Blob has no filename (only File objects from a file input do) - derive
       // one from its mime type since Anam's presigned-upload endpoint requires both.
@@ -1770,7 +1783,7 @@
       const createResp = await fetch('/api/anam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
-        body: JSON.stringify({ action: 'create-voice', audioKey: urlData.audioKey, displayName: `${currentUser.email}'s voice` }),
+        body: JSON.stringify({ action: 'create-voice', audioKey: urlData.audioKey, displayName: (state.displayName ? `${state.displayName}'s voice` : 'My voice') }),
       });
       const createData = await createResp.json();
       if (!createResp.ok) { statusEl.textContent = 'Error: ' + JSON.stringify(createData.error).slice(0, 140); return; }
@@ -1784,7 +1797,7 @@
       // cloned from - the honest, reliable version of "hear how it sounds."
       const audioEl = $('voicePreviewAudio');
       audioEl.src = URL.createObjectURL(blob);
-      $('voicePreviewBtn').style.display = 'inline-block';
+      $('voicePreviewRow').style.display = 'flex';
       loadAnamVoices();
       updateAnamAvatarSummary();
     } catch (err) {
@@ -1794,10 +1807,14 @@
 
   $('voicePreviewBtn').addEventListener('click', () => {
     const audioEl = $('voicePreviewAudio');
+    const btn = $('voicePreviewBtn');
     if (!audioEl.src) return;
-    audioEl.currentTime = 0;
+    if (!audioEl.paused) { audioEl.pause(); return; }
     audioEl.play().catch(() => {});
   });
+  $('voicePreviewAudio').addEventListener('play', () => { $('voicePreviewBtn').textContent = '❚❚'; });
+  $('voicePreviewAudio').addEventListener('pause', () => { $('voicePreviewBtn').textContent = '▶'; });
+  $('voicePreviewAudio').addEventListener('ended', () => { $('voicePreviewBtn').textContent = '▶'; });
 
   $('voiceUploadBtn').addEventListener('click', () => $('voiceFileInput').click());
   $('voiceFileInput').addEventListener('change', async (e) => {
