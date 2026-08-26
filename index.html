@@ -7,6 +7,9 @@
 <meta name="theme-color" content="#1e130d" />
 <link rel="manifest" href="manifest.json" />
 <link rel="apple-touch-icon" href="icon-192.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <style>
@@ -506,6 +509,65 @@
   }
   #authToggleMode b{color:var(--accent); font-weight:650;}
 
+  /* ---------- splash: always shown first, over everything else, while auth
+     resolves. Background is one of the admin-uploaded images, chosen at
+     random on every launch (js below) - falls back to the plain coffee
+     background if none have been uploaded yet. ---------- */
+  #liveSplash{
+    position:fixed; inset:0; z-index:500;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background-color:var(--coffee); background-size:cover; background-position:center;
+    transition:opacity .4s ease;
+  }
+  #liveSplash::before{
+    content:''; position:absolute; inset:0;
+    background:linear-gradient(rgba(30,19,13,0.38), rgba(30,19,13,0.62));
+  }
+  #liveSplash.fade-out{ opacity:0; pointer-events:none; }
+  #liveSplash > *{ position:relative; }
+  #splashIconRow{ display:flex; align-items:center; gap:18px; }
+  #splashIconWrap{
+    width:78px; opacity:0; transform:scale(0.4);
+    filter:drop-shadow(0 6px 14px rgba(0,0,0,.45));
+    animation:splashIconIn .65s cubic-bezier(.34,1.56,.64,1) .15s forwards,
+              splashIconPulse 2.6s ease-in-out 1.1s infinite;
+  }
+  #splashIconWrap svg{display:block; width:100%; height:auto;}
+  #splashIconWrap path{fill:#ffffff;}
+  #splashLabel{
+    font-family:'Sora', -apple-system, sans-serif; font-size:34px; font-weight:600; color:#fff;
+    letter-spacing:0.2px; white-space:nowrap;
+    text-shadow:0 2px 4px rgba(0,0,0,.5), 0 8px 20px rgba(0,0,0,.35);
+    opacity:0; transform:translateX(-14px);
+    animation:splashLabelIn .55s ease-out .62s forwards;
+  }
+  @keyframes splashIconIn{ to{ opacity:1; transform:scale(1); } }
+  @keyframes splashIconPulse{
+    0%,100%{ filter:drop-shadow(0 6px 14px rgba(0,0,0,.45)) drop-shadow(0 0 0px rgba(255,255,255,0)); }
+    50%{ filter:drop-shadow(0 6px 14px rgba(0,0,0,.45)) drop-shadow(0 0 16px rgba(255,255,255,.65)); }
+  }
+  @keyframes splashLabelIn{ to{ opacity:1; transform:translateX(0); } }
+
+  #splashFooter{
+    position:absolute; bottom:calc(env(safe-area-inset-bottom, 0px) + 42px);
+    display:flex; align-items:center; gap:8px;
+    opacity:0; animation:splashFooterIn .6s ease-out 1.05s forwards;
+  }
+  #splashFooterMark{
+    width:22px; flex:none;
+    filter:drop-shadow(0 2px 6px rgba(0,0,0,.5)) drop-shadow(0 0 6px rgba(255,255,255,.45));
+    animation:splashFooterBreathe 4s ease-in-out 1.7s infinite;
+  }
+  #splashFooterMark svg{display:block; width:100%; height:auto;}
+  #splashFooterMark path{fill:#ffffff;}
+  #splashFooterText{
+    font-family:'Sora', -apple-system, sans-serif; font-size:14px; font-weight:500; letter-spacing:0.5px;
+    color:rgba(255,255,255,0.9); text-shadow:0 1px 3px rgba(0,0,0,.5), 0 4px 10px rgba(0,0,0,.35);
+  }
+  #splashFooterText b{ color:#fff; font-weight:700; }
+  @keyframes splashFooterIn{ to{ opacity:1; } }
+  @keyframes splashFooterBreathe{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.08); } }
+
 </style>
 </head>
 <body>
@@ -999,6 +1061,26 @@
 
 </div><!-- /deviceFrame -->
 
+<div id="liveSplash">
+  <div id="splashIconRow">
+    <div id="splashIconWrap">
+      <svg viewBox="0 0 380 235" xmlns="http://www.w3.org/2000/svg">
+        <path d="M0,54 A54,54 0 0 1 54,0 L206,0 A54,54 0 0 1 260,54 L260,181 A54,54 0 0 1 206,235 L54,235 A54,54 0 0 1 0,181 Z"/>
+        <path d="M278,117.5 C288,92 302,50 322,28 C332,17 352,15 364,24 C372,30 372,42 372,55 L372,180 C372,193 372,205 364,211 C352,220 332,218 322,207 C302,185 288,143 278,117.5 Z"/>
+      </svg>
+    </div>
+    <div id="splashLabel">Live Call</div>
+  </div>
+  <div id="splashFooter">
+    <div id="splashFooterMark">
+      <svg viewBox="0 0 253 271" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 122.75,39.00 C 113.12,39.33 101.62,43.54 94.00,49.75 C 86.38,55.96 79.50,67.00 77.00,76.25 C 74.50,85.50 75.21,94.71 79.00,105.25 C 82.79,115.79 96.79,130.42 99.75,139.50 C 102.71,148.58 98.75,155.00 96.75,159.75 C 94.75,164.50 95.25,164.67 87.75,168.00 C 80.25,171.33 59.08,176.17 51.75,179.75 C 44.42,183.33 45.50,185.83 43.75,189.50 C 42.00,193.17 40.75,197.33 41.25,201.75 C 41.75,206.17 42.92,211.96 46.75,216.00 C 50.58,220.04 63.58,226.58 64.25,226.00 C 64.92,225.42 52.79,217.62 50.75,212.50 C 48.71,207.38 49.92,199.71 52.00,195.25 C 54.08,190.79 56.83,188.00 63.25,185.75 C 69.67,183.50 83.88,183.58 90.50,181.75 C 97.12,179.92 99.29,179.00 103.00,174.75 C 106.71,170.50 111.54,162.46 112.75,156.25 C 113.96,150.04 109.25,136.62 110.25,137.50 C 111.25,138.38 118.96,153.67 118.75,161.50 C 118.54,169.33 108.04,171.88 109.00,184.50 C 109.96,197.12 119.50,236.96 124.50,237.25 C 129.50,237.54 138.12,198.92 139.00,186.25 C 139.88,173.58 129.96,169.21 129.75,161.25 C 129.54,153.29 136.67,139.17 137.75,138.50 C 138.83,137.83 135.00,151.25 136.25,157.25 C 137.50,163.25 141.54,170.42 145.25,174.50 C 148.96,178.58 151.83,179.88 158.50,181.75 C 165.17,183.62 178.88,183.50 185.25,185.75 C 191.62,188.00 194.58,190.88 196.75,195.25 C 198.92,199.62 200.21,206.92 198.25,212.00 C 196.29,217.08 184.50,224.96 185.00,225.75 C 185.50,226.54 197.50,221.17 201.25,216.75 C 205.00,212.33 208.42,205.54 207.50,199.25 C 206.58,192.96 203.50,184.21 195.75,179.00 C 188.00,173.79 168.42,171.42 161.00,168.00 C 153.58,164.58 153.29,162.92 151.25,158.50 C 149.21,154.08 145.71,150.38 148.75,141.50 C 151.79,132.62 165.79,116.33 169.50,105.25 C 173.21,94.17 173.96,84.58 171.00,75.00 C 168.04,65.42 159.79,53.75 151.75,47.75 C 143.71,41.75 132.38,38.67 122.75,39.00 Z M 128.25,54.75 C 132.46,55.21 137.08,57.46 140.00,58.75 C 142.92,60.04 143.92,60.96 145.75,62.50 C 147.58,64.04 149.21,65.25 151.00,68.00 C 152.79,70.75 155.38,75.12 156.50,79.00 C 157.62,82.88 157.96,87.50 157.75,91.25 C 157.54,95.00 156.21,98.75 155.25,101.50 C 154.29,104.25 155.71,103.58 152.00,107.75 C 148.29,111.92 137.62,120.92 133.00,126.50 C 128.38,132.08 127.21,141.21 124.25,141.25 C 121.29,141.29 119.42,131.75 115.25,126.75 C 111.08,121.75 102.58,114.75 99.25,111.25 C 95.92,107.75 96.50,108.00 95.25,105.75 C 94.00,103.50 92.50,101.42 91.75,97.75 C 91.00,94.08 90.33,87.92 90.75,83.75 C 91.17,79.58 92.88,75.71 94.25,72.75 C 95.62,69.79 97.50,67.79 99.00,66.00 C 100.50,64.21 100.62,63.67 103.25,62.00 C 105.88,60.33 110.58,57.21 114.75,56.00 C 118.92,54.79 124.04,54.29 128.25,54.75 Z M 10.75,141.75 C 10.29,144.33 10.46,146.71 10.75,148.50 C 11.04,150.29 12.04,153.50 12.50,152.50 C 12.96,151.50 12.50,145.38 13.50,142.50 C 14.50,139.62 16.21,137.21 18.50,135.25 C 20.79,133.29 24.17,131.46 27.25,130.75 C 30.33,130.04 33.83,130.17 37.00,131.00 C 40.17,131.83 41.79,132.00 46.25,135.75 C 50.71,139.50 60.17,150.12 63.75,153.50 C 67.33,156.88 65.83,155.21 67.75,156.00 C 69.67,156.79 72.92,157.88 75.25,158.25 C 77.58,158.62 79.42,158.62 81.75,158.25 C 84.08,157.88 87.04,157.12 89.25,156.00 C 91.46,154.88 93.54,153.17 95.00,151.50 C 96.46,149.83 97.71,148.42 98.00,146.00 C 98.29,143.58 97.83,140.00 96.75,137.00 C 95.67,134.00 92.46,128.25 91.50,128.00 C 90.54,127.75 91.58,133.33 91.00,135.50 C 90.42,137.67 89.42,139.46 88.00,141.00 C 86.58,142.54 84.33,144.00 82.50,144.75 C 80.67,145.50 78.88,145.62 77.00,145.50 C 75.12,145.38 73.00,144.71 71.25,144.00 C 69.50,143.29 70.17,144.21 66.50,141.25 C 62.83,138.29 54.21,129.50 49.25,126.25 C 44.29,123.00 40.29,122.42 36.75,121.75 C 33.21,121.08 31.00,121.42 28.00,122.25 C 25.00,123.08 21.17,124.96 18.75,126.75 C 16.33,128.54 14.83,130.50 13.50,133.00 C 12.17,135.50 11.21,139.17 10.75,141.75 Z M 238.00,142.75 C 237.67,140.04 236.96,136.33 235.75,133.75 C 234.54,131.17 232.75,129.04 230.75,127.25 C 228.75,125.46 226.42,123.96 223.75,123.00 C 221.08,122.04 217.54,121.50 214.75,121.50 C 211.96,121.50 209.54,122.17 207.00,123.00 C 204.46,123.83 203.50,123.54 199.50,126.50 C 195.50,129.46 186.54,137.88 183.00,140.75 C 179.46,143.62 180.12,142.96 178.25,143.75 C 176.38,144.54 173.83,145.33 171.75,145.50 C 169.67,145.67 167.71,145.54 165.75,144.75 C 163.79,143.96 161.46,142.38 160.00,140.75 C 158.54,139.12 157.58,137.00 157.00,135.00 C 156.42,133.00 157.29,128.46 156.50,128.75 C 155.71,129.04 153.25,133.79 152.25,136.75 C 151.25,139.71 150.33,144.08 150.50,146.50 C 150.67,148.92 151.58,149.54 153.25,151.25 C 154.92,152.96 158.12,155.54 160.50,156.75 C 162.88,157.96 164.83,158.33 167.50,158.50 C 170.17,158.67 173.12,158.96 176.50,157.75 C 179.88,156.54 183.12,155.12 187.75,151.25 C 192.38,147.38 200.46,137.83 204.25,134.50 C 208.04,131.17 208.67,131.96 210.50,131.25 C 212.33,130.54 212.83,130.17 215.25,130.25 C 217.67,130.33 222.21,130.62 225.00,131.75 C 227.79,132.88 230.21,134.96 232.00,137.00 C 233.79,139.04 235.04,141.38 235.75,144.00 C 236.46,146.62 235.92,151.75 236.25,152.75 C 236.58,153.75 237.46,151.67 237.75,150.00 C 238.04,148.33 238.33,145.46 238.00,142.75 Z" fill-rule="evenodd"/>
+      </svg>
+    </div>
+    <div id="splashFooterText">by <b>octopusfur</b></div>
+  </div>
+</div>
+
 <script type="module">
   import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -1011,6 +1093,32 @@
   // thing Supabase's own SDK keeps in localStorage — everything else below reads/writes Supabase.
 
   const $ = (id) => document.getElementById(id);
+
+  // ---------- splash ----------
+  // Always shown (unconditional - no "only for returning sessions" check here,
+  // unlike Personal Studio's splash), for at least MIN_SPLASH_MS, and hidden
+  // only once auth has also resolved - whichever of the two finishes last.
+  const MIN_SPLASH_MS = 2300;
+  let splashMinDone = false;
+  let splashAuthDone = false;
+  function maybeHideSplash(){
+    if (!splashMinDone || !splashAuthDone) return;
+    const el = $('liveSplash');
+    if (!el) return;
+    el.classList.add('fade-out');
+    setTimeout(() => el.remove(), 450);
+  }
+  setTimeout(() => { splashMinDone = true; maybeHideSplash(); }, MIN_SPLASH_MS);
+
+  (async () => {
+    try {
+      const { data } = await supabase.from('splash_backgrounds').select('url');
+      if (data && data.length) {
+        const pick = data[Math.floor(Math.random() * data.length)];
+        $('liveSplash').style.backgroundImage = `url('${pick.url}')`;
+      }
+    } catch (e) {}
+  })();
 
   // Reusable "•••" action menu - a small dismissible popover anchored near the button
   // that opened it. Used for Recent chat's overflow menu and Avatar/Voice delete,
@@ -2224,6 +2332,7 @@
       $('authBoot').style.display = 'none';
       $('authBox').style.display = 'none';
       $('pendingBox').style.display = 'block';
+      splashAuthDone = true; maybeHideSplash();
       return;
     }
     $('authBoot').style.display = 'none';
@@ -2234,6 +2343,7 @@
     loadHeygenAvatars();
     loadAnamAvatars();
     loadAnamVoices();
+    splashAuthDone = true; maybeHideSplash();
   }
 
   supabase.auth.onAuthStateChange((_event, session) => {
@@ -2245,6 +2355,7 @@
       $('authBox').style.display = '';
       $('pendingBox').style.display = 'none';
       authScreen.classList.remove('hidden');
+      splashAuthDone = true; maybeHideSplash();
     }
   });
 

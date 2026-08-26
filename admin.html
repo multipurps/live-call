@@ -47,6 +47,12 @@
   .toggleBtn.pending{background:#3a2620; color:var(--dim); border:1px solid var(--line);}
   #signInBox, #pinBox{max-width:320px; margin:70px auto 0; text-align:center; display:block;}
   #pinBox{display:none;}
+  .splashBgCard{position:relative; border-radius:12px; overflow:hidden; border:1px solid var(--line); aspect-ratio:9/16; background:var(--panel);}
+  .splashBgCard img{width:100%; height:100%; object-fit:cover; display:block;}
+  .splashBgCard button{
+    position:absolute; top:6px; right:6px; width:26px; height:26px; border-radius:50%;
+    background:rgba(0,0,0,0.55); color:#fff; font-size:14px; line-height:1; display:flex; align-items:center; justify-content:center;
+  }
 </style>
 </head>
 <body>
@@ -98,6 +104,13 @@
   <button class="btn" id="loginBgClearBtn" style="margin-top:10px; background:rgba(255,59,48,0.2); border-color:rgba(255,59,48,0.45);">Remove current background</button>
   <p class="hint" id="loginBgHint"></p>
 
+  <h1 style="margin-top:28px;">Splash backgrounds</h1>
+  <p class="hint" style="margin-bottom:14px; text-align:left;">The app picks one of these at random every time it's opened. Add as many as you want.</p>
+  <div id="splashBgGrid" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;"></div>
+  <input id="splashBgFile" type="file" accept="image/png,image/jpeg,image/webp" style="display:none;" />
+  <button class="btn" id="splashBgPickBtn" style="background:rgba(255,255,255,0.1); border-color:rgba(255,255,255,0.18);">Add background</button>
+  <p class="hint" id="splashBgHint"></p>
+
   <h1 style="margin-top:28px;">Send announcement</h1>
   <div class="field"><label>Title</label><input id="announceTitle" type="text" placeholder="e.g. New feature" /></div>
   <div class="field"><label>Message</label><input id="announceBody" type="text" placeholder="What's the announcement?" /></div>
@@ -143,6 +156,7 @@
     $('pinBox').style.display = 'none';
     $('userList').style.display = 'block';
     loadLoginBg();
+    loadSplashBgs();
     $('rows').innerHTML = data.users.map(u => `
       <div class="userRow">
         <div>
@@ -224,6 +238,53 @@
     if (!r.ok) { $('loginBgHint').textContent = data.error; return; }
     $('loginBgHint').textContent = 'Removed — login screen back to default.';
     loadLoginBg();
+  });
+
+  async function loadSplashBgs(){
+    const { data } = await supabase.from('splash_backgrounds').select('id,url').order('created_at', { ascending: false });
+    $('splashBgGrid').innerHTML = (data || []).map(row => `
+      <div class="splashBgCard">
+        <img src="${row.url}" />
+        <button data-id="${row.id}" title="Remove">✕</button>
+      </div>
+    `).join('');
+    document.querySelectorAll('.splashBgCard button').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        const { data: { session } } = await supabase.auth.getSession();
+        const r = await fetch('/api/admin-upload-splash-bg', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ action: 'delete', id: btn.dataset.id }),
+        });
+        const data = await r.json();
+        if (!r.ok) { $('splashBgHint').textContent = data.error; btn.disabled = false; return; }
+        loadSplashBgs();
+      });
+    });
+  }
+
+  $('splashBgPickBtn').addEventListener('click', () => $('splashBgFile').click());
+  $('splashBgFile').addEventListener('change', () => {
+    const file = $('splashBgFile').files[0];
+    if (!file) return;
+    $('splashBgHint').textContent = 'Uploading…';
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const fileExt = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const r = await fetch('/api/admin-upload-splash-bg', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ imageBase64: reader.result, fileExt }),
+      });
+      const data = await r.json();
+      $('splashBgFile').value = '';
+      if (!r.ok) { $('splashBgHint').textContent = data.error; return; }
+      $('splashBgHint').textContent = 'Added.';
+      loadSplashBgs();
+    };
+    reader.readAsDataURL(file);
   });
 
   $('announceSendBtn').addEventListener('click', async () => {
