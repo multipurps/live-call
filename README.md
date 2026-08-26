@@ -1,2 +1,2 @@
 # live-call
-Real-time AI video call PWA - HeyGen + Tavus
+Real-time AI video call 
