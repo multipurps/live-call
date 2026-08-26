@@ -922,11 +922,13 @@
           </button>
         </div>
 
-        <div class="sectionLabel" style="margin-top:24px;">Clone your voice</div>
-        <p class="hint" id="voiceRecordStatus" style="margin:0 0 14px; text-align:left;">10–30s of clear speech, quiet room, no music.</p>
-        <div style="display:flex; gap:10px;">
-          <button class="pillActionBtn" id="voiceRecordBtn">Record</button>
-          <button class="pillActionBtn pillActionBtn--ghost" id="voiceUploadBtn">Upload</button>
+        <div id="voiceCloneSection">
+          <div class="sectionLabel" style="margin-top:24px;">Clone your voice</div>
+          <p class="hint" id="voiceRecordStatus" style="margin:0 0 14px; text-align:left;">10–30s of clear speech, quiet room, no music.</p>
+          <div style="display:flex; gap:10px;">
+            <button class="pillActionBtn" id="voiceRecordBtn">Record</button>
+            <button class="pillActionBtn pillActionBtn--ghost" id="voiceUploadBtn">Upload</button>
+          </div>
         </div>
 
         <div class="previewRow" id="voicePreviewRow" style="display:none;">
@@ -1599,17 +1601,25 @@
       }
       sel.innerHTML = '<option value="">Default voice</option>' + options.join('');
       if (state.anamVoiceId) sel.value = state.anamVoiceId;
+      updateVoiceCloneVisibility();
       sel.onchange = () => {
         state.anamVoiceId = sel.value;
         state.anamVoiceName = sel.options[sel.selectedIndex]?.textContent || '';
         persist();
         updateAnamAvatarSummary();
+        updateVoiceCloneVisibility();
       };
     } catch (e) { sel.innerHTML = '<option value="">Could not load voices</option>'; }
   }
 
 
   // ---------------------------------------------------------------- Anam avatar subscreen
+  function updateVoiceCloneVisibility(){
+    const hasVoice = !!state.anamVoiceId;
+    const section = $('voiceCloneSection');
+    if (section) section.style.display = hasVoice ? 'none' : 'block';
+    if (!hasVoice) $('voicePreviewRow').style.display = 'none'; // nothing active left to preview
+  }
   function updateAnamAvatarSummary(){
     const parts = [];
     if (state.anamAvatarName) parts.push(state.anamAvatarName);
