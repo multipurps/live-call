@@ -115,7 +115,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   // the plain coffee background if nothing has been uploaded via admin.html.
   (async () => {
     try {
-      const { data } = await supabase.from('app_settings').select('login_bg_url, chat_bg_url').eq('id', true).maybeSingle();
+      const { data } = await supabase.from('app_settings').select('login_bg_url').eq('id', true).maybeSingle();
       if (data?.login_bg_url) {
         const el = document.getElementById('authScreen');
         el.style.backgroundImage = `linear-gradient(rgba(30,19,13,0.32), rgba(30,19,13,0.55)), url('${data.login_bg_url}')`;
@@ -128,12 +128,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         gate.style.backgroundImage = `linear-gradient(rgba(30,19,13,0.45), rgba(30,19,13,0.72)), url('${data.login_bg_url}')`;
         gate.style.backgroundSize = 'cover';
         gate.style.backgroundPosition = 'center';
-      }
-      if (data?.chat_bg_url) {
-        const el = document.getElementById('screenHome');
-        el.style.backgroundImage = `linear-gradient(rgba(30,19,13,0.5), rgba(30,19,13,0.7)), url('${data.chat_bg_url}')`;
-        el.style.backgroundSize = 'cover';
-        el.style.backgroundPosition = 'center';
       }
     } catch (e) {}
   })();
@@ -256,6 +250,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     language: 'en',
     theme: 'coffee-emerald',
     avatarUrl: '',
+    chatBgUrl: '',
     // Booleans only, never the plaintext - the real keys live encrypted in Supabase
     // Vault and never leave the server after the moment they're first saved (see
     // /api/keys.js, /lib/keys.js). Populated by loadKeyStatus() below.
@@ -279,6 +274,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       language: state.language,
       theme: state.theme,
       avatar_url: state.avatarUrl,
+      chat_bg_url: state.chatBgUrl,
       updated_at: new Date().toISOString(),
     });
     if (error) {
@@ -311,6 +307,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       state.language = data.language || 'en';
       state.theme = data.theme || 'coffee-emerald';
       state.avatarUrl = data.avatar_url || '';
+      state.chatBgUrl = data.chat_bg_url || '';
       applyTheme();
     } else {
       await persist(); // first login — create the row
@@ -322,9 +319,41 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     $('profileTheme').value = state.theme;
     await loadKeyStatus();
     updateAnamAvatarSummary();
+    applyChatBg();
+    loadChatBgOptions();
     ensureNotificationsEnabled();
     checkForNewAnnouncements();
     renderProfile();
+  }
+
+  // ---------------------------------------------------------------- Chat background (per-user pick from admin's gallery)
+  function applyChatBg(){
+    const el = $('screenHome');
+    if (state.chatBgUrl) {
+      el.style.backgroundImage = `linear-gradient(rgba(30,19,13,0.5), rgba(30,19,13,0.7)), url('${state.chatBgUrl}')`;
+      el.style.backgroundSize = 'cover';
+      el.style.backgroundPosition = 'center';
+    } else {
+      el.style.backgroundImage = '';
+    }
+  }
+
+  async function loadChatBgOptions(){
+    const { data } = await supabase.from('chat_backgrounds').select('id,url').order('created_at', { ascending: false });
+    const row = $('chatBgPickerRow');
+    const noneSelected = !state.chatBgUrl;
+    const optionsHtml = (data || []).map(bg => `
+      <button class="chatBgThumb ${state.chatBgUrl === bg.url ? 'selected' : ''}" data-url="${bg.url}"><img src="${bg.url}" /></button>
+    `).join('');
+    row.innerHTML = `<button class="chatBgThumb noneOption ${noneSelected ? 'selected' : ''}" data-url="">None</button>` + optionsHtml;
+    row.querySelectorAll('.chatBgThumb').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        state.chatBgUrl = btn.dataset.url;
+        row.querySelectorAll('.chatBgThumb').forEach(b => b.classList.toggle('selected', b === btn));
+        applyChatBg();
+        await persist();
+      });
+    });
   }
 
   $('profileName').addEventListener('blur', async () => {
@@ -558,6 +587,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     if (state.anamAvatarName) parts.push(state.anamAvatarName);
     if (state.anamVoiceName) parts.push(state.anamVoiceName);
     $('anamAvatarSummary').textContent = parts.join(' · ') || 'Not set';
+    $('avatarPhotoTips').style.display = state.anamAvatarId ? 'none' : 'flex';
   }
   $('openAnamAvatarScreen').addEventListener('click', () => {
     $('anamAvatarScreen').classList.add('active');

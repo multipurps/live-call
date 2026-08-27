@@ -1,9 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'crypto';
 
-// Uploads (or clears) the chat interface's background image. Only the configured admin
-// (ADMIN_EMAIL) can call this - same check as the other admin endpoints. Writes go
-// through the service role key, which bypasses the 'branding' bucket's RLS, so no
-// public write policy is ever needed on that bucket.
+// Adds or removes one of the chat interface's background images. Unlike the
+// login background (a single app_settings column), chat backgrounds can hold many -
+// each user picks their own from it in-app - this is add/delete against
+// the chat_backgrounds table rather than upsert/clear against one row.
+// Same admin check as the other admin endpoints; writes go through the
+// service role key, which bypasses RLS, so no public write policy is ever
+// needed on the table or the 'branding' bucket.
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
@@ -25,10 +29,25 @@ export default async function handler(req, res) {
 
   const { action } = req.body || {};
 
-  if (action === 'clear') {
-    const { error } = await supabase.from('app_settings').update({ chat_bg_url: null }).eq('id', true);
-    if (error) return res.status(500).json({ error: error.message });
-    return res.status(200).json({ ok: true, url: null });
+  if (action === 'delete') {
+    const { id } = req.body || {};
+    if (!id) return res.status(400).json({ error: 'id is required' });
+
+    const { data: row, error: fetchErr } = await supabase
+      .from('chat_backgrounds')
+      .select('storage_path')
+      .eq('id', id)
+      .maybeSingle();
+    if (fetchErr) return res.status(500).json({ error: fetchErr.message });
+    if (!row) return res.status(404).json({ error: 'Not found' });
+
+    const { error: removeErr } = await supabase.storage.from('branding').remove([row.storage_path]);
+    if (removeErr) return res.status(500).json({ error: removeErr.message });
+
+    const { error: deleteErr } = await supabase.from('chat_backgrounds').delete().eq('id', id);
+    if (deleteErr) return res.status(500).json({ error: deleteErr.message });
+
+    return res.status(200).json({ ok: true });
   }
 
   const { imageBase64, fileExt } = req.body || {};
@@ -42,21 +61,25 @@ export default async function handler(req, res) {
     const buffer = Buffer.from(base64Data, 'base64');
     if (buffer.length > 8 * 1024 * 1024) return res.status(400).json({ error: 'Image too large (max 8MB)' });
 
-    const path = `chat-bg.${fileExt.toLowerCase()}`;
+    const ext = fileExt.toLowerCase();
+    const path = `chat/${randomUUID()}.${ext}`;
     const { error: uploadErr } = await supabase.storage.from('branding').upload(path, buffer, {
-      contentType: `image/${fileExt.toLowerCase() === 'jpg' ? 'jpeg' : fileExt.toLowerCase()}`,
-      upsert: true,
+      contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+      upsert: false,
     });
     if (uploadErr) return res.status(500).json({ error: uploadErr.message });
 
     const { data: publicUrlData } = supabase.storage.from('branding').getPublicUrl(path);
-    // Cache-bust so the new image shows immediately instead of the old cached one at the same path
-    const url = `${publicUrlData.publicUrl}?v=${Date.now()}`;
+    const url = publicUrlData.publicUrl;
 
-    const { error: settingsErr } = await supabase.from('app_settings').upsert({ id: true, chat_bg_url: url, updated_at: new Date().toISOString() });
-    if (settingsErr) return res.status(500).json({ error: settingsErr.message });
+    const { data: row, error: insertErr } = await supabase
+      .from('chat_backgrounds')
+      .insert({ url, storage_path: path })
+      .select()
+      .single();
+    if (insertErr) return res.status(500).json({ error: insertErr.message });
 
-    return res.status(200).json({ ok: true, url });
+    return res.status(200).json({ ok: true, row });
   } catch (err) {
     return res.status(500).json({ error: String(err) });
   }

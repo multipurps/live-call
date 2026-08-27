@@ -164,14 +164,11 @@
       <button class="btn" id="loginBgClearBtn" style="margin-top:10px; background:rgba(255,59,48,0.2); border-color:rgba(255,59,48,0.45);">Remove current background</button>
       <p class="hint" id="loginBgHint"></p>
 
-      <h1 style="margin-top:28px;">Chat interface background</h1>
-      <div id="chatBgPreviewWrap" style="display:none; margin-bottom:12px;">
-        <img id="chatBgPreview" style="width:100%; border-radius:14px; display:block; border:1px solid var(--line);" />
-      </div>
+      <h1 style="margin-top:28px;">Chat interface backgrounds</h1>
+      <p class="hint" style="margin-bottom:14px; text-align:left;">Add as many as you want — users pick their own from these in the app.</p>
+      <div id="chatBgGrid" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;"></div>
       <input id="chatBgFile" type="file" accept="image/png,image/jpeg,image/webp" style="display:none;" />
-      <button class="btn" id="chatBgPickBtn" style="background:rgba(255,255,255,0.1); border-color:rgba(255,255,255,0.18);">Choose image</button>
-      <button class="btn" id="chatBgUploadBtn" style="margin-top:10px; display:none;">Upload as chat background</button>
-      <button class="btn" id="chatBgClearBtn" style="margin-top:10px; background:rgba(255,59,48,0.2); border-color:rgba(255,59,48,0.45);">Remove current background</button>
+      <button class="btn" id="chatBgPickBtn" style="background:rgba(255,255,255,0.1); border-color:rgba(255,255,255,0.18);">Add background</button>
       <p class="hint" id="chatBgHint"></p>
 
       <h1 style="margin-top:28px;">Splash backgrounds</h1>
@@ -379,60 +376,60 @@
   });
 
   async function loadChatBg(){
-    const { data } = await supabase.from('app_settings').select('chat_bg_url').eq('id', true).maybeSingle();
-    const url = data?.chat_bg_url;
-    if (url) {
-      $('chatBgPreview').src = url;
-      $('chatBgPreviewWrap').style.display = 'block';
-    } else {
-      $('chatBgPreviewWrap').style.display = 'none';
-    }
+    const { data } = await supabase.from('chat_backgrounds').select('id,url').order('created_at', { ascending: false });
+    $('chatBgGrid').innerHTML = (data || []).map(row => `
+      <div class="splashBgCard">
+        <img src="${row.url}" />
+        <button data-id="${row.id}" title="Remove">✕</button>
+      </div>
+    `).join('');
+    document.querySelectorAll('#chatBgGrid button').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const r = await fetch('/api/admin-upload-chat-bg', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+            body: JSON.stringify({ action: 'delete', id: btn.dataset.id }),
+          });
+          const data = await r.json();
+          if (!r.ok) { $('chatBgHint').textContent = data.error; btn.disabled = false; return; }
+          loadChatBg();
+        } catch (err) {
+          $('chatBgHint').textContent = 'Request failed: ' + (err.message || err);
+          btn.disabled = false;
+        }
+      });
+    });
   }
 
-  let pickedChatFile = null;
   $('chatBgPickBtn').addEventListener('click', () => $('chatBgFile').click());
   $('chatBgFile').addEventListener('change', () => {
     const file = $('chatBgFile').files[0];
     if (!file) return;
-    pickedChatFile = file;
-    $('chatBgPreview').src = URL.createObjectURL(file);
-    $('chatBgPreviewWrap').style.display = 'block';
-    $('chatBgUploadBtn').style.display = 'block';
-    $('chatBgHint').textContent = '';
-  });
-  $('chatBgUploadBtn').addEventListener('click', async () => {
-    if (!pickedChatFile) return;
     $('chatBgHint').textContent = 'Uploading…';
     const reader = new FileReader();
     reader.onload = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const fileExt = (pickedChatFile.name.split('.').pop() || 'jpg').toLowerCase();
-      const r = await fetch('/api/admin-upload-chat-bg', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ imageBase64: reader.result, fileExt }),
-      });
-      const data = await r.json();
-      if (!r.ok) { $('chatBgHint').textContent = data.error; return; }
-      $('chatBgHint').textContent = 'Saved — live in the chat screen now.';
-      $('chatBgUploadBtn').style.display = 'none';
-      pickedChatFile = null;
-      loadChatBg();
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const fileExt = (file.name.split('.').pop() || 'jpg').toLowerCase();
+        const r = await fetch('/api/admin-upload-chat-bg', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ imageBase64: reader.result, fileExt }),
+        });
+        const data = await r.json();
+        $('chatBgFile').value = '';
+        if (!r.ok) { $('chatBgHint').textContent = data.error; return; }
+        $('chatBgHint').textContent = 'Added.';
+        loadChatBg();
+      } catch (err) {
+        $('chatBgHint').textContent = 'Request failed: ' + (err.message || err);
+      }
     };
-    reader.readAsDataURL(pickedChatFile);
-  });
-  $('chatBgClearBtn').addEventListener('click', async () => {
-    $('chatBgHint').textContent = 'Removing…';
-    const { data: { session } } = await supabase.auth.getSession();
-    const r = await fetch('/api/admin-upload-chat-bg', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ action: 'clear' }),
-    });
-    const data = await r.json();
-    if (!r.ok) { $('chatBgHint').textContent = data.error; return; }
-    $('chatBgHint').textContent = 'Removed — chat screen back to default.';
-    loadChatBg();
+    reader.onerror = () => { $('chatBgHint').textContent = 'Could not read that file.'; };
+    reader.readAsDataURL(file);
   });
 
   async function loadSplashBgs(){
