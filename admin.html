@@ -9,20 +9,25 @@
 <link rel="apple-touch-icon" href="icon-192.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <style>
-  :root{ --accent:#0f9d68; --coffee:#1e130d; --panel:#3a2a20; --line:rgba(255,222,196,0.14); --dim:rgba(255,230,210,0.55); }
+  :root{ --accent:#0f9d68; --coffee:#1e130d; --panel:#3a2a20; --line:rgba(255,222,196,0.14); --dim:rgba(255,230,210,0.55); --tabh:58px; }
   *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
   html,body{height:100%;}
   body{
     background:var(--coffee); color:#fff; font-family:-apple-system,BlinkMacSystemFont,sans-serif;
-    padding:max(env(safe-area-inset-top),20px) 18px 24px;
+    padding-top:max(env(safe-area-inset-top),20px);
   }
+  .page{padding:0 18px 24px;}
   h1{font-size:20px; font-weight:800; margin-bottom:18px;}
   .field{margin-bottom:14px;}
   .field label{display:block; font-size:12px; font-weight:600; color:var(--dim); margin-bottom:7px; text-transform:uppercase; letter-spacing:0.03em;}
-  .field input{
+  .field input, .field textarea{
     width:100%; background:var(--panel); border:1px solid var(--line); border-radius:12px;
-    color:#fff; font-size:20px; padding:12px 14px; font-family:inherit; text-align:center; letter-spacing:0.3em;
+    color:#fff; font-size:15px; padding:12px 14px; font-family:inherit; text-align:left; letter-spacing:normal;
   }
+  .field textarea{resize:vertical; min-height:84px; line-height:1.4;}
+  /* PIN entry is the one input that should look like a code field - scoped so it
+     never leaks onto ordinary text fields (that was the announcement-field bug). */
+  #pinBox .field input{font-size:20px; text-align:center; letter-spacing:0.3em;}
   button{-webkit-appearance:none; appearance:none; border:0; cursor:pointer; font-family:inherit;}
   .btn{
     width:100%; padding:14px; border-radius:16px; font-size:15px; font-weight:650; color:#fff;
@@ -35,7 +40,13 @@
   }
   #googleBtn svg{background:#fff; border-radius:50%; padding:2px;}
   .hint{font-size:12px; color:var(--dim); margin-top:12px; text-align:center;}
-  #userList{margin-top:24px; display:none;}
+  #signInBox, #pinBox{max-width:320px; margin:70px auto 0; text-align:center; display:block; padding:0 18px;}
+  #pinBox{display:none;}
+
+  #app{display:none; padding-bottom:calc(var(--tabh) + 18px);}
+  .tabPanel{display:none;}
+  .tabPanel.active{display:block;}
+
   .userRow{
     background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:10px;
     display:flex; justify-content:space-between; align-items:center; gap:12px;
@@ -45,14 +56,38 @@
   .toggleBtn{padding:9px 14px; border-radius:9px; font-size:13px; font-weight:650; flex:none;}
   .toggleBtn.approved{background:var(--accent); color:#fff;}
   .toggleBtn.pending{background:#3a2620; color:var(--dim); border:1px solid var(--line);}
-  #signInBox, #pinBox{max-width:320px; margin:70px auto 0; text-align:center; display:block;}
-  #pinBox{display:none;}
+
   .splashBgCard{position:relative; border-radius:12px; overflow:hidden; border:1px solid var(--line); aspect-ratio:9/16; background:var(--panel);}
   .splashBgCard img{width:100%; height:100%; object-fit:cover; display:block;}
   .splashBgCard button{
     position:absolute; top:6px; right:6px; width:26px; height:26px; border-radius:50%;
     background:rgba(0,0,0,0.55); color:#fff; font-size:14px; line-height:1; display:flex; align-items:center; justify-content:center;
   }
+
+  .statRow{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:10px;
+    display:flex; justify-content:space-between; align-items:center; gap:12px;
+  }
+  .statRow .rank{font-size:13px; font-weight:800; color:var(--dim); width:20px; flex:none;}
+  .statRow .email{font-size:14px; font-weight:600; word-break:break-all;}
+  .statRow .sub{font-size:11.5px; color:var(--dim); margin-top:2px;}
+  .statRow .total{font-size:18px; font-weight:800; color:var(--accent); flex:none; text-align:right;}
+  .statRow .totalLbl{font-size:10px; color:var(--dim); font-weight:600; text-transform:uppercase; letter-spacing:0.03em;}
+  .emptyState{font-size:13px; color:var(--dim); text-align:center; padding:30px 0;}
+
+  /* Bottom tab bar - flush to the bottom on purpose, no safe-area padding. */
+  #tabBar{
+    position:fixed; left:0; right:0; bottom:0; z-index:50; display:flex;
+    background:var(--panel); border-top:1px solid var(--line);
+    height:var(--tabh);
+  }
+  #tabBar button{
+    flex:1; background:none; color:var(--dim); display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:3px; font-size:10.5px; font-weight:650;
+  }
+  #tabBar button svg{width:21px; height:21px; stroke:currentColor;}
+  #tabBar button.active{color:#fff;}
+  #tabBar button.active svg{stroke:var(--accent);}
 </style>
 </head>
 <body>
@@ -66,7 +101,7 @@
   };
   setTimeout(function(){
     var box = document.getElementById('signInBox');
-    if (box && getComputedStyle(box).display === 'none' && document.getElementById('userList').style.display !== 'block') {
+    if (box && getComputedStyle(box).display === 'none' && document.getElementById('app').style.display !== 'block') {
       var bar = document.getElementById('debugBar');
       bar.style.display = 'block';
       bar.innerHTML = 'Could not load (weak connection?). <button onclick="location.reload()" style="text-decoration:underline; background:none; border:0; color:#fff; font-weight:700;">Tap to retry</button>';
@@ -90,33 +125,74 @@
   <p class="hint" id="pinHint"></p>
 </div>
 
-<div id="userList">
-  <h1>Pending &amp; approved users</h1>
-  <div id="rows"></div>
+<div id="app">
 
-  <h1 style="margin-top:28px;">Login background</h1>
-  <div id="loginBgPreviewWrap" style="display:none; margin-bottom:12px;">
-    <img id="loginBgPreview" style="width:100%; border-radius:14px; display:block; border:1px solid var(--line);" />
+  <div class="tabPanel active" id="tab-users">
+    <div class="page">
+      <h1>Pending &amp; approved users</h1>
+      <div id="rows"></div>
+    </div>
   </div>
-  <input id="loginBgFile" type="file" accept="image/png,image/jpeg,image/webp" style="display:none;" />
-  <button class="btn" id="loginBgPickBtn" style="background:rgba(255,255,255,0.1); border-color:rgba(255,255,255,0.18);">Choose image</button>
-  <button class="btn" id="loginBgUploadBtn" style="margin-top:10px; display:none;">Upload as login background</button>
-  <button class="btn" id="loginBgClearBtn" style="margin-top:10px; background:rgba(255,59,48,0.2); border-color:rgba(255,59,48,0.45);">Remove current background</button>
-  <p class="hint" id="loginBgHint"></p>
 
-  <h1 style="margin-top:28px;">Splash backgrounds</h1>
-  <p class="hint" style="margin-bottom:14px; text-align:left;">The app picks one of these at random every time it's opened. Add as many as you want.</p>
-  <div id="splashBgGrid" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;"></div>
-  <input id="splashBgFile" type="file" accept="image/png,image/jpeg,image/webp" style="display:none;" />
-  <button class="btn" id="splashBgPickBtn" style="background:rgba(255,255,255,0.1); border-color:rgba(255,255,255,0.18);">Add background</button>
-  <p class="hint" id="splashBgHint"></p>
+  <div class="tabPanel" id="tab-bg">
+    <div class="page">
+      <h1>Login background</h1>
+      <div id="loginBgPreviewWrap" style="display:none; margin-bottom:12px;">
+        <img id="loginBgPreview" style="width:100%; border-radius:14px; display:block; border:1px solid var(--line);" />
+      </div>
+      <input id="loginBgFile" type="file" accept="image/png,image/jpeg,image/webp" style="display:none;" />
+      <button class="btn" id="loginBgPickBtn" style="background:rgba(255,255,255,0.1); border-color:rgba(255,255,255,0.18);">Choose image</button>
+      <button class="btn" id="loginBgUploadBtn" style="margin-top:10px; display:none;">Upload as login background</button>
+      <button class="btn" id="loginBgClearBtn" style="margin-top:10px; background:rgba(255,59,48,0.2); border-color:rgba(255,59,48,0.45);">Remove current background</button>
+      <p class="hint" id="loginBgHint"></p>
 
-  <h1 style="margin-top:28px;">Send announcement</h1>
-  <div class="field"><label>Title</label><input id="announceTitle" type="text" placeholder="e.g. New feature" /></div>
-  <div class="field"><label>Message</label><input id="announceBody" type="text" placeholder="What's the announcement?" /></div>
-  <button class="btn" id="announceSendBtn">Push to all users</button>
-  <p class="hint" id="announceHint"></p>
+      <h1 style="margin-top:28px;">Splash backgrounds</h1>
+      <p class="hint" style="margin-bottom:14px; text-align:left;">The app picks one of these at random every time it's opened. Add as many as you want.</p>
+      <div id="splashBgGrid" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;"></div>
+      <input id="splashBgFile" type="file" accept="image/png,image/jpeg,image/webp" style="display:none;" />
+      <button class="btn" id="splashBgPickBtn" style="background:rgba(255,255,255,0.1); border-color:rgba(255,255,255,0.18);">Add background</button>
+      <p class="hint" id="splashBgHint"></p>
+    </div>
+  </div>
+
+  <div class="tabPanel" id="tab-push">
+    <div class="page">
+      <h1>Send announcement</h1>
+      <div class="field"><label>Title</label><input id="announceTitle" type="text" placeholder="e.g. New feature" /></div>
+      <div class="field"><label>Message</label><textarea id="announceBody" rows="3" placeholder="What's the announcement?"></textarea></div>
+      <button class="btn" id="announceSendBtn">Push to all users</button>
+      <p class="hint" id="announceHint"></p>
+    </div>
+  </div>
+
+  <div class="tabPanel" id="tab-analytics">
+    <div class="page">
+      <h1>Most active users</h1>
+      <p class="hint" style="margin-bottom:14px; text-align:left;">Ranked by calls + chats. Tap refresh by reopening this tab.</p>
+      <div id="statsRows"></div>
+    </div>
+  </div>
+
 </div>
+
+<nav id="tabBar">
+  <button data-tab="users" class="active">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M4.5 20c1.6-4 4.4-6 7.5-6s5.9 2 7.5 6"/></svg>
+    Users
+  </button>
+  <button data-tab="bg">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2.2"/><circle cx="8.3" cy="9.3" r="1.6"/><path d="M20 15.5l-4.7-4.7a1.5 1.5 0 0 0-2.1 0L4 19.3"/></svg>
+    Backgrounds
+  </button>
+  <button data-tab="push">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8.5c0-3.6-2.7-6-6-6s-6 2.4-6 6c0 6-2.5 7.5-2.5 7.5h17S18 14.5 18 8.5z"/><path d="M10.3 20a1.9 1.9 0 0 0 3.4 0"/></svg>
+    Push
+  </button>
+  <button data-tab="analytics">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M11 20V4M18 20v-7"/></svg>
+    Analytics
+  </button>
+</nav>
 
 <script type="module">
   import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -131,8 +207,8 @@
 
   function showPinGate(){
     $('signInBox').style.display = 'none';
-    $('userList').style.display = 'none';
-    if (localStorage.getItem('admin_pin_ok') === 'true') { loadUsers(); return; }
+    $('app').style.display = 'none';
+    if (localStorage.getItem('admin_pin_ok') === 'true') { loadApp(); return; }
     $('pinBox').style.display = 'block';
   }
 
@@ -140,23 +216,43 @@
     if ($('pinInput').value === ADMIN_PIN) {
       localStorage.setItem('admin_pin_ok', 'true');
       $('pinBox').style.display = 'none';
-      loadUsers();
+      loadApp();
     } else {
       $('pinHint').textContent = 'Wrong PIN.';
     }
   });
+
+  // ---- Tabs ----
+  const TABS = ['users', 'bg', 'push', 'analytics'];
+  function showTab(name){
+    TABS.forEach(t => {
+      $('tab-' + t).classList.toggle('active', t === name);
+    });
+    document.querySelectorAll('#tabBar button').forEach(b => {
+      b.classList.toggle('active', b.dataset.tab === name);
+    });
+    if (name === 'analytics') loadAnalytics();
+  }
+  document.querySelectorAll('#tabBar button').forEach(btn => {
+    btn.addEventListener('click', () => showTab(btn.dataset.tab));
+  });
+
+  function loadApp(){
+    $('pinBox').style.display = 'none';
+    $('app').style.display = 'block';
+    showTab('users');
+    loadUsers();
+    loadLoginBg();
+    loadSplashBgs();
+  }
 
   async function loadUsers(){
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     const r = await fetch('/api/admin-list-users', { headers: { Authorization: `Bearer ${session.access_token}` } });
     const data = await r.json();
-    if (!r.ok) { $('hint').textContent = data.error; $('signInBox').style.display = 'block'; $('pinBox').style.display = 'none'; $('userList').style.display = 'none'; return; }
+    if (!r.ok) { $('hint').textContent = data.error; $('signInBox').style.display = 'block'; $('pinBox').style.display = 'none'; $('app').style.display = 'none'; return; }
 
-    $('pinBox').style.display = 'none';
-    $('userList').style.display = 'block';
-    loadLoginBg();
-    loadSplashBgs();
     $('rows').innerHTML = data.users.map(u => `
       <div class="userRow">
         <div>
@@ -304,9 +400,31 @@
     $('announceTitle').value = ''; $('announceBody').value = '';
   });
 
+  async function loadAnalytics(){
+    $('statsRows').innerHTML = '<p class="emptyState">Loading…</p>';
+    const { data: { session } } = await supabase.auth.getSession();
+    const r = await fetch('/api/admin-analytics', { headers: { Authorization: `Bearer ${session.access_token}` } });
+    const data = await r.json();
+    if (!r.ok) { $('statsRows').innerHTML = `<p class="emptyState">${data.error}</p>`; return; }
+    if (!data.users.length) { $('statsRows').innerHTML = '<p class="emptyState">No user activity yet.</p>'; return; }
+    $('statsRows').innerHTML = data.users.map((u, i) => `
+      <div class="statRow">
+        <div class="rank">${i + 1}</div>
+        <div style="flex:1; min-width:0;">
+          <div class="email">${u.email || u.user_id}</div>
+          <div class="sub">${u.calls} call${u.calls === 1 ? '' : 's'} · ${u.chats} chat${u.chats === 1 ? '' : 's'}${u.lastActive ? ' · last active ' + new Date(u.lastActive).toLocaleDateString() : ''}</div>
+        </div>
+        <div>
+          <div class="total">${u.total}</div>
+          <div class="totalLbl">total</div>
+        </div>
+      </div>
+    `).join('');
+  }
+
   supabase.auth.onAuthStateChange((_event, session) => {
     if (session?.user) showPinGate();
-    else { $('signInBox').style.display = 'block'; $('pinBox').style.display = 'none'; $('userList').style.display = 'none'; }
+    else { $('signInBox').style.display = 'block'; $('pinBox').style.display = 'none'; $('app').style.display = 'none'; }
   });
 </script></body>
 </html>
