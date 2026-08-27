@@ -1899,12 +1899,13 @@
 
 
   async function addHistory(entry){
-    if (!currentUser) return;
-    await supabase.from('video_call_history').insert({
+    if (!currentUser) return null;
+    const { data } = await supabase.from('video_call_history').insert({
       user_id: currentUser.id,
       provider: entry.provider,
       summary: entry.summary,
-    });
+    }).select('id').single();
+    return data?.id || null;
   }
   async function renderRecent(){
     const list = $('recentList');
@@ -2121,6 +2122,20 @@
         provider: state.provider,
         time: new Date().toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }),
         summary: durationSec > 0 ? `Call ended after ${durationSec}s` : 'Call ended immediately',
+      }).then(async (historyId) => {
+        // Only Anam exposes a transcript endpoint today. Fire-and-forget on
+        // purpose: the summary can take a few seconds (Anam's session report
+        // + our own summarization pass), and the push notification - not
+        // this request staying open - is what actually reaches the user if
+        // they've already left the app.
+        if (!historyId || state.provider !== 'anam' || durationSec <= 0) return;
+        try {
+          await fetch('/api/call-summary', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+            body: JSON.stringify({ historyId }),
+          });
+        } catch (e) { console.error('call-summary request failed:', e); }
       });
     }
     if (liveavatarRoom) { try { liveavatarRoom.disconnect(); } catch(e){} liveavatarRoom = null; }
