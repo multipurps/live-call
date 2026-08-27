@@ -26,13 +26,66 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   }
   setTimeout(() => { splashMinDone = true; maybeHideSplash(); }, MIN_SPLASH_MS);
 
+  // ---------- splash background caching (embedded base64, not GitHub/build-time) ----------
+  // splash_backgrounds is admin-managed and changes at runtime, so it can't be baked
+  // into the bundle at build time. Instead: the first time an image is shown, we fetch
+  // it, convert it to a base64 data URL, and stash it in localStorage. Every launch
+  // after that picks a cached data URL and paints it immediately - zero network wait,
+  // before Supabase has even answered. The list is still refreshed in the background
+  // on every launch so new admin uploads get pulled in and cached for next time.
+  const SPLASH_CACHE_KEY = 'liveCallSplashCache';
+  const SPLASH_CACHE_MAX = 6;
+
+  function readSplashCache(){
+    try { return JSON.parse(localStorage.getItem(SPLASH_CACHE_KEY)) || []; }
+    catch (e) { return []; }
+  }
+  function writeSplashCache(list){
+    try { localStorage.setItem(SPLASH_CACHE_KEY, JSON.stringify(list)); }
+    catch (e) { /* storage full/unavailable - just skip caching this round */ }
+  }
+  function blobToDataURL(blob){
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
   (async () => {
+    // 1. Paint instantly from the cache if we have one - no network involved.
+    const cached = readSplashCache();
+    if (cached.length) {
+      const pick = cached[Math.floor(Math.random() * cached.length)];
+      $('liveSplash').style.backgroundImage = `url('${pick.dataUrl}')`;
+    }
+
+    // 2. Refresh from Supabase - paints the splash if this is the first-ever open
+    // (no cache yet), and otherwise just keeps the cache current for next time.
     try {
       const { data } = await supabase.from('splash_backgrounds').select('url');
-      if (data && data.length) {
+      if (!data || !data.length) return;
+
+      if (!cached.length) {
         const pick = data[Math.floor(Math.random() * data.length)];
         $('liveSplash').style.backgroundImage = `url('${pick.url}')`;
       }
+
+      const cachedUrls = new Set(cached.map(c => c.url));
+      const toFetch = data.filter(row => !cachedUrls.has(row.url));
+      const fetched = toFetch.length ? await Promise.all(toFetch.map(async (row) => {
+        try {
+          const res = await fetch(row.url);
+          const dataUrl = await blobToDataURL(await res.blob());
+          return { url: row.url, dataUrl };
+        } catch (e) { return null; }
+      })) : [];
+
+      const merged = [...cached, ...fetched.filter(Boolean)]
+        .filter(c => data.some(row => row.url === c.url)) // drop backgrounds the admin removed
+        .slice(-SPLASH_CACHE_MAX);
+      writeSplashCache(merged);
     } catch (e) {}
   })();
 
