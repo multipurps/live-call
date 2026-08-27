@@ -121,6 +121,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         el.style.backgroundImage = `linear-gradient(rgba(30,19,13,0.32), rgba(30,19,13,0.55)), url('${data.login_bg_url}')`;
         el.style.backgroundSize = 'cover';
         el.style.backgroundPosition = 'center';
+        // Same background on the "install to Home Screen" gate - a person bounced
+        // to that screen (opened in a browser tab, not installed) shouldn't see a
+        // flat coffee card when everyone past that gate sees the real login art.
+        const gate = document.getElementById('installGate');
+        gate.style.backgroundImage = `linear-gradient(rgba(30,19,13,0.45), rgba(30,19,13,0.72)), url('${data.login_bg_url}')`;
+        gate.style.backgroundSize = 'cover';
+        gate.style.backgroundPosition = 'center';
       }
       if (data?.chat_bg_url) {
         const el = document.getElementById('screenHome');
