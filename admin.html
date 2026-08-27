@@ -43,7 +43,7 @@
   #signInBox, #pinBox{max-width:320px; margin:70px auto 0; text-align:center; display:block; padding:0 18px;}
   #pinBox{display:none;}
 
-  #app{display:none; padding-bottom:calc(var(--tabh) + 18px);}
+  #app{display:none; padding-bottom:100px;}
   .tabPanel{display:none;}
   .tabPanel.active{display:block;}
 
@@ -75,18 +75,26 @@
   .statRow .totalLbl{font-size:10px; color:var(--dim); font-weight:600; text-transform:uppercase; letter-spacing:0.03em;}
   .emptyState{font-size:13px; color:var(--dim); text-align:center; padding:30px 0;}
 
-  /* Bottom tab bar - flush to the bottom on purpose, no safe-area padding. */
+  /* Bottom tab nav: a small floating pill, centered, clear of every edge -
+     does not sit flush against the bottom, does not reserve safe-area space,
+     matches the main app's #tabBar treatment for consistency. */
   #tabBar{
-    position:fixed; left:0; right:0; bottom:0; z-index:50; display:flex;
-    background:var(--panel); border-top:1px solid var(--line);
-    height:var(--tabh);
+    position:fixed; left:50%; bottom:16px; transform:translateX(-50%); z-index:50;
+    display:flex; align-items:center; gap:2px;
+    padding:5px;
+    border-radius:20px;
+    background:rgba(58,42,32,0.65);
+    backdrop-filter:blur(20px) saturate(180%); -webkit-backdrop-filter:blur(20px) saturate(180%);
+    border:1px solid rgba(255,255,255,0.12);
+    box-shadow:0 10px 26px rgba(0,0,0,0.45);
   }
   #tabBar button{
-    flex:1; background:none; color:var(--dim); display:flex; flex-direction:column;
-    align-items:center; justify-content:center; gap:3px; font-size:10.5px; font-weight:650;
+    flex:none; width:64px; height:52px; background:none; color:var(--dim); display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:2px; font-size:9.5px; font-weight:650;
+    border-radius:15px; transition:color 0.2s, background 0.2s;
   }
-  #tabBar button svg{width:21px; height:21px; stroke:currentColor;}
-  #tabBar button.active{color:#fff;}
+  #tabBar button svg{width:19px; height:19px; stroke:currentColor;}
+  #tabBar button.active{color:#fff; background:rgba(255,255,255,0.08);}
   #tabBar button.active svg{stroke:var(--accent);}
 </style>
 </head>
