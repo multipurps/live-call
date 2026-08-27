@@ -1,5 +1,5 @@
-const CACHE = 'live-call-v4';
-const SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
+const CACHE = 'live-call-v5';
+const SHELL = ['./', './index.html', './styles.css', './app.js', './boot.js', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
