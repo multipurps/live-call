@@ -224,7 +224,7 @@
     padding:13px; border-radius:14px; display:flex; align-items:center; justify-content:center;
   }
 
-  /* ---------- home header: logo overlapping center, call button right (provider picker lives in Profile now) ---------- */
+  /* ---------- home header: logo overlapping center, call button right ---------- */
   #homeHeader{
     position:sticky; top:0; z-index:20; overflow:visible;
     display:flex; align-items:center; justify-content:space-between;
@@ -233,25 +233,6 @@
   }
   #newChatBtn{flex:none; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:var(--icon-color);}
   #newChatBtn svg{width:22px; height:22px; display:block;}
-  #providerPicker{position:relative;}
-  #providerPickerBtn{
-    display:flex; align-items:center; justify-content:space-between; gap:5px; width:100%;
-    background:var(--coffee); border:1px solid var(--line); border-radius:10px;
-    padding:10px 12px; font-size:14px; font-weight:650; color:#fff;
-  }
-  #providerPickerBtn .chev{color:var(--dim); transition:transform 0.15s;}
-  #providerPicker.open #providerPickerBtn .chev{transform:rotate(180deg);}
-  #providerPickerMenu{
-    display:none; position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:30;
-    background:var(--coffee); border:1px solid var(--line); border-radius:12px;
-    overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,0.4);
-  }
-  #providerPicker.open #providerPickerMenu{display:block;}
-  #providerPickerMenu button{
-    display:block; width:100%; text-align:left; padding:11px 13px;
-    font-size:13.5px; font-weight:600; color:var(--dim);
-  }
-  #providerPickerMenu button.active{color:#fff; background:rgba(255,255,255,0.06);}
 
   #headerLogo{
     position:absolute; left:50%; top:0; transform:translateX(-50%);
@@ -328,11 +309,6 @@
   .profileCard .cValue{font-size:15px; font-weight:600; color:#fff;}
   .profileCard .cChev{flex:none; color:var(--dim);}
 
-  .profileCard #providerPickerBtn{
-    background:none; border:none; padding:0; width:auto; display:flex; align-items:center; gap:6px;
-    font-size:15px; font-weight:600; color:#fff;
-  }
-  .profileCard #providerPickerMenu{left:auto; right:0; min-width:130px;}
   .profileCard .cInputRow{display:flex; align-items:center; gap:8px;}
   .profileCard input[type="text"].keyInput, .profileCard input.keyInput{
     flex:1; min-width:0; background:none; border:none; outline:none;
@@ -811,36 +787,7 @@
       </div>
 
       <div class="sectionLabel">Avatar</div>
-      <div class="profileCard">
-        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3L4 8l8 5 8-5-8-5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 12l8 5 8-5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 16l8 5 8-5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></div>
-        <div class="cBody">
-          <div class="cLabel">Active provider</div>
-          <div id="providerPicker">
-            <button id="providerPickerBtn" aria-haspopup="listbox" aria-expanded="false">
-              <span id="providerPickerLabel">HeyGen</span>
-            </button>
-            <div id="providerPickerMenu">
-              <button data-provider="heygen" class="active">HeyGen</button>
-              <button data-provider="anam">Anam</button>
-            </div>
-          </div>
-        </div>
-        <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-
-      <div class="profileCard" id="heygenFields">
-        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
-        <div class="cBody">
-          <div class="cLabel">HeyGen avatar</div>
-          <select class="cSelect" id="heygenAvatarId"><option value="">Loading your avatars…</option></select>
-        </div>
-      </div>
-      <div class="profileCard navRow" id="openPublicAvatars">
-        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3c2.5 2.5 3.8 6 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-6-3.8-9s1.3-6.5 3.8-9z" stroke="currentColor" stroke-width="1.8"/></svg></div>
-        <div class="cBody"><div class="cValue">Browse public avatars</div></div>
-        <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-      <div class="profileCard navRow" id="openAnamAvatarScreen" style="display:none;">
+      <div class="profileCard navRow" id="openAnamAvatarScreen">
         <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
         <div class="cBody"><div class="cValue">Avatar</div><div class="hint" id="anamAvatarSummary" style="margin:2px 0 0;"></div></div>
         <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -904,22 +851,6 @@
         <div class="profileCard">
           <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
           <div class="cBody">
-            <div class="cLabel">HeyGen API key</div>
-            <div class="cInputRow">
-              <input class="keyInput" id="heygenApiKey" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore name="heygen-key-field" placeholder="Paste your HeyGen API key" />
-            </div>
-          </div>
-          <button class="eyeToggle" type="button" data-reveal-for="heygenApiKey" aria-label="Show key">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/></svg>
-          </button>
-        </div>
-        <button class="saveKeyBtn" id="saveHeygenKey">Save HeyGen key</button>
-        <p class="hint" id="heygenKeyStatus" style="margin:8px 0 4px; min-height:16px;"></p>
-        <p class="hint" style="margin:0 0 18px;">Get this from <a href="https://app.liveavatar.com/developers" target="_blank" rel="noopener" style="color:inherit; text-decoration:underline;">app.liveavatar.com/developers</a> — your old HeyGen dashboard key will not work here, HeyGen's real-time avatar product moved to a separate platform called LiveAvatar with its own key.</p>
-
-        <div class="profileCard">
-          <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-          <div class="cBody">
             <div class="cLabel">Anam API key</div>
             <div class="cInputRow">
               <input class="keyInput" id="anamApiKey" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore name="anam-key-field" placeholder="Paste your Anam API key" />
@@ -932,19 +863,6 @@
         <button class="saveKeyBtn" id="saveAnamKey">Save Anam key</button>
         <p class="hint" id="anamKeyStatus" style="margin:8px 0 4px; min-height:16px;"></p>
         <p class="hint" style="margin:0 0 18px;">Get this from your Anam dashboard at <a href="https://lab.anam.ai/api-keys" target="_blank" rel="noopener" style="color:inherit; text-decoration:underline;">lab.anam.ai/api-keys</a> — opens in your browser, not inside this app, so paste it back here after copying.</p>
-      </div>
-    </div>
-
-    <div id="publicAvatarsScreen" class="subScreen">
-      <div class="subScreenHeader">
-        <button class="backBtn" id="closePublicAvatars" aria-label="Back">
-          <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-        <div class="subScreenTitle">Public avatars</div>
-      </div>
-      <div class="subScreenBody">
-        <p class="hint" style="margin:0 0 16px; text-align:left;">Pick any avatar from LiveAvatar's public directory. This sets your avatar without needing one of your own.</p>
-        <div id="publicAvatarsList"></div>
       </div>
     </div>
 
@@ -1252,19 +1170,15 @@
   $('openApiKeys').addEventListener('click', () => $('apiKeysScreen').classList.add('active'));
   $('closeApiKeys').addEventListener('click', () => $('apiKeysScreen').classList.remove('active'));
 
-  $('openPublicAvatars').addEventListener('click', () => { $('publicAvatarsScreen').classList.add('active'); loadPublicHeygenAvatars(); });
-  $('closePublicAvatars').addEventListener('click', () => $('publicAvatarsScreen').classList.remove('active'));
 
   const infoContent = {
     faq: {
       title: 'FAQ',
       html: `
-        <h3>Which providers can I use?</h3>
-        <p>HeyGen and Anam. Pick the active one in Profile, and add your own API key for it under the API screen — each user brings their own key, so your calls are billed to your own account, never anyone else's.</p>
-        <h3>Why does it say my HeyGen key is invalid?</h3>
-        <p>HeyGen's real-time avatar product moved to a separate platform called LiveAvatar. Your old HeyGen dashboard key won't work — get a new one from app.liveavatar.com/developers.</p>
-        <h3>Where do I manage my avatar or replica?</h3>
-        <p>In Profile, right under Active provider — the dropdown shows the avatars or replicas available on your account for whichever provider is active.</p>
+        <h3>Which provider powers the calls?</h3>
+        <p>Anam. Add your own Anam API key under the API screen — your calls are billed to your own account, never anyone else's.</p>
+        <h3>Where do I manage my avatar or voice?</h3>
+        <p>In Profile, under Avatar — it shows the avatars and voices available on your Anam account.</p>
         <h3>Is my API key visible to anyone else?</h3>
         <p>No. It's stored against your account only and sent only when you start a call.</p>
       `,
@@ -1273,7 +1187,7 @@
       title: 'About',
       html: `
         <h3>Live Call</h3>
-        <p>A lightweight way to start a real-time video call with an AI avatar, powered by your own HeyGen or Anam account.</p>
+        <p>A lightweight way to start a real-time video call with an AI avatar, powered by your own Anam account.</p>
         <h3>Built for iPhone</h3>
         <p>Live Call is a Progressive Web App — add it to your home screen for the full experience.</p>
       `,
@@ -1285,13 +1199,13 @@
         <h3>Account data</h3>
         <p>When you sign in (Google or email), we store your email address and a unique account ID from Supabase Auth. That's the only identity data we keep.</p>
         <h3>Your API keys</h3>
-        <p>If you add your own HeyGen or Anam API key, it's stored encrypted in Supabase Vault, never in plaintext, and used solely to place your own calls through your own provider account. The app's UI never displays a saved key back to you or anyone else — you can only overwrite it with a new one.</p>
+        <p>If you add your own Anam API key, it's stored encrypted in Supabase Vault, never in plaintext, and used solely to place your own calls through your own account. The app's UI never displays a saved key back to you or anyone else — you can only overwrite it with a new one.</p>
         <h3>Call content</h3>
-        <p>Your persona briefs, chat messages, and call history are stored against your account so you can resume past chats. This data is not shared with other users. Live video/audio during a call is streamed directly between your device and your chosen provider (HeyGen or Anam) — we don't record or store the call media itself.</p>
+        <p>Your persona briefs, chat messages, and call history are stored against your account so you can resume past chats. This data is not shared with other users. Live video/audio during a call is streamed directly between your device and Anam — we don't record or store the call media itself.</p>
         <h3>What we don't do</h3>
         <p>We don't sell your data, share it with advertisers, or share your API keys or call data with any other user of this app. We don't use your data to train any AI model.</p>
         <h3>Third parties involved</h3>
-        <p>Supabase (auth and database), and whichever avatar provider you choose (HeyGen/LiveAvatar or Anam) and Groq (for the pre-call chat) process data as needed to run the app — each under their own privacy terms.</p>
+        <p>Supabase (auth and database), Anam (avatar/voice calls), and Groq (for the pre-call chat) process data as needed to run the app — each under their own privacy terms.</p>
         <h3>Your control</h3>
         <p>You can delete your saved API keys at any time by saving an empty value, or contact the app owner to request full account deletion.</p>
         <h3>Changes</h3>
@@ -1303,11 +1217,11 @@
       html: `
         <p>By using Live Call, you agree to the following.</p>
         <h3>Your account and keys</h3>
-        <p>You're responsible for any API keys you add and all usage or cost they incur on HeyGen, LiveAvatar, Anam, or any other connected provider. This app does not provide free access to those services — you must have and pay for your own account with them.</p>
+        <p>You're responsible for any API keys you add and all usage or cost they incur on Anam or any other connected provider. This app does not provide free access to those services — you must have and pay for your own account with them.</p>
         <h3>Acceptable use</h3>
         <p>You may not use this app to impersonate a real, identifiable person without their explicit consent, to harass or deceive anyone, to generate content involving minors in any sexual or exploitative context, or for any illegal purpose. Creating a fictional persona or roleplaying a scenario you've written yourself is fine; impersonating a specific real person to deceive someone else is not.</p>
         <h3>No guarantee of availability</h3>
-        <p>This app depends on third-party providers (HeyGen/LiveAvatar, Anam, Groq, Supabase). We don't control their uptime, pricing, or policy changes, and can't guarantee the app will always work exactly as described.</p>
+        <p>This app depends on third-party providers (Anam, Groq, Supabase). We don't control their uptime, pricing, or policy changes, and can't guarantee the app will always work exactly as described.</p>
         <h3>Approval gate</h3>
         <p>New accounts require manual approval before use. Approval can be revoked at any time at the app owner's discretion, for any reason, including suspected abuse of the acceptable use terms above.</p>
         <h3>Liability</h3>
@@ -1328,10 +1242,7 @@
   $('closeInfo').addEventListener('click', () => $('infoScreen').classList.remove('active'));
 
   const state = {
-    provider: 'heygen',
     systemPrompt: '',
-    heygenAvatarId: '',
-    heygenAvatarName: '',
     anamAvatarId: '',
     anamAvatarName: '',
     anamVoiceId: '',
@@ -1344,7 +1255,6 @@
     // Booleans only, never the plaintext - the real keys live encrypted in Supabase
     // Vault and never leave the server after the moment they're first saved (see
     // /api/keys.js, /lib/keys.js). Populated by loadKeyStatus() below.
-    heygenKeySet: false,
     anamKeySet: false,
   };
   let currentUser = null;
@@ -1355,10 +1265,7 @@
     if (!currentUser) return;
     const { error } = await supabase.from('video_call_settings').upsert({
       user_id: currentUser.id,
-      provider: state.provider,
       system_prompt: state.systemPrompt,
-      heygen_avatar_id: state.heygenAvatarId,
-      heygen_avatar_name: state.heygenAvatarName,
       anam_avatar_id: state.anamAvatarId,
       anam_avatar_name: state.anamAvatarName,
       anam_voice_id: state.anamVoiceId,
@@ -1382,20 +1289,15 @@
       const r = await fetch('/api/keys', { headers: await authHeader() });
       const data = await r.json();
       if (!r.ok) return;
-      state.heygenKeySet = !!data.heygen;
       state.anamKeySet = !!data.anam;
     } catch (e) { /* leave as false - UI just shows "paste your key" */ }
-    $('heygenApiKey').placeholder = state.heygenKeySet ? 'Key saved — enter a new one to replace' : 'Paste your HeyGen API key';
     $('anamApiKey').placeholder = state.anamKeySet ? 'Key saved — enter a new one to replace' : 'Paste your Anam API key';
   }
 
   async function loadSettings(){
     const { data } = await supabase.from('video_call_settings').select('*').eq('user_id', currentUser.id).maybeSingle();
     if (data) {
-      state.provider = data.provider || 'heygen';
       state.systemPrompt = data.system_prompt || '';
-      state.heygenAvatarId = data.heygen_avatar_id || '';
-      state.heygenAvatarName = data.heygen_avatar_name || '';
       state.anamAvatarId = data.anam_avatar_id || '';
       state.anamAvatarName = data.anam_avatar_name || '';
       state.anamVoiceId = data.anam_voice_id || '';
@@ -1409,14 +1311,13 @@
     } else {
       await persist(); // first login — create the row
     }
-    $('heygenApiKey').value = '';
     $('anamApiKey').value = '';
     $('profileName').value = state.displayName;
     $('profileCountry').value = state.country;
     $('profileLanguage').value = state.language;
     $('profileTheme').value = state.theme;
     await loadKeyStatus();
-    setProviderUI(state.provider);
+    updateAnamAvatarSummary();
     ensureNotificationsEnabled();
     checkForNewAnnouncements();
     renderProfile();
@@ -1473,28 +1374,6 @@
     if (latest && latest !== localStorage.getItem('lastSeenAnnouncement')) $('notifDot').style.display = 'block';
   }
 
-  function setProviderUI(p){
-    state.provider = p; persist();
-    $('providerPickerLabel').textContent = p === 'heygen' ? 'HeyGen' : 'Anam';
-    document.querySelectorAll('#providerPickerMenu button').forEach(b => b.classList.toggle('active', b.dataset.provider === p));
-    $('heygenFields').style.display = p === 'heygen' ? 'block' : 'none';
-    $('openPublicAvatars').style.display = p === 'heygen' ? 'flex' : 'none';
-    $('openAnamAvatarScreen').style.display = p === 'anam' ? 'flex' : 'none';
-    if (p === 'anam') updateAnamAvatarSummary();
-  }
-  $('providerPickerBtn').addEventListener('click', (e) => {
-    e.stopPropagation();
-    $('providerPicker').classList.toggle('open');
-  });
-  document.querySelectorAll('#providerPickerMenu button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      setProviderUI(btn.dataset.provider);
-      $('providerPicker').classList.remove('open');
-    });
-  });
-  document.addEventListener('click', (e) => {
-    if (!$('providerPicker').contains(e.target)) $('providerPicker').classList.remove('open');
-  });
   function autoGrow(){
     const el = $('briefInput');
     el.style.height = 'auto';
@@ -1536,7 +1415,6 @@
       btn.textContent = originalText; btn.disabled = false;
     }
   }
-  $('saveHeygenKey').addEventListener('click', () => saveProviderKey('heygen', 'heygenApiKey', 'saveHeygenKey', loadHeygenAvatars));
   $('saveAnamKey').addEventListener('click', () => saveProviderKey('anam', 'anamApiKey', 'saveAnamKey', () => { loadAnamAvatars(); loadAnamVoices(); }));
   document.querySelectorAll('.eyeToggle').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1557,12 +1435,12 @@
     if (!currentUser) return;
     if (currentChatId) {
       await supabase.from('video_call_chats').update({
-        messages: chatMessages, provider: state.provider,
+        messages: chatMessages, provider: 'anam',
         title: title || undefined, updated_at: new Date().toISOString(),
       }).eq('id', currentChatId);
     } else {
       const { data } = await supabase.from('video_call_chats').insert({
-        user_id: currentUser.id, messages: chatMessages, provider: state.provider,
+        user_id: currentUser.id, messages: chatMessages, provider: 'anam',
         title: title || 'New chat',
       }).select('id').single();
       if (data) currentChatId = data.id;
@@ -1612,63 +1490,6 @@
   }
   $('newChatBtn').addEventListener('click', startNewChat);
 
-  async function loadHeygenAvatars(){
-    const sel = $('heygenAvatarId');
-    if (!state.heygenKeySet) { sel.innerHTML = '<option value="">Add your LiveAvatar API key in the API screen first</option>'; return; }
-    try {
-      const r = await fetch('/api/heygen-avatars?type=private', { headers: await authHeader() });
-      const data = await r.json();
-      if (!r.ok) { sel.innerHTML = `<option value="">Error: ${JSON.stringify(data.error).slice(0,120)}</option>`; return; }
-      const avatars = data.avatars || [];
-      const options = avatars.map(a => `<option value="${a.id}">${a.name}</option>`);
-      // If the saved selection (e.g. picked via Browse Public Avatars) isn't in the
-      // user's own private avatar list, still show it instead of losing it in the UI —
-      // the id is already persisted and used for calls either way.
-      if (state.heygenAvatarId && !avatars.some(a => a.id === state.heygenAvatarId)) {
-        options.unshift(`<option value="${state.heygenAvatarId}">${state.heygenAvatarName || state.heygenAvatarId}</option>`);
-      }
-      if (!options.length) { sel.innerHTML = '<option value="">No avatars yet — create one at app.liveavatar.com/home</option>'; return; }
-      sel.innerHTML = options.join('');
-      if (state.heygenAvatarId) sel.value = state.heygenAvatarId;
-      sel.onchange = () => {
-        state.heygenAvatarId = sel.value;
-        state.heygenAvatarName = sel.options[sel.selectedIndex]?.textContent || '';
-        persist();
-      };
-    } catch (e) { sel.innerHTML = '<option value="">Could not load avatars</option>'; }
-  }
-  async function loadPublicHeygenAvatars(){
-    const list = $('publicAvatarsList');
-    if (!state.heygenKeySet) { list.innerHTML = '<div class="emptyState">Add your LiveAvatar API key in the API screen first.</div>'; return; }
-    list.innerHTML = '<div class="emptyState">Loading…</div>';
-    try {
-      const r = await fetch('/api/heygen-avatars?type=public', { headers: await authHeader() });
-      const data = await r.json();
-      if (!r.ok) { list.innerHTML = `<div class="emptyState">Error: ${JSON.stringify(data.error).slice(0,160)}</div>`; return; }
-      const avatars = data.avatars || [];
-      if (!avatars.length) { list.innerHTML = '<div class="emptyState">No public avatars found.</div>'; return; }
-      list.innerHTML = avatars.map(a => `
-        <button class="publicAvatarRow${a.id === state.heygenAvatarId ? ' selected' : ''}" data-avatar-id="${a.id}" data-avatar-name="${a.name.replace(/"/g,'&quot;')}">
-          ${a.preview_url ? `<img class="paThumb" src="${a.preview_url}" alt="" />` : '<div class="paThumb"></div>'}
-          <div class="paName">${a.name.replace(/</g,'&lt;')}</div>
-        </button>
-      `).join('');
-      list.querySelectorAll('[data-avatar-id]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          state.heygenAvatarId = btn.dataset.avatarId;
-          state.heygenAvatarName = btn.dataset.avatarName;
-          persist();
-          const sel = $('heygenAvatarId');
-          if (sel && ![...sel.options].some(o => o.value === state.heygenAvatarId)) {
-            sel.insertAdjacentHTML('afterbegin', `<option value="${state.heygenAvatarId}">${btn.dataset.avatarName}</option>`);
-          }
-          if (sel) sel.value = state.heygenAvatarId;
-          list.querySelectorAll('.publicAvatarRow').forEach(row => row.classList.toggle('selected', row.dataset.avatarId === state.heygenAvatarId));
-          $('publicAvatarsScreen').classList.remove('active');
-        });
-      });
-    } catch (e) { list.innerHTML = '<div class="emptyState">Could not load public avatars.</div>'; }
-  }
 
   async function loadAnamAvatars(){
     const sel = $('anamAvatarId');
@@ -2081,9 +1902,7 @@
     if (!chat) return;
     currentChatId = chat.id;
     chatMessages = Array.isArray(chat.messages) ? chat.messages : [];
-    state.provider = chat.provider || state.provider;
     state.systemPrompt = chatMessages.filter(m => m.role === 'user').map(m => m.content).join(' ');
-    setProviderUI(state.provider);
     persist();
     showTab('home');
     renderChatThread();
@@ -2091,7 +1910,7 @@
 
   const callScreen = $('callScreen'), callIdle = $('callIdle'), callStatus = $('callStatus'), callBottom = $('callBottom');
   const remoteVideo = $('remoteVideo'), liveDot = $('liveDot');
-  let liveavatarRoom = null, liveavatarSessionId = null, anamClient = null, micStream = null, audioCtx = null, callStartedAt = null;
+  let anamClient = null, micStream = null, audioCtx = null, callStartedAt = null;
 
   function primeAudioSession(){
     try {
@@ -2115,11 +1934,7 @@
       $('homeHint').textContent = 'Type what you want it to do first.';
       return;
     }
-    if (state.provider === 'heygen' && !state.heygenAvatarId) {
-      $('homeHint').textContent = 'Pick an avatar first.';
-      return;
-    }
-    if (state.provider === 'anam' && !state.anamAvatarId) {
+    if (!state.anamAvatarId) {
       $('homeHint').textContent = 'Pick an avatar first.';
       return;
     }
@@ -2141,59 +1956,7 @@
     }
 
     callStartedAt = Date.now();
-    if (state.provider === 'heygen') await startHeygen();
-    else await startAnam();
-  }
-
-  async function startHeygen(){
-    // "HeyGen" here means LiveAvatar - HeyGen's real-time avatar product now lives on
-    // its own platform (app.liveavatar.com) with its own key and its own API, separate
-    // from the old HeyGen Interactive Avatar API. The saved "HeyGen API key" is a
-    // LiveAvatar key (see the hint on the API key screen).
-    if (!state.heygenKeySet) { callStatus.textContent = 'Add your LiveAvatar API key in Profile settings first.'; return; }
-    const sessionResp = await fetch('/api/heygen-token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
-      body: JSON.stringify({ avatarId: state.heygenAvatarId, systemPrompt: state.systemPrompt, language: state.language }),
-    });
-    const sessionData = await sessionResp.json();
-    if (!sessionResp.ok) { callStatus.textContent = 'LiveAvatar error: ' + JSON.stringify(sessionData.error); return; }
-    liveavatarSessionId = sessionData.sessionId;
-
-    const { Room, RoomEvent, Track } = await import('https://esm.sh/livekit-client@latest');
-    liveavatarRoom = new Room();
-
-    const outStream = new MediaStream();
-    remoteVideo.srcObject = outStream;
-    remoteVideo.muted = false;
-    remoteVideo.volume = 1.0;
-
-    liveavatarRoom.on(RoomEvent.TrackSubscribed, (track) => {
-      if (track.kind !== Track.Kind.Video && track.kind !== Track.Kind.Audio) return;
-      outStream.addTrack(track.mediaStreamTrack);
-      remoteVideo.play().catch(() => {});
-      if (track.kind === Track.Kind.Video) {
-        remoteVideo.style.display = 'block';
-        callIdle.style.display = 'none';
-        liveDot.classList.add('live');
-        callBottom.classList.remove('hidden');
-      }
-    });
-    liveavatarRoom.on(RoomEvent.Disconnected, () => endCall());
-
-    await liveavatarRoom.connect(sessionData.livekitUrl, sessionData.livekitToken);
-    try {
-      if (micStream) {
-        await liveavatarRoom.localParticipant.publishTrack(micStream.getAudioTracks()[0], {
-          source: Track.Source.Microphone,
-          name: 'microphone',
-        });
-      } else {
-        await liveavatarRoom.localParticipant.setMicrophoneEnabled(true);
-      }
-    } catch (e) {
-      callStatus.textContent = 'Mic publish failed: ' + (e?.message || e);
-    }
+    await startAnam();
   }
 
   async function startAnam(){
@@ -2220,9 +1983,8 @@
     });
     anamClient.addListener(AnamEvent.CONNECTION_CLOSED, () => endCall());
 
-    // The Anam SDK owns #remoteVideo directly (captures its own mic + streams both
-    // audio and video into it) rather than us wiring MediaStream tracks by hand like
-    // the HeyGen path above.
+    // The Anam SDK owns #remoteVideo directly - it captures its own mic and
+    // streams both audio and video into it.
     await anamClient.streamToVideoElement('remoteVideo');
   }
 
@@ -2236,24 +1998,10 @@
     const durationSec = callStartedAt ? Math.round((Date.now() - callStartedAt) / 1000) : 0;
     if (callStartedAt) {
       addHistory({
-        provider: state.provider,
+        provider: 'anam',
         time: new Date().toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }),
         summary: durationSec > 0 ? `Call ended after ${durationSec}s` : 'Call ended immediately',
       });
-    }
-    if (liveavatarRoom) { try { liveavatarRoom.disconnect(); } catch(e){} liveavatarRoom = null; }
-    if (liveavatarSessionId) {
-      const sid = liveavatarSessionId;
-      (async () => {
-        try {
-          await fetch('/api/heygen-stop-session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
-            body: JSON.stringify({ sessionId: sid }),
-          });
-        } catch (e) {}
-      })();
-      liveavatarSessionId = null;
     }
     if (anamClient) { try { anamClient.stopStreaming(); } catch(e){} anamClient = null; }
     if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
@@ -2340,7 +2088,6 @@
     $('pendingBox').style.display = 'none';
     authScreen.classList.add('hidden');
     await loadSettings();
-    loadHeygenAvatars();
     loadAnamAvatars();
     loadAnamVoices();
     splashAuthDone = true; maybeHideSplash();
