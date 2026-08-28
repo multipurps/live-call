@@ -213,7 +213,7 @@
   #homeHeader{
     position:sticky; top:0; z-index:20; overflow:visible;
     display:flex; align-items:center; justify-content:space-between;
-    height:44px; margin:6px 0 0; padding-bottom:6px;
+    height:76px; margin:6px 0 0; padding-bottom:6px;
     background:var(--coffee);
   }
   #newChatBtn{flex:none; width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:var(--icon-color);}

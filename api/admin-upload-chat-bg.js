@@ -29,6 +29,20 @@ export default async function handler(req, res) {
 
   const { action } = req.body || {};
 
+  if (action === 'setDefault') {
+    const { url } = req.body || {};
+    if (!url) return res.status(400).json({ error: 'url is required' });
+    const { error } = await supabase.from('app_settings').upsert({ id: true, chat_bg_url: url, updated_at: new Date().toISOString() });
+    if (error) return res.status(500).json({ error: error.message });
+    return res.status(200).json({ ok: true });
+  }
+
+  if (action === 'clearDefault') {
+    const { error } = await supabase.from('app_settings').update({ chat_bg_url: null }).eq('id', true);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.status(200).json({ ok: true });
+  }
+
   if (action === 'delete') {
     const { id } = req.body || {};
     if (!id) return res.status(400).json({ error: 'id is required' });

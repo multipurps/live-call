@@ -319,6 +319,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     $('profileTheme').value = state.theme;
     await loadKeyStatus();
     updateAnamAvatarSummary();
+    await loadAdminDefaultChatBg();
     applyChatBg();
     loadChatBgOptions();
     ensureNotificationsEnabled();
@@ -326,11 +327,21 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     renderProfile();
   }
 
-  // ---------------------------------------------------------------- Chat background (per-user pick from admin's gallery)
+  // ---------------------------------------------------------------- Chat background
+  // Three states for state.chatBgUrl: '' (no preference yet - inherits the admin's
+  // default), '__none__' (user explicitly turned it off), or a specific gallery URL.
+  let adminDefaultChatBg = '';
+  async function loadAdminDefaultChatBg(){
+    try {
+      const { data } = await supabase.from('app_settings').select('chat_bg_url').eq('id', true).maybeSingle();
+      adminDefaultChatBg = data?.chat_bg_url || '';
+    } catch (e) { adminDefaultChatBg = ''; }
+  }
   function applyChatBg(){
     const el = $('screenHome');
-    if (state.chatBgUrl) {
-      el.style.backgroundImage = `linear-gradient(rgba(30,19,13,0.5), rgba(30,19,13,0.7)), url('${state.chatBgUrl}')`;
+    const effectiveUrl = state.chatBgUrl === '__none__' ? '' : (state.chatBgUrl || adminDefaultChatBg);
+    if (effectiveUrl) {
+      el.style.backgroundImage = `linear-gradient(rgba(30,19,13,0.5), rgba(30,19,13,0.7)), url('${effectiveUrl}')`;
       el.style.backgroundSize = 'cover';
       el.style.backgroundPosition = 'center';
     } else {
@@ -341,11 +352,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   async function loadChatBgOptions(){
     const { data } = await supabase.from('chat_backgrounds').select('id,url').order('created_at', { ascending: false });
     const row = $('chatBgPickerRow');
-    const noneSelected = !state.chatBgUrl;
+    const defaultSelected = !state.chatBgUrl;
+    const noneSelected = state.chatBgUrl === '__none__';
     const optionsHtml = (data || []).map(bg => `
       <button class="chatBgThumb ${state.chatBgUrl === bg.url ? 'selected' : ''}" data-url="${bg.url}"><img src="${bg.url}" /></button>
     `).join('');
-    row.innerHTML = `<button class="chatBgThumb noneOption ${noneSelected ? 'selected' : ''}" data-url="">None</button>` + optionsHtml;
+    row.innerHTML = `<button class="chatBgThumb noneOption ${defaultSelected ? 'selected' : ''}" data-url="">Default</button>`
+      + `<button class="chatBgThumb noneOption ${noneSelected ? 'selected' : ''}" data-url="__none__">None</button>`
+      + optionsHtml;
     row.querySelectorAll('.chatBgThumb').forEach(btn => {
       btn.addEventListener('click', async () => {
         state.chatBgUrl = btn.dataset.url;

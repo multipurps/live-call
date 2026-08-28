@@ -63,6 +63,16 @@
     position:absolute; top:6px; right:6px; width:26px; height:26px; border-radius:50%;
     background:rgba(0,0,0,0.55); color:#fff; font-size:14px; line-height:1; display:flex; align-items:center; justify-content:center;
   }
+  .splashBgCard.isDefault{border-color:var(--accent); border-width:2px;}
+  .splashBgCard .starBtn{
+    top:6px; right:auto; left:6px; font-size:13px;
+    background:rgba(0,0,0,0.55);
+  }
+  .splashBgCard .starBtn.active{background:var(--accent);}
+  .defaultTag{
+    position:absolute; bottom:6px; left:6px; right:6px; background:rgba(0,0,0,0.55);
+    color:#fff; font-size:10px; font-weight:650; text-align:center; padding:3px 0; border-radius:6px;
+  }
 
   .statRow{
     background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:10px;
@@ -413,14 +423,40 @@
   });
 
   async function loadChatBg(){
-    const { data } = await supabase.from('chat_backgrounds').select('id,url').order('created_at', { ascending: false });
+    const [{ data }, { data: settings }] = await Promise.all([
+      supabase.from('chat_backgrounds').select('id,url').order('created_at', { ascending: false }),
+      supabase.from('app_settings').select('chat_bg_url').eq('id', true).maybeSingle(),
+    ]);
+    const defaultUrl = settings?.chat_bg_url || '';
     $('chatBgGrid').innerHTML = (data || []).map(row => `
-      <div class="splashBgCard">
+      <div class="splashBgCard ${row.url === defaultUrl ? 'isDefault' : ''}">
         <img src="${row.url}" />
+        <button class="starBtn ${row.url === defaultUrl ? 'active' : ''}" data-url="${row.url}" title="Set as default">★</button>
         <button data-id="${row.id}" title="Remove">✕</button>
+        ${row.url === defaultUrl ? '<div class="defaultTag">Default</div>' : ''}
       </div>
     `).join('');
-    document.querySelectorAll('#chatBgGrid button').forEach(btn => {
+    document.querySelectorAll('#chatBgGrid .starBtn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const isActive = btn.classList.contains('active');
+          const r = await fetch('/api/admin-upload-chat-bg', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+            body: JSON.stringify(isActive ? { action: 'clearDefault' } : { action: 'setDefault', url: btn.dataset.url }),
+          });
+          const data = await r.json();
+          if (!r.ok) { $('chatBgHint').textContent = data.error; btn.disabled = false; return; }
+          loadChatBg();
+        } catch (err) {
+          $('chatBgHint').textContent = 'Request failed: ' + (err.message || err);
+          btn.disabled = false;
+        }
+      });
+    });
+    document.querySelectorAll('#chatBgGrid button:not(.starBtn)').forEach(btn => {
       btn.addEventListener('click', async () => {
         btn.disabled = true;
         try {
