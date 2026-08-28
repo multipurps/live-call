@@ -1,4 +1,33 @@
-// Hard gate: the app must never render inside a plain browser tab, only when
+// Fix for iOS WKWebView/standalone-install PWAs where 100dvh and even
+  // -webkit-fill-available (both used on body in styles.css) under-report the
+  // true visible height on the very first layout pass after a cold launch,
+  // only self-correcting a moment later once WebKit settles - visible as a
+  // coffee-brown gap under the splash that "grows into place" a beat after
+  // launch. This used to live in app.js, but app.js is now a separate module
+  // file that needs its own network fetch before it can even start running -
+  // on a slow connection that's exactly the gap-then-correct delay this was
+  // supposed to prevent. Running it here instead, in a plain blocking script
+  // tag with no fetch of its own, means it's already done before #liveSplash
+  // is even parsed.
+  function setAppHeight(){
+    const h = Math.max(window.innerHeight, window.screen.height || 0);
+    const px = h + 'px';
+    // Guard against a feedback loop: setting body.style.height can itself trigger
+    // another 'resize' in some WKWebView builds, which would re-run this and set the
+    // same value again forever - this is what caused the "Maximum call stack size
+    // exceeded" crash. Skip the write entirely when nothing actually changed.
+    if (document.body.style.height === px) return;
+    document.documentElement.style.setProperty('--app-height', px);
+    document.body.style.height = px;
+  }
+  setAppHeight();
+  // Deliberately NOT listening on 'resize' - on mobile that also fires every time the
+  // keyboard opens/closes while typing, which would reflow body's explicit height and
+  // visibly shift the whole page around. orientationchange (portrait/landscape) is the
+  // only real case this needs to react to; screen.height never changes for the keyboard.
+  window.addEventListener('orientationchange', setAppHeight);
+
+  // Hard gate: the app must never render inside a plain browser tab, only when
   // installed to the Home Screen and launched standalone. Runs first, before
   // anything else, and just stops here if it fails the check.
   (function enforceStandalone(){

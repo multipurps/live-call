@@ -69,28 +69,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
-  // Fix for iOS WKWebView/standalone-install PWAs where 100dvh (and even
-  // window.innerHeight in some builds) under-reports the true visible height,
-  // leaving a coffee-brown gap above the home indicator on fullscreen views.
-  // screen.height is the true physical screen size in CSS px and isn't subject
-  // to that under-report - take whichever of the two is larger as the real height.
-  function setAppHeight(){
-    const h = Math.max(window.innerHeight, window.screen.height || 0);
-    const px = h + 'px';
-    // Guard against a feedback loop: setting body.style.height can itself trigger
-    // another 'resize' in some WKWebView builds, which would re-run this and set the
-    // same value again forever - this is what caused the "Maximum call stack size
-    // exceeded" crash. Skip the write entirely when nothing actually changed.
-    if (document.body.style.height === px) return;
-    document.documentElement.style.setProperty('--app-height', px);
-    document.body.style.height = px;
-  }
-  setAppHeight();
-  // Deliberately NOT listening on 'resize' - on mobile that also fires every time the
-  // keyboard opens/closes while typing, which would reflow body's explicit height and
-  // visibly shift the whole page around. orientationchange (portrait/landscape) is the
-  // only real case this needs to react to; screen.height never changes for the keyboard.
-  window.addEventListener('orientationchange', setAppHeight);
+  // setAppHeight() (the iOS WKWebView height-gap fix) now lives in boot.js, which
+  // runs before app.js has even been fetched - see the comment there for why.
 
   // Temporary on-screen diagnostic in case the fix above still isn't enough -
   // remove once the gap is confirmed gone. Tap the "Live Call" logo 5x to show it.
