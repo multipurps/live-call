@@ -224,6 +224,43 @@
   import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   const supabase = createClient('https://ewgtpxomgkpbmfyddypw.supabase.co', 'sb_publishable_NkeueZ7vabkD9nUIPDaGwQ_GCd5Ci40');
 
+  // Downscales + re-encodes an image before it's ever turned into base64. Without
+  // this, a full-resolution phone photo can produce a base64 payload bigger than
+  // Vercel's request body limit - the function then never even runs, Vercel
+  // returns a plain-text/HTML error instead of JSON, and Safari's r.json() throws
+  // "The string did not match the expected pattern" (its generic parse-failure
+  // error) which looked like a broken feature but was really an oversized upload.
+  function downscaleImage(file, maxDim = 1600, quality = 0.82){
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+          if (!blob) { reject(new Error('Could not process that image')); return; }
+          const reader = new FileReader();
+          reader.onload = () => resolve({ dataUrl: reader.result, ext: 'jpg' });
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        }, 'image/jpeg', quality);
+      };
+      img.onerror = () => reject(new Error('Could not read that image'));
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  // Response may not be JSON (e.g. a Vercel size-limit or timeout error page) -
+  // reading it as text first avoids Safari's cryptic JSON-parse crash and lets
+  // us show something the person can actually act on.
+  async function safeJson(r){
+    const text = await r.text();
+    try { return JSON.parse(text); }
+    catch (e) { return { error: r.status === 413 ? 'Image too large for upload — try a smaller photo.' : `Server returned an unexpected response (${r.status}).` }; }
+  }
+
   const ADMIN_PIN = '2048';
   const $ = (id) => document.getElementById(id);
 
@@ -343,23 +380,23 @@
   $('loginBgUploadBtn').addEventListener('click', async () => {
     if (!pickedFile) return;
     $('loginBgHint').textContent = 'Uploading…';
-    const reader = new FileReader();
-    reader.onload = async () => {
+    try {
+      const { dataUrl, ext } = await downscaleImage(pickedFile);
       const { data: { session } } = await supabase.auth.getSession();
-      const fileExt = (pickedFile.name.split('.').pop() || 'jpg').toLowerCase();
       const r = await fetch('/api/admin-upload-login-bg', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ imageBase64: reader.result, fileExt }),
+        body: JSON.stringify({ imageBase64: dataUrl, fileExt: ext }),
       });
-      const data = await r.json();
+      const data = await safeJson(r);
       if (!r.ok) { $('loginBgHint').textContent = data.error; return; }
       $('loginBgHint').textContent = 'Saved — live on the login screen now.';
       $('loginBgUploadBtn').style.display = 'none';
       pickedFile = null;
       loadLoginBg();
-    };
-    reader.readAsDataURL(pickedFile);
+    } catch (err) {
+      $('loginBgHint').textContent = 'Request failed: ' + (err.message || err);
+    }
   });
   $('loginBgClearBtn').addEventListener('click', async () => {
     $('loginBgHint').textContent = 'Removing…';
@@ -409,17 +446,16 @@
     const file = $('chatBgFile').files[0];
     if (!file) return;
     $('chatBgHint').textContent = 'Uploading…';
-    const reader = new FileReader();
-    reader.onload = async () => {
+    (async () => {
       try {
+        const { dataUrl, ext } = await downscaleImage(file);
         const { data: { session } } = await supabase.auth.getSession();
-        const fileExt = (file.name.split('.').pop() || 'jpg').toLowerCase();
         const r = await fetch('/api/admin-upload-chat-bg', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({ imageBase64: reader.result, fileExt }),
+          body: JSON.stringify({ imageBase64: dataUrl, fileExt: ext }),
         });
-        const data = await r.json();
+        const data = await safeJson(r);
         $('chatBgFile').value = '';
         if (!r.ok) { $('chatBgHint').textContent = data.error; return; }
         $('chatBgHint').textContent = 'Added.';
@@ -427,9 +463,7 @@
       } catch (err) {
         $('chatBgHint').textContent = 'Request failed: ' + (err.message || err);
       }
-    };
-    reader.onerror = () => { $('chatBgHint').textContent = 'Could not read that file.'; };
-    reader.readAsDataURL(file);
+    })();
   });
 
   async function loadSplashBgs(){
@@ -461,22 +495,24 @@
     const file = $('splashBgFile').files[0];
     if (!file) return;
     $('splashBgHint').textContent = 'Uploading…';
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const fileExt = (file.name.split('.').pop() || 'jpg').toLowerCase();
-      const r = await fetch('/api/admin-upload-splash-bg', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ imageBase64: reader.result, fileExt }),
-      });
-      const data = await r.json();
-      $('splashBgFile').value = '';
-      if (!r.ok) { $('splashBgHint').textContent = data.error; return; }
-      $('splashBgHint').textContent = 'Added.';
-      loadSplashBgs();
-    };
-    reader.readAsDataURL(file);
+    (async () => {
+      try {
+        const { dataUrl, ext } = await downscaleImage(file);
+        const { data: { session } } = await supabase.auth.getSession();
+        const r = await fetch('/api/admin-upload-splash-bg', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ imageBase64: dataUrl, fileExt: ext }),
+        });
+        const data = await safeJson(r);
+        $('splashBgFile').value = '';
+        if (!r.ok) { $('splashBgHint').textContent = data.error; return; }
+        $('splashBgHint').textContent = 'Added.';
+        loadSplashBgs();
+      } catch (err) {
+        $('splashBgHint').textContent = 'Request failed: ' + (err.message || err);
+      }
+    })();
   });
 
   $('announceSendBtn').addEventListener('click', async () => {

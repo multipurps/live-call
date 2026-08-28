@@ -413,8 +413,19 @@
     position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
     gap:10px; text-align:center; padding:0 32px;
   }
-  #callStatus{font-size:13px; color:var(--dim);}
-  #callConfirm{font-size:14.5px; color:#fff; font-weight:600; text-align:center; max-width:280px; margin-bottom:10px; line-height:1.4;}
+  #callStatus{font-size:13px; color:var(--dim); min-height:16px;}
+  #callConfirm{font-size:13px; color:var(--dim); text-align:center; max-width:260px; margin-bottom:2px; line-height:1.4;}
+  #callPulse{
+    width:64px; height:64px; border-radius:50%; margin-bottom:6px;
+    background:var(--coffee-light); border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center; color:#fff;
+    animation:callPulseAnim 1.8s ease-in-out infinite;
+  }
+  #callPulse svg{width:28px; height:28px;}
+  @keyframes callPulseAnim{
+    0%, 100%{ box-shadow:0 0 0 0 rgba(255,255,255,0.14); }
+    50%{ box-shadow:0 0 0 14px rgba(255,255,255,0); }
+  }
 
   #callTop{
     position:absolute; left:0; right:0; top:0;

@@ -19,15 +19,17 @@
     const bar = document.getElementById('debugBar');
     bar.style.display = 'block';
     bar.innerHTML = '<div style="display:flex; justify-content:space-between; gap:10px; align-items:flex-start;">'
-      + '<div style="opacity:0.85;">Something went wrong. ' + text.replace(/</g,'&lt;') + '</div>'
+      + '<div style="opacity:0.85; white-space:pre-wrap;">Something went wrong. ' + text.replace(/</g,'&lt;') + '</div>'
       + '<button onclick="this.closest(\'#debugBar\').style.display=\'none\'" style="flex:none; color:#fff; opacity:0.6; font-size:16px; line-height:1; background:none; border:0;">✕</button>'
       + '</div>';
   }
   window.onerror = function(msg, src, line, col, err){
-    showErrorToast(msg + ' (line ' + line + ')');
+    showErrorToast(msg + ' (line ' + line + ')' + (err && err.stack ? '\n' + err.stack.slice(0, 400) : ''));
   };
   window.addEventListener('unhandledrejection', function(e){
-    showErrorToast(e.reason?.message || e.reason);
+    const reason = e.reason;
+    const detail = reason && reason.stack ? reason.stack.slice(0, 400) : (reason?.message || reason);
+    showErrorToast(detail);
   });
   // Poll instead of a single check: a slow network (auth + approval + settings + avatar
   // list, all sequential) can easily blow past a one-shot timer even when the app is

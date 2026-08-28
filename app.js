@@ -977,8 +977,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
     callScreen.classList.add('active');
     callIdle.style.display = 'flex';
-    $('callConfirm').textContent = `Got it — I'll ${state.systemPrompt.length > 140 ? state.systemPrompt.slice(0, 140).trim() + '…' : state.systemPrompt}`;
-    callStatus.textContent = 'Connecting…';
+    $('callConfirm').textContent = `Got it — I'll ${state.systemPrompt.length > 70 ? state.systemPrompt.slice(0, 70).trim() + '…' : state.systemPrompt}`;
+    startConnectingMessages();
     liveDot.classList.remove('live');
 
     primeAudioSession();
@@ -986,12 +986,32 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     try {
       micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
+      stopConnectingMessages();
       callStatus.textContent = 'Microphone permission is required';
       return;
     }
 
     callStartedAt = Date.now();
     await startAnam();
+  }
+
+  // Cycles a few short phrases instead of a single static "Connecting…" - the call
+  // still takes a few seconds either way, but rotating text reads as progress
+  // instead of a stall.
+  const CONNECTING_MESSAGES = ['Connecting…', 'Setting the scene…', 'Warming up the avatar…', 'Almost there…'];
+  let connectingMsgTimer = null;
+  function startConnectingMessages(){
+    let i = 0;
+    callStatus.textContent = CONNECTING_MESSAGES[0];
+    clearInterval(connectingMsgTimer);
+    connectingMsgTimer = setInterval(() => {
+      i = (i + 1) % CONNECTING_MESSAGES.length;
+      callStatus.textContent = CONNECTING_MESSAGES[i];
+    }, 2200);
+  }
+  function stopConnectingMessages(){
+    clearInterval(connectingMsgTimer);
+    connectingMsgTimer = null;
   }
 
   async function startAnam(){
@@ -1013,6 +1033,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     anamClient.addListener(AnamEvent.VIDEO_PLAY_STARTED, () => {
       remoteVideo.style.display = 'block';
       callIdle.style.display = 'none';
+      stopConnectingMessages();
       liveDot.classList.add('live');
       callBottom.classList.remove('hidden');
     });
@@ -1030,6 +1051,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   }
 
   function endCall(){
+    stopConnectingMessages();
     const durationSec = callStartedAt ? Math.round((Date.now() - callStartedAt) / 1000) : 0;
     if (callStartedAt) {
       addHistory({
