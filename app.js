@@ -148,6 +148,20 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   $('openApiKeys').addEventListener('click', () => $('apiKeysScreen').classList.add('active'));
   $('closeApiKeys').addEventListener('click', () => $('apiKeysScreen').classList.remove('active'));
 
+  $('openChangePassword').addEventListener('click', () => $('changePasswordScreen').classList.add('active'));
+  $('closeChangePassword').addEventListener('click', () => $('changePasswordScreen').classList.remove('active'));
+  $('changePasswordBtn').addEventListener('click', async () => {
+    const p1 = $('newPassword1').value;
+    const p2 = $('newPassword2').value;
+    if (!p1 || p1.length < 6) { $('changePasswordHint').textContent = 'Password must be at least 6 characters.'; return; }
+    if (p1 !== p2) { $('changePasswordHint').textContent = 'Passwords do not match.'; return; }
+    $('changePasswordHint').textContent = 'Saving…';
+    const { error } = await supabase.auth.updateUser({ password: p1 });
+    if (error) { $('changePasswordHint').textContent = error.message; return; }
+    $('newPassword1').value = ''; $('newPassword2').value = '';
+    $('changePasswordHint').textContent = 'Password updated.';
+  });
+
 
   const infoContent = {
     faq: {
@@ -1138,6 +1152,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   async function enterApp(user){
     currentUser = user;
+    // Google accounts have no password to change — only show this for email/password sign-ups.
+    const provider = user.app_metadata?.provider || user.identities?.[0]?.provider || 'email';
+    $('openChangePassword').style.display = provider === 'email' ? 'flex' : 'none';
     const approved = await checkApproval(user.id);
     if (!approved) {
       authScreen.classList.remove('hidden');
