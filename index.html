@@ -214,6 +214,11 @@
         <div class="cBody"><div class="cValue">API</div></div>
         <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
+      <div class="profileCard navRow" id="openChangePassword" style="display:none;">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V7a4 4 0 0 1 8 0v4" stroke="currentColor" stroke-width="1.8"/></svg></div>
+        <div class="cBody"><div class="cValue">Change password</div></div>
+        <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
 
       <div style="height:1px; background:var(--line); margin:6px 0 12px;"></div>
 
@@ -251,6 +256,31 @@
         <div class="subScreenTitle">Notifications</div>
       </div>
       <div class="subScreenBody" id="notificationsList"></div>
+    </div>
+
+    <div id="changePasswordScreen" class="subScreen">
+      <div class="subScreenHeader">
+        <button class="backBtn" id="closeChangePassword" aria-label="Back">
+          <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="subScreenTitle">Change password</div>
+      </div>
+      <div class="subScreenBody">
+        <div class="profileCard">
+          <div class="cBody">
+            <div class="cLabel">New password</div>
+            <input class="plainInput" id="newPassword1" type="password" autocomplete="new-password" placeholder="At least 6 characters" />
+          </div>
+        </div>
+        <div class="profileCard">
+          <div class="cBody">
+            <div class="cLabel">Confirm new password</div>
+            <input class="plainInput" id="newPassword2" type="password" autocomplete="new-password" placeholder="Type it again" />
+          </div>
+        </div>
+        <button class="saveKeyBtn" id="changePasswordBtn">Save new password</button>
+        <p class="hint" id="changePasswordHint"></p>
+      </div>
     </div>
 
     <div id="apiKeysScreen" class="subScreen">
