@@ -27,9 +27,23 @@ export default async function handler(req, res) {
       headers: { 'Content-Type': 'application/json', Authorization: `Key ${falKey}` },
       body: JSON.stringify({ allowed_apps: [app], duration: 120 }),
     });
-    const data = await resp.json().catch(() => ({}));
+    const raw = await resp.text();
+    let data = {};
+    try { data = JSON.parse(raw); } catch (e) { /* not JSON - raw is shown below */ }
+
     if (!resp.ok || !data.token) {
-      return res.status(resp.status || 500).json({ error: data.error || data.message || 'Fal token request failed' });
+      // Masked key fingerprint (never the key itself) so a 401 can be
+      // cross-checked against the exact key saved in Profile > API without
+      // ever putting the plaintext key in a log or response.
+      const keyFingerprint = falKey.length > 8
+        ? `${falKey.slice(0, 4)}…${falKey.slice(-4)} (${falKey.length} chars)`
+        : `(${falKey.length} chars)`;
+      const detail = data.error || data.message || data.detail || raw || 'no response body';
+      console.error(`[fal-realtime-token] ${resp.status} from Fal. key=${keyFingerprint} detail=${detail}`);
+      return res.status(resp.status || 500).json({
+        error: `Fal returned ${resp.status}: ${detail}`,
+        keyFingerprint,
+      });
     }
     res.setHeader('Content-Type', 'text/plain');
     return res.status(200).send(data.token);

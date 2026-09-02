@@ -1276,7 +1276,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     });
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
-      throw new Error(`Token request failed (${r.status}): ${body.error || 'no error message'}`);
+      const fp = body.keyFingerprint ? ` [key: ${body.keyFingerprint}]` : '';
+      throw new Error(`Token request failed (${r.status}): ${body.error || 'no error message'}${fp}`);
     }
     const token = await r.text();
     console.log('[LiveFilter] got token, length:', token?.length);
