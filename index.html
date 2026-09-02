@@ -254,7 +254,6 @@
 
     <div class="screen" id="screenFeatures">
       <h1 class="pageTitle">Live Swap</h1>
-      <p class="hint" style="margin:-6px 0 16px; text-align:left;">Swap your live camera in <b><i>real time</i></b> — take on a reference photo's look, or restyle your own background.</p>
 
       <div class="lfHeroCard" id="openLfImageUpload">
         <div class="lfHeroLabel">Reference picture <span>(optional)</span></div>
@@ -265,16 +264,17 @@
       </div>
       <input type="file" id="lfImageInput" accept="image/png,image/jpeg,image/webp" style="display:none;" />
       <img id="lfImagePreview" style="display:none; width:100%; max-width:220px; border-radius:14px; margin:4px 0 18px; border:1px solid var(--line);" />
+      <button type="button" class="pillActionBtn pillActionBtn--ghost" id="lfPickWallpaperBtn" style="width:100%; margin:2px 0 18px;">Or use a chat wallpaper</button>
+      <div id="lfBgPickerRow" style="display:none; gap:10px; overflow-x:auto; padding-bottom:4px; margin:-10px 0 18px;"></div>
 
-      <div class="profileCard" id="lfBgSourceCard" style="display:none;">
+      <div class="profileCard" id="lfBgSourceCard" style="display:none; align-items:center; justify-content:space-between;">
         <div class="cBody">
-          <div class="cLabel">Background</div>
-          <div style="display:flex; gap:8px; margin-top:8px;">
-            <button type="button" class="lfBgSourceBtn active" id="lfBgSourceMine" style="flex:1; padding:10px; border-radius:10px; font:inherit; color:#fff;">My camera</button>
-            <button type="button" class="lfBgSourceBtn" id="lfBgSourceRef" style="flex:1; padding:10px; border-radius:10px; font:inherit; color:#fff;">Reference photo</button>
-          </div>
-          <p class="hint" style="margin:8px 0 0;">My camera keeps your real surroundings and only applies the prompt below. Reference photo swaps in that photo's background/character instead.</p>
+          <div class="cValue" id="lfBgSourceLabel">My camera</div>
+          <div class="hint" style="margin:4px 0 0;">Use your real surroundings, or swap in the reference picture's background/character.</div>
         </div>
+        <button type="button" class="toggleSwitch" id="lfBgSourceToggle" aria-label="Background source" data-on="false">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M7,6 C3.68629,6 1,8.68629 1,12 C1,15.3137 3.68629,18 7,18 L17,18 C20.3137,18 23,15.3137 23,12 C23,8.68629 20.3137,6 17,6 L7,6 Z M7,16 C9.20914,16 11,14.2091 11,12 C11,9.79086 9.20914,8 7,8 C4.79086,8 3,9.79086 3,12 C3,14.2091 4.79086,16 7,16 Z" fill="currentColor"/></svg>
+        </button>
       </div>
 
       <div class="profileCard">

@@ -319,6 +319,14 @@
     background:rgba(var(--gold-rgb),0.25);
     border:1px solid rgba(var(--gold-rgb),0.55);
   }
+  .toggleSwitch{
+    background:none; border:0; padding:0; margin:0; width:38px; height:26px;
+    display:inline-flex; align-items:center; justify-content:center;
+    color:var(--dim); cursor:pointer; flex-shrink:0;
+  }
+  .toggleSwitch svg{width:38px; height:26px; transition:transform 0.15s;}
+  .toggleSwitch[data-on="true"]{color:var(--gold);}
+  .toggleSwitch[data-on="true"] svg{transform:scaleX(-1);}
   .lfStartBtn{
     width:100%; padding:15px; border-radius:16px; font-size:15px; font-weight:700; letter-spacing:0.01em;
     color:#241a05; border:1px solid rgba(var(--gold-rgb),0.7);

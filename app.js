@@ -1111,14 +1111,43 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   // short-lived realtime token minted by /api/fal-realtime-token.
   let lfReferenceImageUrl = '';
   let lfUseReferenceBg = true; // default once a reference photo is added: use its background
+  let lfWallpapersLoaded = false;
 
   function setLfBgSource(useRef){
     lfUseReferenceBg = useRef;
-    $('lfBgSourceMine')?.classList.toggle('active', !useRef);
-    $('lfBgSourceRef')?.classList.toggle('active', useRef);
+    const toggle = $('lfBgSourceToggle');
+    if (toggle) toggle.dataset.on = useRef ? 'true' : 'false';
+    const label = $('lfBgSourceLabel');
+    if (label) label.textContent = useRef ? 'Reference photo' : 'My camera';
   }
-  $('lfBgSourceMine')?.addEventListener('click', () => setLfBgSource(false));
-  $('lfBgSourceRef')?.addEventListener('click', () => setLfBgSource(true));
+  $('lfBgSourceToggle')?.addEventListener('click', () => setLfBgSource(!lfUseReferenceBg));
+
+  async function loadLfBgOptions(){
+    const row = $('lfBgPickerRow');
+    if (!row) return;
+    const { data } = await supabase.from('chat_backgrounds').select('id,url').order('created_at', { ascending: false });
+    if (!data || !data.length) {
+      row.innerHTML = '<p class="hint" style="margin:0;">No wallpapers yet — add some under Avatar &rarr; Chat background first.</p>';
+      return;
+    }
+    row.innerHTML = data.map(bg => `<button class="chatBgThumb ${lfReferenceImageUrl === bg.url ? 'selected' : ''}" data-url="${bg.url}"><img src="${bg.url}" /></button>`).join('');
+    row.querySelectorAll('.chatBgThumb').forEach(btn => {
+      btn.addEventListener('click', () => {
+        lfReferenceImageUrl = btn.dataset.url;
+        row.querySelectorAll('.chatBgThumb').forEach(b => b.classList.toggle('selected', b === btn));
+        $('lfImagePreview').src = lfReferenceImageUrl;
+        $('lfImagePreview').style.display = 'block';
+        $('lfBgSourceCard').style.display = 'flex';
+        setLfBgSource(true);
+      });
+    });
+  }
+  $('lfPickWallpaperBtn')?.addEventListener('click', () => {
+    const row = $('lfBgPickerRow');
+    const showing = row.style.display === 'flex';
+    row.style.display = showing ? 'none' : 'flex';
+    if (!showing && !lfWallpapersLoaded) { lfWallpapersLoaded = true; loadLfBgOptions(); }
+  });
 
   // Mirrors every diagnostic line onto the on-screen log too, since the
   // person debugging this may only have their phone (no devtools/console
@@ -1159,7 +1188,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       lfReferenceImageUrl = pub.publicUrl;
       $('lfImagePreview').src = lfReferenceImageUrl;
       $('lfImagePreview').style.display = 'block';
-      $('lfBgSourceCard').style.display = 'block';
+      $('lfBgSourceCard').style.display = 'flex';
       setLfBgSource(true);
       statusEl.textContent = 'Reference photo added';
     } catch (e) {
