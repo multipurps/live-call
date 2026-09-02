@@ -472,6 +472,10 @@
   #lfRemoteVideo{
     position:absolute; inset:0; width:100%; height:100%;
     object-fit:cover; border:0; background:#000;
+    transform:scaleX(-1); /* front camera is sent unmirrored (true orientation) so a
+      call partner sees you correctly - but for this self-view feature we flip the
+      *display* only, to match the mirror behavior every phone camera app uses for
+      its own selfie preview (raise your left hand, see it on your left). */
   }
   #lfIdle{
     position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
