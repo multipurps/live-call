@@ -140,6 +140,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     $('homeInputBar').classList.toggle('visible', name === 'home');
     if (name === 'recent') renderRecent();
     if (name === 'profile') renderProfile();
+    if (name === 'features') updateLfKeyHint();
   }
   tabBtns.forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
   window.addEventListener('resize', () => moveTabGlider(document.querySelector('#tabBar .tabBtn.active')?.dataset.tab || 'home'));
@@ -147,8 +148,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   $('openApiKeys')?.addEventListener('click', () => $('apiKeysScreen').classList.add('active'));
   $('closeApiKeys')?.addEventListener('click', () => $('apiKeysScreen').classList.remove('active'));
-  $('openLiveFilter')?.addEventListener('click', () => { $('liveFilterScreen').classList.add('active'); updateLfKeyHint(); });
-  $('closeLiveFilter')?.addEventListener('click', () => $('liveFilterScreen').classList.remove('active'));
 
   $('openChangePassword')?.addEventListener('click', () => $('changePasswordScreen').classList.add('active'));
   $('closeChangePassword')?.addEventListener('click', () => $('changePasswordScreen').classList.remove('active'));
@@ -1117,8 +1116,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     lfUseReferenceBg = useRef;
     $('lfBgSourceMine')?.classList.toggle('active', !useRef);
     $('lfBgSourceRef')?.classList.toggle('active', useRef);
-    $('lfBgSourceMine').style.background = useRef ? 'transparent' : 'var(--accent, #6b7a1f)';
-    $('lfBgSourceRef').style.background = useRef ? 'var(--accent, #6b7a1f)' : 'transparent';
   }
   $('lfBgSourceMine')?.addEventListener('click', () => setLfBgSource(false));
   $('lfBgSourceRef')?.addEventListener('click', () => setLfBgSource(true));
@@ -1321,7 +1318,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     const prompt = $('lfPrompt').value.trim();
     $('lfStartStatus').textContent = '';
 
-    $('liveFilterScreen').classList.remove('active');
     lfCallScreen.classList.add('active');
     lfIdle.style.display = 'flex';
     lfStatus.textContent = 'Connecting…';

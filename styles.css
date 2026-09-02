@@ -279,6 +279,25 @@
   }
   .profileName{text-align:center; font-size:22px; font-weight:700; margin-bottom:28px; letter-spacing:-0.01em;}
 
+  /* Live Swap screen (Features tab): liquid-glass cards on the app's normal
+     background (var(--coffee)) - frosted/translucent rather than the flat
+     --coffee-light fill .profileCard uses elsewhere, scoped here only so
+     other screens keep their existing look. */
+  #screenFeatures .profileCard{
+    background:rgba(255,255,255,0.05);
+    backdrop-filter:blur(24px) saturate(180%); -webkit-backdrop-filter:blur(24px) saturate(180%);
+    border:1px solid rgba(255,255,255,0.12);
+    box-shadow:0 8px 30px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+  .lfBgSourceBtn{
+    background:rgba(255,255,255,0.04);
+    border:1px solid rgba(255,255,255,0.12);
+    backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  }
+  .lfBgSourceBtn.active{
+    background:rgba(var(--accent-rgb),0.3);
+    border:1px solid rgba(var(--accent-rgb),0.55);
+  }
   .profileCard{
     display:flex; align-items:center; gap:13px;
     background:var(--coffee-light); border-radius:20px; padding:15px 17px;

@@ -253,14 +253,40 @@
     </div>
 
     <div class="screen" id="screenFeatures">
-      <h1 class="pageTitle">Features</h1>
-      <div class="sectionLabel">Live</div>
-      <div class="profileCard navRow" id="openLiveFilter">
-        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 8v8l6-4-6-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><rect x="3" y="6" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.8"/></svg></div>
-        <div class="cBody"><div class="cValue">Live Swap</div><div class="hint" style="margin:2px 0 0;">Swap your face or background live, in real time</div></div>
+      <h1 class="pageTitle">Live Swap</h1>
+      <p class="hint" style="margin:-6px 0 16px; text-align:left;">Swap your live camera in real time — take on a reference photo's look, or restyle your own background.</p>
+
+      <div class="profileCard navRow" id="openLfImageUpload">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 8a2 2 0 0 1 2-2h1.5l1-1.5h7l1 1.5H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.2" stroke="currentColor" stroke-width="1.8"/></svg></div>
+        <div class="cBody"><div class="cValue">Reference picture (optional)</div><div class="hint" id="lfImageStatus" style="margin:2px 0 0;">Add a photo to swap yourself for it, or an outfit/product image</div></div>
         <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
+      <input type="file" id="lfImageInput" accept="image/png,image/jpeg,image/webp" style="display:none;" />
+      <img id="lfImagePreview" style="display:none; width:100%; max-width:220px; border-radius:14px; margin:4px 0 18px; border:1px solid var(--line);" />
+
+      <div class="profileCard" id="lfBgSourceCard" style="display:none;">
+        <div class="cBody">
+          <div class="cLabel">Background</div>
+          <div style="display:flex; gap:8px; margin-top:8px;">
+            <button type="button" class="lfBgSourceBtn active" id="lfBgSourceMine" style="flex:1; padding:10px; border-radius:10px; font:inherit; color:#fff;">My camera</button>
+            <button type="button" class="lfBgSourceBtn" id="lfBgSourceRef" style="flex:1; padding:10px; border-radius:10px; font:inherit; color:#fff;">Reference photo</button>
+          </div>
+          <p class="hint" style="margin:8px 0 0;">My camera keeps your real surroundings and only applies the prompt below. Reference photo swaps in that photo's background/character instead.</p>
+        </div>
+      </div>
+
+      <div class="profileCard">
+        <div class="cBody">
+          <div class="cLabel">Prompt (optional)</div>
+          <textarea class="cSelect" id="lfPrompt" rows="3" style="width:100%; resize:vertical; background:transparent; border:0; color:#fff; font:inherit; padding:0;" placeholder="e.g. Change the background to a sunlit tropical beach — leave blank to just use the reference photo"></textarea>
+        </div>
+      </div>
+
+      <p class="hint" id="lfKeyHint" style="margin:14px 0 0; display:none;">Add your API key in <b>Profile → API</b> first.</p>
+      <button class="saveKeyBtn" id="lfStartBtn" style="margin-top:18px;">Start Live Swap</button>
+      <p class="hint" id="lfStartStatus" style="margin:8px 0 0; min-height:16px;"></p>
     </div>
+
 
     <div id="notificationsScreen" class="subScreen">
       <div class="subScreenHeader">
@@ -414,48 +440,6 @@
 
         <div class="sectionLabel" style="margin-top:24px;">Chat background</div>
         <div id="chatBgPickerRow" style="display:flex; gap:10px; overflow-x:auto; padding-bottom:4px;"></div>
-      </div>
-    </div>
-
-    <div id="liveFilterScreen" class="subScreen">
-      <div class="subScreenHeader">
-        <button class="backBtn" id="closeLiveFilter" aria-label="Back">
-          <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-        <div class="subScreenTitle">Live Swap</div>
-      </div>
-      <div class="subScreenBody">
-        <p class="hint" style="margin:0 0 16px; text-align:left;">Swap your live camera in real time — take on a reference photo's look, or restyle your own background.</p>
-
-        <div class="profileCard navRow" id="openLfImageUpload">
-          <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 8a2 2 0 0 1 2-2h1.5l1-1.5h7l1 1.5H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.2" stroke="currentColor" stroke-width="1.8"/></svg></div>
-          <div class="cBody"><div class="cValue">Reference picture (optional)</div><div class="hint" id="lfImageStatus" style="margin:2px 0 0;">Add a photo to swap yourself for it, or an outfit/product image</div></div>
-          <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-        <input type="file" id="lfImageInput" accept="image/png,image/jpeg,image/webp" style="display:none;" />
-        <img id="lfImagePreview" style="display:none; width:100%; max-width:220px; border-radius:14px; margin:4px 0 18px; border:1px solid var(--line);" />
-
-        <div class="profileCard" id="lfBgSourceCard" style="display:none;">
-          <div class="cBody">
-            <div class="cLabel">Background</div>
-            <div style="display:flex; gap:8px; margin-top:8px;">
-              <button type="button" class="lfBgSourceBtn active" id="lfBgSourceMine" style="flex:1; padding:10px; border-radius:10px; border:1px solid var(--line); background:transparent; color:#fff; font:inherit;">My camera</button>
-              <button type="button" class="lfBgSourceBtn" id="lfBgSourceRef" style="flex:1; padding:10px; border-radius:10px; border:1px solid var(--line); background:transparent; color:#fff; font:inherit;">Reference photo</button>
-            </div>
-            <p class="hint" style="margin:8px 0 0;">My camera keeps your real surroundings and only applies the prompt below. Reference photo swaps in that photo's background/character instead.</p>
-          </div>
-        </div>
-
-        <div class="profileCard">
-          <div class="cBody">
-            <div class="cLabel">Prompt (optional)</div>
-            <textarea class="cSelect" id="lfPrompt" rows="3" style="width:100%; resize:vertical; background:transparent; border:0; color:#fff; font:inherit; padding:0;" placeholder="e.g. Change the background to a sunlit tropical beach — leave blank to just use the reference photo"></textarea>
-          </div>
-        </div>
-
-        <p class="hint" id="lfKeyHint" style="margin:14px 0 0; display:none;">Add your API key in <b>Profile → API</b> first.</p>
-        <button class="saveKeyBtn" id="lfStartBtn" style="margin-top:18px;">Start Live Swap</button>
-        <p class="hint" id="lfStartStatus" style="margin:8px 0 0; min-height:16px;"></p>
       </div>
     </div>
 
