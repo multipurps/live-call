@@ -1294,6 +1294,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       throw new Error(msg);
     }
     const token = await r.text();
+    if (!token || token.trim().startsWith('{')) {
+      const msg = `Server returned 200 but body isn't a token (looks like JSON): ${token.slice(0, 300)}`;
+      lfDebug(msg);
+      throw new Error(msg);
+    }
     lfDebug(`got token for app "${app}", length: ${token?.length}, prefix: ${token?.slice(0, 12)}…`);
     return token;
   }

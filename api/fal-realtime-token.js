@@ -46,7 +46,13 @@ export default async function handler(req, res) {
       const detail = data.error || data.message || data.detail || raw || 'no response body';
       const detailStr = typeof detail === 'string' ? detail : JSON.stringify(detail);
       console.error(`[fal-realtime-token] ${resp.status} from Fal. key=${keyFingerprint} app=${app} detail=${detailStr}`);
-      return res.status(resp.status || 500).json({
+      // resp.ok being true but data.token missing means Fal replied 2xx with
+      // an unexpected body shape - that's still an error on our end and must
+      // never be forwarded as a 2xx, or the browser's `!r.ok` check will miss
+      // it entirely and hand the error JSON to the fal client as if it were
+      // a real token (silent, unexplained connection failure downstream).
+      const statusToSend = resp.ok ? 502 : (resp.status || 500);
+      return res.status(statusToSend).json({
         error: `Fal returned ${resp.status}: ${detailStr}`,
         keyFingerprint,
         app,
