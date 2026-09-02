@@ -1343,9 +1343,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       // instead of hanging on "Connecting…" forever.
       lfConnectTimer = setTimeout(() => {
         if (!lfGotIceServers) {
-          lfStatus.textContent = 'Timed out waiting for Fal — no response after 15s. Check Profile → API Fal key, and Fal dashboard → Logs.';
+          lfStatus.textContent = 'Timed out waiting for Fal — no response after 45s. Check Profile → API Fal key, and Fal dashboard → Logs.';
         }
-      }, 15000);
+      }, 45000);
 
       // Only the initial prompt/reference-image payload goes through the Fal
       // relay here - the actual WebRTC offer is sent once `handleLfResult`
