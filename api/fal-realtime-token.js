@@ -39,10 +39,12 @@ export default async function handler(req, res) {
         ? `${falKey.slice(0, 4)}…${falKey.slice(-4)} (${falKey.length} chars)`
         : `(${falKey.length} chars)`;
       const detail = data.error || data.message || data.detail || raw || 'no response body';
-      console.error(`[fal-realtime-token] ${resp.status} from Fal. key=${keyFingerprint} detail=${detail}`);
+      const detailStr = typeof detail === 'string' ? detail : JSON.stringify(detail);
+      console.error(`[fal-realtime-token] ${resp.status} from Fal. key=${keyFingerprint} app=${app} detail=${detailStr}`);
       return res.status(resp.status || 500).json({
-        error: `Fal returned ${resp.status}: ${detail}`,
+        error: `Fal returned ${resp.status}: ${detailStr}`,
         keyFingerprint,
+        app,
       });
     }
     res.setHeader('Content-Type', 'text/plain');
