@@ -1147,12 +1147,98 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   const lfCallScreen = $('lfCallScreen'), lfIdle = $('lfIdle'), lfStatus = $('lfStatus'), lfBottom = $('lfBottom');
   const lfRemoteVideo = $('lfRemoteVideo'), lfLiveDot = $('lfLiveDot');
-  let lfConnection = null, lfLocalStream = null;
+  let lfConnection = null, lfLocalStream = null, lfPc = null;
+
+  // Fal's `fal.realtime.connect` client is only a signaling *relay* for this
+  // model (and its VTON sibling) - it does not open the WebRTC peer connection
+  // for you. `onResult` delivers the raw signaling messages Decart's realtime
+  // service sends back (iceServers, sdp offer/answer, ice candidates,
+  // ice-restart, prompt/image acks, errors), and the app is expected to build
+  // its own RTCPeerConnection, attach the local camera track, exchange
+  // SDP/ICE via `connection.send(...)`, and render the incoming remote track
+  // into a <video> itself. There is no `stream`/`outputVideo` shorthand for
+  // this endpoint - that only exists on Decart's native SDK, not @fal-ai/client.
+  // Source: fal.ai/models/decart/lucy2-vton/realtime (same signaling shape
+  // documented for decart/lucy-2-5/realtime).
+  async function handleLfResult(result){
+    switch (result.type) {
+      case 'iceservers':
+      case 'iceServers': {
+        const servers = (result.iceservers || result.iceServers || result.ice_servers || [])
+          .map((s) => ({ urls: s.urls, username: s.username, credential: s.credential }));
+
+        lfPc = new RTCPeerConnection({ iceServers: servers });
+        lfLocalStream.getTracks().forEach((track) => lfPc.addTrack(track, lfLocalStream));
+
+        lfPc.ontrack = (e) => {
+          lfRemoteVideo.srcObject = e.streams[0];
+          if (lfRemoteVideo.style.display !== 'block') {
+            lfRemoteVideo.style.display = 'block';
+            lfIdle.style.display = 'none';
+            lfLiveDot.classList.add('live');
+            lfBottom.classList.remove('hidden');
+          }
+        };
+
+        lfPc.onicecandidate = (e) => {
+          if (e.candidate) {
+            lfConnection.send({
+              type: 'icecandidate',
+              candidate: {
+                candidate: e.candidate.candidate,
+                sdpMid: e.candidate.sdpMid,
+                sdpMLineIndex: e.candidate.sdpMLineIndex,
+              },
+            });
+          }
+        };
+
+        const offer = await lfPc.createOffer();
+        await lfPc.setLocalDescription(offer);
+        lfConnection.send({ type: 'offer', sdp: offer.sdp });
+        break;
+      }
+      case 'answer':
+        if (lfPc) await lfPc.setRemoteDescription({ type: 'answer', sdp: result.sdp });
+        break;
+      case 'icecandidate':
+        if (lfPc) await lfPc.addIceCandidate(new RTCIceCandidate(result.candidate));
+        break;
+      case 'ice-restart':
+        if (result.turn_config && lfPc) {
+          lfPc.setConfiguration({
+            iceServers: [
+              { urls: 'stun:stun.l.google.com:19302' },
+              {
+                urls: result.turn_config.server_url,
+                username: result.turn_config.username,
+                credential: result.turn_config.credential,
+              },
+            ],
+          });
+          const offer = await lfPc.createOffer({ iceRestart: true });
+          await lfPc.setLocalDescription(offer);
+          lfConnection.send({ type: 'offer', sdp: offer.sdp });
+        }
+        break;
+      case 'prompt_ack':
+        if (!result.success) console.error('Prompt failed:', result.error);
+        break;
+      case 'set_image_ack':
+        if (!result.success) console.error('Image failed:', result.error);
+        break;
+      case 'generation_started':
+        break;
+      case 'error':
+        console.error('Fal realtime server error:', result.error);
+        lfStatus.textContent = 'Connection error — check your Fal key/credits';
+        break;
+    }
+  }
 
   async function startLiveFilter(){
     if (!state.falKeySet) { updateLfKeyHint(); return; }
     const prompt = $('lfPrompt').value.trim();
-    if (!prompt) { $('lfStartStatus').textContent = 'Describe what you want the filter to do first.'; return; }
     $('lfStartStatus').textContent = '';
 
     $('liveFilterScreen').classList.remove('active');
@@ -1184,30 +1270,20 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
           return await r.text();
         },
         tokenExpirationSeconds: 120,
-        onResult: () => {
-          if (lfRemoteVideo.style.display !== 'block') {
-            lfRemoteVideo.style.display = 'block';
-            lfIdle.style.display = 'none';
-            lfLiveDot.classList.add('live');
-            lfBottom.classList.remove('hidden');
-          }
-        },
+        onResult: handleLfResult,
         onError: (err) => {
           console.error('Fal realtime error:', err);
           lfStatus.textContent = 'Connection error — check your Fal key/credits';
         },
       });
 
-      // `stream` (the local camera MediaStream) and `outputVideo` (the id of the
-      // <video> to render into) are the client's convenience wiring for
-      // WebRTC-backed realtime models - documented for Lucy's sibling VTON
-      // model. If Fal changes this shape, check fal.ai/models/decart/lucy-2-5/realtime/api.
+      // Only the initial prompt/reference-image payload goes through the Fal
+      // relay here - the actual WebRTC offer is sent once `handleLfResult`
+      // receives the `iceservers` message above.
       lfConnection.send({
-        prompt,
+        prompt: prompt || undefined,
         reference_image_url: lfReferenceImageUrl || undefined,
         enable_prompt_expansion: true,
-        stream: lfLocalStream,
-        outputVideo: 'lfRemoteVideo',
       });
     } catch (e) {
       lfStatus.textContent = 'Failed to start: ' + (e.message || e);
@@ -1215,6 +1291,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   }
 
   function endLiveFilter(){
+    if (lfPc) { try { lfPc.close(); } catch(e){} lfPc = null; }
     if (lfConnection) { try { lfConnection.close ? lfConnection.close() : lfConnection.send({ close: true }); } catch(e){} lfConnection = null; }
     if (lfLocalStream) { lfLocalStream.getTracks().forEach(t => t.stop()); lfLocalStream = null; }
     lfRemoteVideo.srcObject = null;
