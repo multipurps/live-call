@@ -33,17 +33,21 @@ export default async function handler(req, res) {
       body: JSON.stringify({ app, allowed_apps: [app], duration: 120 }),
     });
     const raw = await resp.text();
-    let data = {};
-    try { data = JSON.parse(raw); } catch (e) { /* not JSON - raw is shown below */ }
+    let data = null;
+    try { data = JSON.parse(raw); } catch (e) { /* not JSON - Fal returns the raw JWT as plain text on success, not wrapped in {token: ...} */ }
 
-    if (!resp.ok || !data.token) {
+    // Success case: Fal's real response is plain text (the JWT itself), not
+    // JSON - only fall back to data.token if the body did parse as JSON.
+    const token = data ? data.token : (resp.ok ? raw : null);
+
+    if (!resp.ok || !token) {
       // Masked key fingerprint (never the key itself) so a 401 can be
       // cross-checked against the exact key saved in Profile > API without
       // ever putting the plaintext key in a log or response.
       const keyFingerprint = falKey.length > 8
         ? `${falKey.slice(0, 4)}…${falKey.slice(-4)} (${falKey.length} chars)`
         : `(${falKey.length} chars)`;
-      const detail = data.error || data.message || data.detail || raw || 'no response body';
+      const detail = (data && (data.error || data.message || data.detail)) || raw || 'no response body';
       const detailStr = typeof detail === 'string' ? detail : JSON.stringify(detail);
       console.error(`[fal-realtime-token] ${resp.status} from Fal. key=${keyFingerprint} app=${app} detail=${detailStr}`);
       // resp.ok being true but data.token missing means Fal replied 2xx with
@@ -59,7 +63,7 @@ export default async function handler(req, res) {
       });
     }
     res.setHeader('Content-Type', 'text/plain');
-    return res.status(200).send(data.token);
+    return res.status(200).send(token);
   } catch (err) {
     return res.status(500).json({ error: err.message || String(err) });
   }
