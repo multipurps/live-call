@@ -33,12 +33,23 @@ export default async function handler(req, res) {
       body: JSON.stringify({ app, allowed_apps: [app], duration: 120 }),
     });
     const raw = await resp.text();
-    let data = null;
-    try { data = JSON.parse(raw); } catch (e) { /* not JSON - Fal returns the raw JWT as plain text on success, not wrapped in {token: ...} */ }
+    let parsed = null;
+    try { parsed = JSON.parse(raw); } catch (e) { /* truly plain text, not JSON at all */ }
 
-    // Success case: Fal's real response is plain text (the JWT itself), not
-    // JSON - only fall back to data.token if the body did parse as JSON.
-    const token = data ? data.token : (resp.ok ? raw : null);
+    // Fal's actual success shape is a JSON-encoded string (the raw body is
+    // `"eyJ...`" with real quote characters) - JSON.parse succeeds and hands
+    // back a plain JS string, not an object, so `.token` never applies here.
+    // Still also handle {token: "..."} and truly unquoted plain text, in
+    // case Fal's response shape varies.
+    let token = null;
+    if (typeof parsed === 'string') {
+      token = parsed;
+    } else if (parsed && typeof parsed === 'object' && parsed.token) {
+      token = parsed.token;
+    } else if (resp.ok && parsed === null) {
+      token = raw;
+    }
+    const data = (parsed && typeof parsed === 'object') ? parsed : null;
 
     if (!resp.ok || !token) {
       // Masked key fingerprint (never the key itself) so a 401 can be
