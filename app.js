@@ -337,15 +337,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     } catch (e) { adminDefaultChatBg = ''; }
   }
   function applyChatBg(){
-    const el = $('screenHome');
     const effectiveUrl = state.chatBgUrl === '__none__' ? '' : (state.chatBgUrl || adminDefaultChatBg);
-    if (effectiveUrl) {
-      el.style.backgroundImage = `linear-gradient(rgba(30,19,13,0.5), rgba(30,19,13,0.7)), url('${effectiveUrl}')`;
-      el.style.backgroundSize = 'cover';
-      el.style.backgroundPosition = 'center';
-    } else {
-      el.style.backgroundImage = '';
-    }
+    ['screenHome', 'screenFeatures'].forEach(id => {
+      const el = $(id);
+      if (!el) return;
+      if (effectiveUrl) {
+        el.style.backgroundImage = `linear-gradient(rgba(30,19,13,0.5), rgba(30,19,13,0.7)), url('${effectiveUrl}')`;
+        el.style.backgroundSize = 'cover';
+        el.style.backgroundPosition = 'center';
+      } else {
+        el.style.backgroundImage = '';
+      }
+    });
   }
 
   async function loadChatBgOptions(){
@@ -1111,7 +1114,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   // short-lived realtime token minted by /api/fal-realtime-token.
   let lfReferenceImageUrl = '';
   let lfUseReferenceBg = true; // default once a reference photo is added: use its background
-  let lfWallpapersLoaded = false;
 
   function setLfBgSource(useRef){
     lfUseReferenceBg = useRef;
@@ -1121,33 +1123,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     if (label) label.textContent = useRef ? 'Reference photo' : 'My camera';
   }
   $('lfBgSourceToggle')?.addEventListener('click', () => setLfBgSource(!lfUseReferenceBg));
-
-  async function loadLfBgOptions(){
-    const row = $('lfBgPickerRow');
-    if (!row) return;
-    const { data } = await supabase.from('chat_backgrounds').select('id,url').order('created_at', { ascending: false });
-    if (!data || !data.length) {
-      row.innerHTML = '<p class="hint" style="margin:0;">No wallpapers yet — add some under Avatar &rarr; Chat background first.</p>';
-      return;
-    }
-    row.innerHTML = data.map(bg => `<button class="chatBgThumb ${lfReferenceImageUrl === bg.url ? 'selected' : ''}" data-url="${bg.url}"><img src="${bg.url}" /></button>`).join('');
-    row.querySelectorAll('.chatBgThumb').forEach(btn => {
-      btn.addEventListener('click', () => {
-        lfReferenceImageUrl = btn.dataset.url;
-        row.querySelectorAll('.chatBgThumb').forEach(b => b.classList.toggle('selected', b === btn));
-        $('lfImagePreview').src = lfReferenceImageUrl;
-        $('lfImagePreview').style.display = 'block';
-        $('lfBgSourceCard').style.display = 'flex';
-        setLfBgSource(true);
-      });
-    });
-  }
-  $('lfPickWallpaperBtn')?.addEventListener('click', () => {
-    const row = $('lfBgPickerRow');
-    const showing = row.style.display === 'flex';
-    row.style.display = showing ? 'none' : 'flex';
-    if (!showing && !lfWallpapersLoaded) { lfWallpapersLoaded = true; loadLfBgOptions(); }
-  });
 
   // Mirrors every diagnostic line onto the on-screen log too, since the
   // person debugging this may only have their phone (no devtools/console
