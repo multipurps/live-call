@@ -1112,6 +1112,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   // short-lived realtime token minted by /api/fal-realtime-token.
   let lfReferenceImageUrl = '';
 
+  // Mirrors every diagnostic line onto the on-screen log too, since the
+  // person debugging this may only have their phone (no devtools/console
+  // access) - so a screenshot of the call screen has to be enough to see
+  // exactly which step got stuck.
+  function lfDebug(msg){
+    console.log('[LiveFilter]', msg);
+    const el = $('lfDebugLog');
+    if (!el) return;
+    const t = new Date().toISOString().slice(11, 19);
+    el.textContent += `[${t}] ${msg}\n`;
+  }
+
   function updateLfKeyHint(){
     $('lfKeyHint').style.display = state.falKeySet ? 'none' : 'block';
     $('lfStartBtn').disabled = !state.falKeySet;
@@ -1168,7 +1180,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     // Temporary: surface every message type Fal actually sends so a failed
     // connection tells us exactly which step it got stuck on, instead of
     // guessing again. Safe to trim once this is confirmed working end-to-end.
-    console.log('[LiveFilter] onResult:', result?.type, result);
+    lfDebug(`onResult: ${result?.type} ${JSON.stringify(result).slice(0, 200)}`);
 
     switch (result.type) {
       case 'iceservers':
@@ -1268,7 +1280,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   // reaches Fal at all - if this never resolves/rejects visibly, nothing
   // downstream ever gets a chance to open the actual WebSocket).
   async function fetchLfToken(app){
-    console.log('[LiveFilter] requesting token for app:', app);
+    lfDebug(`requesting token for app: ${app}`);
     const r = await fetch('/api/fal-realtime-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
@@ -1277,10 +1289,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
       const fp = body.keyFingerprint ? ` [key: ${body.keyFingerprint}]` : '';
-      throw new Error(`Token request failed (${r.status}) for app "${app}": ${body.error || 'no error message'}${fp}`);
+      const msg = `Token request failed (${r.status}) for app "${app}": ${body.error || 'no error message'}${fp}`;
+      lfDebug(msg);
+      throw new Error(msg);
     }
     const token = await r.text();
-    console.log('[LiveFilter] got token, length:', token?.length);
+    lfDebug(`got token for app "${app}", length: ${token?.length}, prefix: ${token?.slice(0, 12)}…`);
     return token;
   }
 
@@ -1296,6 +1310,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     lfLiveDot.classList.remove('live');
     lfGotIceServers = false;
     lfClearConnectTimer();
+    $('lfDebugLog').textContent = '';
+    lfDebug(`fal client version check: importing esm.sh/@fal-ai/client@latest`);
 
     try {
       lfLocalStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
@@ -1313,7 +1329,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       lfStatus.textContent = 'Requesting Fal token…';
       await fetchLfToken('decart/lucy-2-5/realtime');
     } catch (e) {
-      console.error('[LiveFilter] token fetch failed:', e);
+      lfDebug(`token fetch failed: ${e.message || e}`);
       lfStatus.textContent = 'Token error: ' + (e.message || e);
       return;
     }
@@ -1323,19 +1339,22 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       // Fal's realtime client - loaded from esm.sh the same way the Anam SDK
       // is above, so no build step / bundler is needed for this single-file app.
       const { fal } = await import('https://esm.sh/@fal-ai/client@latest');
+      lfDebug('fal client module loaded');
 
       lfConnection = fal.realtime.connect('decart/lucy-2-5/realtime', {
         connectionKey: `lf-${Date.now()}`,
         throttleInterval: 0,
-        tokenProvider: fetchLfToken,
+        tokenProvider: (app) => { lfDebug(`tokenProvider invoked by fal client with app="${app}"`); return fetchLfToken(app); },
         tokenExpirationSeconds: 120,
         onResult: handleLfResult,
         onError: (err) => {
           lfClearConnectTimer();
-          console.error('[LiveFilter] Fal realtime error:', err);
-          lfStatus.textContent = 'Connection error: ' + (err?.message || JSON.stringify(err) || 'unknown');
+          const msg = err?.message || (() => { try { return JSON.stringify(err); } catch { return String(err); } })();
+          lfDebug(`onError fired: ${msg}`);
+          lfStatus.textContent = 'Connection error: ' + msg;
         },
       });
+      lfDebug(`fal.realtime.connect() returned, connection object: ${lfConnection ? 'created' : 'null/undefined'}`);
 
       // If we never even get the `iceservers` message back, the WebSocket to
       // Fal itself is the problem (network/CSP/auth) rather than anything in
@@ -1343,6 +1362,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       // instead of hanging on "Connecting…" forever.
       lfConnectTimer = setTimeout(() => {
         if (!lfGotIceServers) {
+          lfDebug('45s elapsed, no iceservers/error/any message ever received from onResult or onError');
           lfStatus.textContent = 'Timed out waiting for Fal — no response after 45s. Check Profile → API Fal key, and Fal dashboard → Logs.';
         }
       }, 45000);
@@ -1355,11 +1375,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         reference_image_url: lfReferenceImageUrl || undefined,
         enable_prompt_expansion: true,
       };
-      console.log('[LiveFilter] sending initial payload:', payload);
+      lfDebug(`sending initial payload: ${JSON.stringify(payload)}`);
       lfConnection.send(payload);
+      lfDebug('initial payload sent, waiting for onResult/onError…');
     } catch (e) {
       lfClearConnectTimer();
-      console.error('[LiveFilter] failed to start:', e);
+      lfDebug(`failed to start (exception): ${e.message || e}`);
       lfStatus.textContent = 'Failed to start: ' + (e.message || e);
     }
   }
