@@ -461,6 +461,46 @@
     width:64px; height:64px; border-radius:50%;
     background:#ff3b30; display:flex; align-items:center; justify-content:center;
   }
+  /* -------- Live Filter fullscreen render (Fal.ai Lucy 2.5) --------
+     Mirrors #callScreen: full-bleed video, nothing else on screen once live,
+     tap anywhere outside the top pill / bottom controls to show or hide them. */
+  #lfCallScreen{
+    position:absolute; inset:0; height:var(--app-height, 100dvh); background:var(--coffee);
+    display:none; z-index:50;
+  }
+  #lfCallScreen.active{display:block;}
+  #lfRemoteVideo{
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit:cover; border:0; background:#000;
+  }
+  #lfIdle{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:10px; text-align:center; padding:0 32px;
+  }
+  #lfStatus{font-size:13px; color:var(--dim); min-height:16px;}
+  .pulseCircle{
+    width:64px; height:64px; border-radius:50%; margin-bottom:6px;
+    background:var(--coffee-light); border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center; color:#fff;
+    animation:callPulseAnim 1.8s ease-in-out infinite;
+  }
+  .pulseCircle svg{width:28px; height:28px;}
+  #lfTop{
+    position:absolute; left:0; right:0; top:0;
+    padding-top:max(env(safe-area-inset-top), 10px);
+    padding-left:14px; padding-right:14px;
+    display:flex; justify-content:flex-start;
+    transition:opacity 0.2s;
+  }
+  #lfTop.hidden{opacity:0; pointer-events:none;}
+  #lfBottom{
+    position:absolute; left:0; right:0; bottom:0;
+    padding-bottom:max(env(safe-area-inset-bottom), 18px);
+    display:flex; justify-content:center; align-items:center; gap:14px;
+    transition:opacity 0.2s;
+  }
+  #lfBottom.hidden{opacity:0; pointer-events:none;}
+
   #authScreen{
     position:absolute; inset:0; z-index:100; background:var(--coffee);
     height:var(--app-height, 100dvh);

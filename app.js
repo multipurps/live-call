@@ -113,7 +113,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   })();
 
 
-  const screens = { home: $('screenHome'), recent: $('screenRecent'), profile: $('screenProfile') };
+  const screens = { home: $('screenHome'), recent: $('screenRecent'), profile: $('screenProfile'), features: $('screenFeatures') };
   const tabBtns = document.querySelectorAll('.tabBtn');
   function moveTabGlider(name){
     const glider = $('tabGlider');
@@ -147,6 +147,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   $('openApiKeys').addEventListener('click', () => $('apiKeysScreen').classList.add('active'));
   $('closeApiKeys').addEventListener('click', () => $('apiKeysScreen').classList.remove('active'));
+  $('openLiveFilter').addEventListener('click', () => { $('liveFilterScreen').classList.add('active'); updateLfKeyHint(); });
+  $('closeLiveFilter').addEventListener('click', () => $('liveFilterScreen').classList.remove('active'));
 
   $('openChangePassword').addEventListener('click', () => $('changePasswordScreen').classList.add('active'));
   $('closeChangePassword').addEventListener('click', () => $('changePasswordScreen').classList.remove('active'));
@@ -249,6 +251,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     // Vault and never leave the server after the moment they're first saved (see
     // /api/keys.js, /lib/keys.js). Populated by loadKeyStatus() below.
     anamKeySet: false,
+    falKeySet: false,
   };
   let currentUser = null;
   let currentChatId = null;
@@ -284,8 +287,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       const data = await r.json();
       if (!r.ok) return;
       state.anamKeySet = !!data.anam;
+      state.falKeySet = !!data.fal;
     } catch (e) { /* leave as false - UI just shows "paste your key" */ }
     $('anamApiKey').placeholder = state.anamKeySet ? 'Key saved — enter a new one to replace' : 'Paste your Anam API key';
+    $('falApiKey').placeholder = state.falKeySet ? 'Key saved — enter a new one to replace' : 'Paste your Fal API key';
   }
 
   async function loadSettings(){
@@ -307,6 +312,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       await persist(); // first login — create the row
     }
     $('anamApiKey').value = '';
+    $('falApiKey').value = '';
     $('profileName').value = state.displayName;
     $('profileCountry').value = state.country;
     $('profileLanguage').value = state.language;
@@ -457,6 +463,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
   }
   $('saveAnamKey').addEventListener('click', () => saveProviderKey('anam', 'anamApiKey', 'saveAnamKey', () => { loadAnamAvatars(); loadAnamVoices(); }));
+  $('saveFalKey').addEventListener('click', () => saveProviderKey('fal', 'falApiKey', 'saveFalKey', () => updateLfKeyHint()));
   document.querySelectorAll('.eyeToggle').forEach(btn => {
     btn.addEventListener('click', () => {
       const input = $(btn.dataset.revealFor);
@@ -1096,6 +1103,133 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     if (e.target.closest('#callTop') || e.target.closest('#callBottom')) return;
     callBottom.classList.toggle('hidden');
     $('callTop').classList.toggle('hidden');
+  });
+
+  // ---------------------------------------------------------------- Live Filter (Fal.ai / Decart Lucy 2.5)
+  // Runs the user's camera through Fal's real-time video-to-video model over
+  // WebRTC. Uses the same per-user Vault key pattern as Anam (see /api/keys.js,
+  // /lib/keys.js) - the plaintext Fal key never reaches this client, only a
+  // short-lived realtime token minted by /api/fal-realtime-token.
+  let lfReferenceImageUrl = '';
+
+  function updateLfKeyHint(){
+    $('lfKeyHint').style.display = state.falKeySet ? 'none' : 'block';
+    $('lfStartBtn').disabled = !state.falKeySet;
+  }
+
+  $('openLfImageUpload').addEventListener('click', () => $('lfImageInput').click());
+  $('lfImageInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    const statusEl = $('lfImageStatus');
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      statusEl.textContent = 'Use a PNG, JPEG, or WEBP photo.'; return;
+    }
+    if (file.size > 4.5 * 1024 * 1024) {
+      statusEl.textContent = 'Photo is too large — 4.5MB max.'; return;
+    }
+    try {
+      statusEl.textContent = 'Uploading…';
+      const ext = file.type.split('/')[1];
+      const path = `${currentUser.id}/live-filter/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from('user-uploads').upload(path, file, { contentType: file.type, upsert: true });
+      if (upErr) { statusEl.textContent = 'Upload failed: ' + upErr.message; return; }
+      const { data: pub } = supabase.storage.from('user-uploads').getPublicUrl(path);
+      lfReferenceImageUrl = pub.publicUrl;
+      $('lfImagePreview').src = lfReferenceImageUrl;
+      $('lfImagePreview').style.display = 'block';
+      statusEl.textContent = 'Reference photo added';
+    } catch (e) {
+      statusEl.textContent = 'Upload failed: ' + (e.message || e);
+    }
+  });
+
+  const lfCallScreen = $('lfCallScreen'), lfIdle = $('lfIdle'), lfStatus = $('lfStatus'), lfBottom = $('lfBottom');
+  const lfRemoteVideo = $('lfRemoteVideo'), lfLiveDot = $('lfLiveDot');
+  let lfConnection = null, lfLocalStream = null;
+
+  async function startLiveFilter(){
+    if (!state.falKeySet) { updateLfKeyHint(); return; }
+    const prompt = $('lfPrompt').value.trim();
+    if (!prompt) { $('lfStartStatus').textContent = 'Describe what you want the filter to do first.'; return; }
+    $('lfStartStatus').textContent = '';
+
+    $('liveFilterScreen').classList.remove('active');
+    lfCallScreen.classList.add('active');
+    lfIdle.style.display = 'flex';
+    lfStatus.textContent = 'Connecting…';
+    lfLiveDot.classList.remove('live');
+
+    try {
+      lfLocalStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+    } catch (e) {
+      lfStatus.textContent = 'Camera permission is required';
+      return;
+    }
+
+    try {
+      // Fal's realtime client - loaded from esm.sh the same way the Anam SDK
+      // is above, so no build step / bundler is needed for this single-file app.
+      const { fal } = await import('https://esm.sh/@fal-ai/client@latest');
+
+      lfConnection = fal.realtime.connect('decart/lucy-2-5/realtime', {
+        tokenProvider: async (app) => {
+          const r = await fetch('/api/fal-realtime-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+            body: JSON.stringify({ app }),
+          });
+          if (!r.ok) throw new Error((await r.json()).error || 'Token request failed');
+          return await r.text();
+        },
+        tokenExpirationSeconds: 120,
+        onResult: () => {
+          if (lfRemoteVideo.style.display !== 'block') {
+            lfRemoteVideo.style.display = 'block';
+            lfIdle.style.display = 'none';
+            lfLiveDot.classList.add('live');
+            lfBottom.classList.remove('hidden');
+          }
+        },
+        onError: (err) => {
+          console.error('Fal realtime error:', err);
+          lfStatus.textContent = 'Connection error — check your Fal key/credits';
+        },
+      });
+
+      // `stream` (the local camera MediaStream) and `outputVideo` (the id of the
+      // <video> to render into) are the client's convenience wiring for
+      // WebRTC-backed realtime models - documented for Lucy's sibling VTON
+      // model. If Fal changes this shape, check fal.ai/models/decart/lucy-2-5/realtime/api.
+      lfConnection.send({
+        prompt,
+        reference_image_url: lfReferenceImageUrl || undefined,
+        enable_prompt_expansion: true,
+        stream: lfLocalStream,
+        outputVideo: 'lfRemoteVideo',
+      });
+    } catch (e) {
+      lfStatus.textContent = 'Failed to start: ' + (e.message || e);
+    }
+  }
+
+  function endLiveFilter(){
+    if (lfConnection) { try { lfConnection.close ? lfConnection.close() : lfConnection.send({ close: true }); } catch(e){} lfConnection = null; }
+    if (lfLocalStream) { lfLocalStream.getTracks().forEach(t => t.stop()); lfLocalStream = null; }
+    lfRemoteVideo.srcObject = null;
+    lfRemoteVideo.style.display = 'none';
+    lfLiveDot.classList.remove('live');
+    lfBottom.classList.add('hidden');
+    lfCallScreen.classList.remove('active');
+  }
+
+  $('lfStartBtn').addEventListener('click', startLiveFilter);
+  $('lfEndBtn').addEventListener('click', endLiveFilter);
+  lfCallScreen.addEventListener('click', (e) => {
+    if (e.target.closest('#lfTop') || e.target.closest('#lfBottom')) return;
+    lfBottom.classList.toggle('hidden');
+    $('lfTop').classList.toggle('hidden');
   });
 
   let muted = false;

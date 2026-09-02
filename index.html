@@ -84,6 +84,10 @@
     <svg viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M6.75 6.5C6.75 3.6005 9.1005 1.25 12 1.25C14.8995 1.25 17.25 3.6005 17.25 6.5C17.25 9.3995 14.8995 11.75 12 11.75C9.1005 11.75 6.75 9.3995 6.75 6.5Z" fill="currentColor"/><path fill-rule="evenodd" clip-rule="evenodd" d="M4.25 18.5714C4.25 15.6325 6.63249 13.25 9.57143 13.25H14.4286C17.3675 13.25 19.75 15.6325 19.75 18.5714C19.75 20.8792 17.8792 22.75 15.5714 22.75H8.42857C6.12081 22.75 4.25 20.8792 4.25 18.5714Z" fill="currentColor"/></svg>
     Profile
   </button>
+  <button class="tabBtn" data-tab="features">
+    <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="#000000"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="m 13.265625 10.476562 l 2.1875 -2.476562 h 0.546875 v 5.003906 h -0.535156 z m -6.265625 -3.476562 h 5 c 0.554688 0 1 0.445312 1 1 v 5 c 0 0.554688 -0.445312 1 -1 1 h -5 c -0.554688 0 -1 -0.445312 -1 -1 v -5 c 0 -0.554688 0.445312 -1 1 -1 z m 0 0" fill="#2e3436"></path> <path d="m 4 1.996094 c -0.554688 0 -1 0.445312 -1 1 v 5.007812 c 0 0.550782 0.445312 1 1 1 h 0.996094 v -1.003906 c 0 -1.050781 0.953125 -2.007812 2.003906 -2.003906 h 3 v -3 c 0 -0.554688 -0.445312 -1 -1 -1 z m -4 1.007812 v 5.003906 h 0.480469 l 2.253906 -2.585937 l -2.125 -2.417969 z m 0 0" fill="#2e3434" fill-opacity="0.34902"></path> </g></svg>
+    Features
+  </button>
 </div>
 
 <div id="app">
@@ -248,6 +252,16 @@
       </div>
     </div>
 
+    <div class="screen" id="screenFeatures">
+      <h1 class="pageTitle">Features</h1>
+      <div class="sectionLabel">Live</div>
+      <div class="profileCard navRow" id="openLiveFilter">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 8v8l6-4-6-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><rect x="3" y="6" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.8"/></svg></div>
+        <div class="cBody"><div class="cValue">Live Filter</div><div class="hint" style="margin:2px 0 0;">Real-time AI video effects on your camera</div></div>
+        <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+    </div>
+
     <div id="notificationsScreen" class="subScreen">
       <div class="subScreenHeader">
         <button class="backBtn" id="closeNotifications" aria-label="Back">
@@ -306,6 +320,22 @@
         <button class="saveKeyBtn" id="saveAnamKey">Save Anam key</button>
         <p class="hint" id="anamKeyStatus" style="margin:8px 0 4px; min-height:16px;"></p>
         <p class="hint" style="margin:0 0 18px;">Get this from your Anam dashboard at <a href="https://lab.anam.ai/api-keys" target="_blank" rel="noopener" style="color:inherit; text-decoration:underline;">lab.anam.ai/api-keys</a> — opens in your browser, not inside this app, so paste it back here after copying.</p>
+
+        <div class="profileCard">
+          <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="cBody">
+            <div class="cLabel">Fal API key</div>
+            <div class="cInputRow">
+              <input class="keyInput" id="falApiKey" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore name="fal-key-field" placeholder="Paste your Fal API key" />
+            </div>
+          </div>
+          <button class="eyeToggle" type="button" data-reveal-for="falApiKey" aria-label="Show key">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/></svg>
+          </button>
+        </div>
+        <button class="saveKeyBtn" id="saveFalKey">Save Fal key</button>
+        <p class="hint" id="falKeyStatus" style="margin:8px 0 4px; min-height:16px;"></p>
+        <p class="hint" style="margin:0 0 18px;">Used for the Live Filter feature (real-time video effects). Get a key from your Fal dashboard at <a href="https://fal.ai/dashboard/keys" target="_blank" rel="noopener" style="color:inherit; text-decoration:underline;">fal.ai/dashboard/keys</a> — opens in your browser, not inside this app, so paste it back here after copying.</p>
       </div>
     </div>
 
@@ -387,6 +417,37 @@
       </div>
     </div>
 
+    <div id="liveFilterScreen" class="subScreen">
+      <div class="subScreenHeader">
+        <button class="backBtn" id="closeLiveFilter" aria-label="Back">
+          <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="subScreenTitle">Live Filter</div>
+      </div>
+      <div class="subScreenBody">
+        <p class="hint" style="margin:0 0 16px; text-align:left;">Runs your camera through Fal.ai's Lucy 2.5 model in real time — restyle the scene, swap backgrounds, or turn yourself into a reference character.</p>
+
+        <div class="profileCard navRow" id="openLfImageUpload">
+          <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 8a2 2 0 0 1 2-2h1.5l1-1.5h7l1 1.5H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.2" stroke="currentColor" stroke-width="1.8"/></svg></div>
+          <div class="cBody"><div class="cValue">Reference picture (optional)</div><div class="hint" id="lfImageStatus" style="margin:2px 0 0;">Add a photo to swap yourself for it, or an outfit/product image</div></div>
+          <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <input type="file" id="lfImageInput" accept="image/png,image/jpeg,image/webp" style="display:none;" />
+        <img id="lfImagePreview" style="display:none; width:100%; max-width:220px; border-radius:14px; margin:4px 0 18px; border:1px solid var(--line);" />
+
+        <div class="profileCard">
+          <div class="cBody">
+            <div class="cLabel">Prompt</div>
+            <textarea class="cSelect" id="lfPrompt" rows="3" style="width:100%; resize:vertical; background:transparent; border:0; color:#fff; font:inherit; padding:0;" placeholder="e.g. Change the background to a sunlit tropical beach"></textarea>
+          </div>
+        </div>
+
+        <p class="hint" id="lfKeyHint" style="margin:14px 0 0; display:none;">Add your Fal API key in <b>Profile → API</b> first.</p>
+        <button class="saveKeyBtn" id="lfStartBtn" style="margin-top:18px;">Start Live Filter</button>
+        <p class="hint" id="lfStartStatus" style="margin:8px 0 0; min-height:16px;"></p>
+      </div>
+    </div>
+
     <div id="infoScreen" class="subScreen">
       <div class="subScreenHeader">
         <button class="backBtn" id="closeInfo" aria-label="Back">
@@ -420,6 +481,9 @@
         <svg id="tabProfileDefault" viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M6.75 6.5C6.75 3.6005 9.1005 1.25 12 1.25C14.8995 1.25 17.25 3.6005 17.25 6.5C17.25 9.3995 14.8995 11.75 12 11.75C9.1005 11.75 6.75 9.3995 6.75 6.5Z" fill="currentColor"/><path fill-rule="evenodd" clip-rule="evenodd" d="M4.25 18.5714C4.25 15.6325 6.63249 13.25 9.57143 13.25H14.4286C17.3675 13.25 19.75 15.6325 19.75 18.5714C19.75 20.8792 17.8792 22.75 15.5714 22.75H8.42857C6.12081 22.75 4.25 20.8792 4.25 18.5714Z" fill="currentColor"/></svg>
       </span>
     </button>
+    <button class="tabBtn" data-tab="features" aria-label="Features">
+      <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="#000000"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="m 13.265625 10.476562 l 2.1875 -2.476562 h 0.546875 v 5.003906 h -0.535156 z m -6.265625 -3.476562 h 5 c 0.554688 0 1 0.445312 1 1 v 5 c 0 0.554688 -0.445312 1 -1 1 h -5 c -0.554688 0 -1 -0.445312 -1 -1 v -5 c 0 -0.554688 0.445312 -1 1 -1 z m 0 0" fill="#2e3436"></path> <path d="m 4 1.996094 c -0.554688 0 -1 0.445312 -1 1 v 5.007812 c 0 0.550782 0.445312 1 1 1 h 0.996094 v -1.003906 c 0 -1.050781 0.953125 -2.007812 2.003906 -2.003906 h 3 v -3 c 0 -0.554688 -0.445312 -1 -1 -1 z m -4 1.007812 v 5.003906 h 0.480469 l 2.253906 -2.585937 l -2.125 -2.417969 z m 0 0" fill="#2e3434" fill-opacity="0.34902"></path> </g></svg>
+    </button>
   </div>
 </div>
 
@@ -443,6 +507,27 @@
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/></svg>
     </button>
     <button class="endBtn" id="endBtn" aria-label="End call">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M12 9c-2.5 0-4.9.5-7 1.4a1.5 1.5 0 0 0-.9 1.7l.6 2.5c.15.6.7 1 1.3 1 .2 0 .4 0 .6-.1l2-.8c.4-.15.7-.5.8-.9l.3-1.3c1.3-.3 2.7-.5 4.3-.5s3 .2 4.3.5l.3 1.3c.1.4.4.75.8.9l2 .8c.2.1.4.1.6.1.6 0 1.15-.4 1.3-1l.6-2.5a1.5 1.5 0 0 0-.9-1.7C16.9 9.5 14.5 9 12 9z"/></svg>
+    </button>
+  </div>
+</div>
+
+<div id="lfCallScreen">
+  <video id="lfRemoteVideo" autoplay playsinline muted style="display:none;"></video>
+
+  <div id="lfTop">
+    <div class="pill"><span class="dot" id="lfLiveDot"></span><span>Live</span></div>
+  </div>
+
+  <div id="lfIdle">
+    <div id="lfPulse" class="pulseCircle">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M15 8v8l6-4-6-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><rect x="3" y="6" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.8"/></svg>
+    </div>
+    <div id="lfStatus">Connecting…</div>
+  </div>
+
+  <div id="lfBottom" class="hidden">
+    <button class="endBtn" id="lfEndBtn" aria-label="End">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M12 9c-2.5 0-4.9.5-7 1.4a1.5 1.5 0 0 0-.9 1.7l.6 2.5c.15.6.7 1 1.3 1 .2 0 .4 0 .6-.1l2-.8c.4-.15.7-.5.8-.9l.3-1.3c1.3-.3 2.7-.5 4.3-.5s3 .2 4.3.5l.3 1.3c.1.4.4.75.8.9l2 .8c.2.1.4.1.6.1.6 0 1.15-.4 1.3-1l.6-2.5a1.5 1.5 0 0 0-.9-1.7C16.9 9.5 14.5 9 12 9z"/></svg>
     </button>
   </div>

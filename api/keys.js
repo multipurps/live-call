@@ -2,7 +2,7 @@ import { getServiceClient, getAuthedUserId } from '../lib/supabaseAdmin.js';
 import { getProviderKey, saveProviderKey } from '../lib/keys.js';
 import { HUMANIZER_DOC, HUMANIZER_DOC_FILENAME } from '../lib/humanizerDoc.js';
 
-const PROVIDERS = ['tavus', 'anam'];
+const PROVIDERS = ['tavus', 'anam', 'fal'];
 
 // Pushes the fixed persona reference doc into this user's own Anam Knowledge
 // base, using their own key. Runs once per user (tracked via
