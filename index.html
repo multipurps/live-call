@@ -254,12 +254,14 @@
 
     <div class="screen" id="screenFeatures">
       <h1 class="pageTitle">Live Swap</h1>
-      <p class="hint" style="margin:-6px 0 16px; text-align:left;">Swap your live camera in real time — take on a reference photo's look, or restyle your own background.</p>
+      <p class="hint" style="margin:-6px 0 16px; text-align:left;">Swap your live camera in <b><i>real time</i></b> — take on a reference photo's look, or restyle your own background.</p>
 
-      <div class="profileCard navRow" id="openLfImageUpload">
-        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 8a2 2 0 0 1 2-2h1.5l1-1.5h7l1 1.5H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.2" stroke="currentColor" stroke-width="1.8"/></svg></div>
-        <div class="cBody"><div class="cValue">Reference picture (optional)</div><div class="hint" id="lfImageStatus" style="margin:2px 0 0;">Add a photo to swap yourself for it, or an outfit/product image</div></div>
-        <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="lfHeroCard" id="openLfImageUpload">
+        <div class="lfHeroLabel">Reference picture <span>(optional)</span></div>
+        <div class="lfHeroIcon">
+          <svg viewBox="0 0 24 24" fill="none" width="34" height="34"><path d="M4 8a2 2 0 0 1 2-2h1.5l1-1.5h7l1 1.5H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.4" stroke="currentColor" stroke-width="1.6"/></svg>
+        </div>
+        <div class="hint" id="lfImageStatus" style="margin-top:4px;">Add a photo to swap yourself for it, or an outfit/product image</div>
       </div>
       <input type="file" id="lfImageInput" accept="image/png,image/jpeg,image/webp" style="display:none;" />
       <img id="lfImagePreview" style="display:none; width:100%; max-width:220px; border-radius:14px; margin:4px 0 18px; border:1px solid var(--line);" />
@@ -283,7 +285,7 @@
       </div>
 
       <p class="hint" id="lfKeyHint" style="margin:14px 0 0; display:none;">Add your API key in <b>Profile → API</b> first.</p>
-      <button class="saveKeyBtn" id="lfStartBtn" style="margin-top:18px;">Start Live Swap</button>
+      <button class="lfStartBtn" id="lfStartBtn" style="margin-top:18px;">Start Live Swap</button>
       <p class="hint" id="lfStartStatus" style="margin:8px 0 0; min-height:16px;"></p>
     </div>
 

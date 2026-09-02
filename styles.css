@@ -283,11 +283,32 @@
      background (var(--coffee)) - frosted/translucent rather than the flat
      --coffee-light fill .profileCard uses elsewhere, scoped here only so
      other screens keep their existing look. */
+  /* Live Swap screen (Features tab): a warmer, more premium look than the
+     app's default teal/green accent - scoped entirely to #screenFeatures so
+     no other screen's colors change. Still sits on the app's normal
+     background (var(--coffee)), just richer cards/typography on top of it. */
+  #screenFeatures{ --gold:#e0b84d; --gold-rgb:224,184,77; --gold-deep:#a97e2b; }
   #screenFeatures .profileCard{
     background:rgba(255,255,255,0.05);
     backdrop-filter:blur(24px) saturate(180%); -webkit-backdrop-filter:blur(24px) saturate(180%);
-    border:1px solid rgba(255,255,255,0.12);
-    box-shadow:0 8px 30px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08);
+    border:1px solid rgba(var(--gold-rgb),0.25);
+    box-shadow:0 8px 30px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+  .lfHeroCard{
+    display:flex; flex-direction:column; align-items:center; text-align:center;
+    gap:10px; padding:26px 20px; border-radius:20px; margin-bottom:12px; cursor:pointer;
+    background:rgba(255,255,255,0.05);
+    backdrop-filter:blur(24px) saturate(180%); -webkit-backdrop-filter:blur(24px) saturate(180%);
+    border:1px solid rgba(var(--gold-rgb),0.3);
+    box-shadow:0 8px 30px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.1);
+  }
+  .lfHeroLabel{font-size:15.5px; font-weight:650; color:#fff;}
+  .lfHeroLabel span{font-weight:500; color:var(--dim); font-size:14px;}
+  .lfHeroIcon{
+    width:64px; height:64px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    color:var(--gold);
+    background:radial-gradient(circle at 35% 30%, rgba(var(--gold-rgb),0.35), rgba(var(--gold-rgb),0.08));
+    border:1px solid rgba(var(--gold-rgb),0.4);
   }
   .lfBgSourceBtn{
     background:rgba(255,255,255,0.04);
@@ -295,9 +316,16 @@
     backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
   }
   .lfBgSourceBtn.active{
-    background:rgba(var(--accent-rgb),0.3);
-    border:1px solid rgba(var(--accent-rgb),0.55);
+    background:rgba(var(--gold-rgb),0.25);
+    border:1px solid rgba(var(--gold-rgb),0.55);
   }
+  .lfStartBtn{
+    width:100%; padding:15px; border-radius:16px; font-size:15px; font-weight:700; letter-spacing:0.01em;
+    color:#241a05; border:1px solid rgba(var(--gold-rgb),0.7);
+    background:linear-gradient(135deg, #f3d78a, var(--gold) 45%, var(--gold-deep));
+    box-shadow:0 10px 26px rgba(var(--gold-rgb),0.25), inset 0 1px 0 rgba(255,255,255,0.5);
+  }
+  .lfStartBtn:disabled{ opacity:0.5; }
   .profileCard{
     display:flex; align-items:center; gap:13px;
     background:var(--coffee-light); border-radius:20px; padding:15px 17px;
