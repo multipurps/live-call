@@ -145,14 +145,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   window.addEventListener('resize', () => moveTabGlider(document.querySelector('#tabBar .tabBtn.active')?.dataset.tab || 'home'));
   setTimeout(() => moveTabGlider('home'), 50);
 
-  $('openApiKeys').addEventListener('click', () => $('apiKeysScreen').classList.add('active'));
-  $('closeApiKeys').addEventListener('click', () => $('apiKeysScreen').classList.remove('active'));
-  $('openLiveFilter').addEventListener('click', () => { $('liveFilterScreen').classList.add('active'); updateLfKeyHint(); });
-  $('closeLiveFilter').addEventListener('click', () => $('liveFilterScreen').classList.remove('active'));
+  $('openApiKeys')?.addEventListener('click', () => $('apiKeysScreen').classList.add('active'));
+  $('closeApiKeys')?.addEventListener('click', () => $('apiKeysScreen').classList.remove('active'));
+  $('openLiveFilter')?.addEventListener('click', () => { $('liveFilterScreen').classList.add('active'); updateLfKeyHint(); });
+  $('closeLiveFilter')?.addEventListener('click', () => $('liveFilterScreen').classList.remove('active'));
 
-  $('openChangePassword').addEventListener('click', () => $('changePasswordScreen').classList.add('active'));
-  $('closeChangePassword').addEventListener('click', () => $('changePasswordScreen').classList.remove('active'));
-  $('changePasswordBtn').addEventListener('click', async () => {
+  $('openChangePassword')?.addEventListener('click', () => $('changePasswordScreen').classList.add('active'));
+  $('closeChangePassword')?.addEventListener('click', () => $('changePasswordScreen').classList.remove('active'));
+  $('changePasswordBtn')?.addEventListener('click', async () => {
     const p1 = $('newPassword1').value;
     const p2 = $('newPassword2').value;
     if (!p1 || p1.length < 6) { $('changePasswordHint').textContent = 'Password must be at least 6 characters.'; return; }
@@ -233,7 +233,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       $('infoScreen').classList.add('active');
     });
   });
-  $('closeInfo').addEventListener('click', () => $('infoScreen').classList.remove('active'));
+  $('closeInfo')?.addEventListener('click', () => $('infoScreen').classList.remove('active'));
 
   const state = {
     systemPrompt: '',
@@ -370,30 +370,30 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     });
   }
 
-  $('profileName').addEventListener('blur', async () => {
+  $('profileName')?.addEventListener('blur', async () => {
     state.displayName = $('profileName').value.trim();
     await persist();
     renderProfile();
   });
-  $('profileCountry').addEventListener('change', async () => {
+  $('profileCountry')?.addEventListener('change', async () => {
     state.country = $('profileCountry').value;
     await persist();
   });
-  $('profileLanguage').addEventListener('change', async () => {
+  $('profileLanguage')?.addEventListener('change', async () => {
     state.language = $('profileLanguage').value;
     await persist();
   });
   function applyTheme(){
     document.documentElement.setAttribute('data-theme', state.theme === 'coffee-emerald' ? '' : state.theme);
   }
-  $('profileTheme').addEventListener('change', async () => {
+  $('profileTheme')?.addEventListener('change', async () => {
     state.theme = $('profileTheme').value;
     applyTheme();
     await persist();
   });
 
-  $('notifBellBtn').addEventListener('click', () => { $('notificationsScreen').classList.add('active'); loadAnnouncements(); });
-  $('closeNotifications').addEventListener('click', () => $('notificationsScreen').classList.remove('active'));
+  $('notifBellBtn')?.addEventListener('click', () => { $('notificationsScreen').classList.add('active'); loadAnnouncements(); });
+  $('closeNotifications')?.addEventListener('click', () => $('notificationsScreen').classList.remove('active'));
 
   async function loadAnnouncements(){
     const { data } = await supabase.from('announcements').select('*').order('created_at', { ascending: false }).limit(30);
@@ -426,11 +426,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, 120) + 'px';
   }
-  $('briefInput').addEventListener('input', autoGrow);
-  $('briefInput').addEventListener('keydown', (e) => {
+  $('briefInput')?.addEventListener('input', autoGrow);
+  $('briefInput')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
   });
-  $('sendBtn').addEventListener('click', sendChatMessage);
+  $('sendBtn')?.addEventListener('click', sendChatMessage);
   async function saveProviderKey(provider, inputId, btnId, onSaved){
     const input = $(inputId);
     const val = input.value.trim();
@@ -462,8 +462,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       btn.textContent = originalText; btn.disabled = false;
     }
   }
-  $('saveAnamKey').addEventListener('click', () => saveProviderKey('anam', 'anamApiKey', 'saveAnamKey', () => { loadAnamAvatars(); loadAnamVoices(); }));
-  $('saveFalKey').addEventListener('click', () => saveProviderKey('fal', 'falApiKey', 'saveFalKey', () => updateLfKeyHint()));
+  $('saveAnamKey')?.addEventListener('click', () => saveProviderKey('anam', 'anamApiKey', 'saveAnamKey', () => { loadAnamAvatars(); loadAnamVoices(); }));
+  $('saveFalKey')?.addEventListener('click', () => saveProviderKey('fal', 'falApiKey', 'saveFalKey', () => updateLfKeyHint()));
   document.querySelectorAll('.eyeToggle').forEach(btn => {
     btn.addEventListener('click', () => {
       const input = $(btn.dataset.revealFor);
@@ -536,7 +536,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     $('homeHint').textContent = '';
     renderChatThread();
   }
-  $('newChatBtn').addEventListener('click', startNewChat);
+  $('newChatBtn')?.addEventListener('click', startNewChat);
 
 
   async function loadAnamAvatars(){
@@ -604,17 +604,17 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     $('anamAvatarSummary').textContent = parts.join(' · ') || 'Not set';
     $('avatarPhotoTips').style.display = state.anamAvatarId ? 'none' : 'flex';
   }
-  $('openAnamAvatarScreen').addEventListener('click', () => {
+  $('openAnamAvatarScreen')?.addEventListener('click', () => {
     $('anamAvatarScreen').classList.add('active');
     loadAnamAvatars();
     loadAnamVoices();
   });
-  $('closeAnamAvatarScreen').addEventListener('click', () => {
+  $('closeAnamAvatarScreen')?.addEventListener('click', () => {
     $('anamAvatarScreen').classList.remove('active');
     updateAnamAvatarSummary();
   });
 
-  $('anamAvatarMenuBtn').addEventListener('click', (e) => {
+  $('anamAvatarMenuBtn')?.addEventListener('click', (e) => {
     e.stopPropagation();
     if (!state.anamAvatarId) return;
     openActionMenu($('anamAvatarMenuBtn'), [{
@@ -636,7 +636,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }]);
   });
 
-  $('anamVoiceMenuBtn').addEventListener('click', (e) => {
+  $('anamVoiceMenuBtn')?.addEventListener('click', (e) => {
     e.stopPropagation();
     if (!state.anamVoiceId) return;
     openActionMenu($('anamVoiceMenuBtn'), [{
@@ -659,8 +659,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   });
 
   // ---------------------------------------------------------------- Anam custom avatar photo
-  $('openAvatarUpload').addEventListener('click', () => $('avatarPhotoInput').click());
-  $('avatarPhotoInput').addEventListener('change', async (e) => {
+  $('openAvatarUpload')?.addEventListener('click', () => $('avatarPhotoInput').click());
+  $('avatarPhotoInput')?.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     e.target.value = ''; // allow picking the same file again later
     if (!file) return;
@@ -708,7 +708,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     $('voiceRecordBtn').textContent = recording ? 'Stop' : 'Record';
   }
 
-  $('voiceRecordBtn').addEventListener('click', () => {
+  $('voiceRecordBtn')?.addEventListener('click', () => {
     if (voiceRecorder && voiceRecorder.state === 'recording') stopVoiceRecording();
     else startVoiceRecording();
   });
@@ -793,19 +793,19 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
   }
 
-  $('voicePreviewBtn').addEventListener('click', () => {
+  $('voicePreviewBtn')?.addEventListener('click', () => {
     const audioEl = $('voicePreviewAudio');
     const btn = $('voicePreviewBtn');
     if (!audioEl.src) return;
     if (!audioEl.paused) { audioEl.pause(); return; }
     audioEl.play().catch(() => {});
   });
-  $('voicePreviewAudio').addEventListener('play', () => { $('voicePreviewBtn').textContent = '❚❚'; });
-  $('voicePreviewAudio').addEventListener('pause', () => { $('voicePreviewBtn').textContent = '▶'; });
-  $('voicePreviewAudio').addEventListener('ended', () => { $('voicePreviewBtn').textContent = '▶'; });
+  $('voicePreviewAudio')?.addEventListener('play', () => { $('voicePreviewBtn').textContent = '❚❚'; });
+  $('voicePreviewAudio')?.addEventListener('pause', () => { $('voicePreviewBtn').textContent = '▶'; });
+  $('voicePreviewAudio')?.addEventListener('ended', () => { $('voicePreviewBtn').textContent = '▶'; });
 
-  $('voiceUploadBtn').addEventListener('click', () => $('voiceFileInput').click());
-  $('voiceFileInput').addEventListener('change', async (e) => {
+  $('voiceUploadBtn')?.addEventListener('click', () => $('voiceFileInput').click());
+  $('voiceFileInput')?.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     e.target.value = '';
     if (!file) return;
@@ -830,8 +830,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     updateTabBarAvatar();
   }
 
-  $('profilePhotoBtn').addEventListener('click', () => $('profilePhotoInput').click());
-  $('profilePhotoInput').addEventListener('change', async (e) => {
+  $('profilePhotoBtn')?.addEventListener('click', () => $('profilePhotoInput').click());
+  $('profilePhotoInput')?.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file || !currentUser) return;
     $('photoUploadHint').textContent = 'Uploading…';
@@ -1111,6 +1111,17 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   // /lib/keys.js) - the plaintext Fal key never reaches this client, only a
   // short-lived realtime token minted by /api/fal-realtime-token.
   let lfReferenceImageUrl = '';
+  let lfUseReferenceBg = true; // default once a reference photo is added: use its background
+
+  function setLfBgSource(useRef){
+    lfUseReferenceBg = useRef;
+    $('lfBgSourceMine')?.classList.toggle('active', !useRef);
+    $('lfBgSourceRef')?.classList.toggle('active', useRef);
+    $('lfBgSourceMine').style.background = useRef ? 'transparent' : 'var(--accent, #6b7a1f)';
+    $('lfBgSourceRef').style.background = useRef ? 'var(--accent, #6b7a1f)' : 'transparent';
+  }
+  $('lfBgSourceMine')?.addEventListener('click', () => setLfBgSource(false));
+  $('lfBgSourceRef')?.addEventListener('click', () => setLfBgSource(true));
 
   // Mirrors every diagnostic line onto the on-screen log too, since the
   // person debugging this may only have their phone (no devtools/console
@@ -1129,8 +1140,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     $('lfStartBtn').disabled = !state.falKeySet;
   }
 
-  $('openLfImageUpload').addEventListener('click', () => $('lfImageInput').click());
-  $('lfImageInput').addEventListener('change', async (e) => {
+  $('openLfImageUpload')?.addEventListener('click', () => $('lfImageInput').click());
+  $('lfImageInput')?.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     e.target.value = '';
     if (!file) return;
@@ -1151,6 +1162,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       lfReferenceImageUrl = pub.publicUrl;
       $('lfImagePreview').src = lfReferenceImageUrl;
       $('lfImagePreview').style.display = 'block';
+      $('lfBgSourceCard').style.display = 'block';
+      setLfBgSource(true);
       statusEl.textContent = 'Reference photo added';
     } catch (e) {
       statusEl.textContent = 'Upload failed: ' + (e.message || e);
@@ -1264,7 +1277,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       case 'error':
         lfClearConnectTimer();
         console.error('Fal realtime server error:', result.error);
-        lfStatus.textContent = 'Fal server error: ' + (result.error?.message || result.error || 'unknown');
+        lfStatus.textContent = 'Swap error: ' + (result.error?.message || result.error || 'unknown');
         break;
       default:
         // An unrecognized message type means Fal is sending something this
@@ -1331,7 +1344,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     // opens without a valid token) and points straight at /api/fal-realtime-token
     // or the saved Fal key rather than the WebRTC signaling logic.
     try {
-      lfStatus.textContent = 'Requesting Fal token…';
+      lfStatus.textContent = 'Connecting…';
       await fetchLfToken('decart/lucy-2-5/realtime');
     } catch (e) {
       lfDebug(`token fetch failed: ${e.message || e}`);
@@ -1368,7 +1381,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       lfConnectTimer = setTimeout(() => {
         if (!lfGotIceServers) {
           lfDebug('45s elapsed, no iceservers/error/any message ever received from onResult or onError');
-          lfStatus.textContent = 'Timed out waiting for Fal — no response after 45s. Check Profile → API Fal key, and Fal dashboard → Logs.';
+          lfStatus.textContent = 'Timed out — no response after 45s. Check your API key in Profile → API.';
         }
       }, 45000);
 
@@ -1377,7 +1390,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       // receives the `iceservers` message above.
       const payload = {
         prompt: prompt || undefined,
-        reference_image_url: lfReferenceImageUrl || undefined,
+        reference_image_url: (lfUseReferenceBg && lfReferenceImageUrl) || undefined,
         enable_prompt_expansion: true,
       };
       lfDebug(`sending initial payload: ${JSON.stringify(payload)}`);
@@ -1402,8 +1415,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     lfCallScreen.classList.remove('active');
   }
 
-  $('lfStartBtn').addEventListener('click', startLiveFilter);
-  $('lfEndBtn').addEventListener('click', endLiveFilter);
+  $('lfStartBtn')?.addEventListener('click', startLiveFilter);
+  $('lfEndBtn')?.addEventListener('click', endLiveFilter);
   lfCallScreen.addEventListener('click', (e) => {
     if (e.target.closest('#lfTop') || e.target.closest('#lfBottom')) return;
     lfBottom.classList.toggle('hidden');
@@ -1411,7 +1424,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   });
 
   let muted = false;
-  $('muteBtn').addEventListener('click', () => {
+  $('muteBtn')?.addEventListener('click', () => {
     muted = !muted;
     if (micStream) micStream.getAudioTracks().forEach(t => t.enabled = !muted);
     $('muteBtn').classList.toggle('muted', muted);
@@ -1420,21 +1433,21 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/></svg>';
   });
 
-  $('headerCallBtn').addEventListener('click', startCall);
-  $('endBtn').addEventListener('click', endCall);
+  $('headerCallBtn')?.addEventListener('click', startCall);
+  $('endBtn')?.addEventListener('click', endCall);
 
   // ---------- auth ----------
   const authScreen = $('authScreen');
   let authMode = 'signin';
 
-  $('authToggleMode').addEventListener('click', () => {
+  $('authToggleMode')?.addEventListener('click', () => {
     authMode = authMode === 'signin' ? 'signup' : 'signin';
     $('authSubmit').textContent = authMode === 'signin' ? 'Sign in' : 'Sign up';
     $('authToggleMode').innerHTML = authMode === 'signin' ? 'Need an account? <b>Sign up</b>' : 'Have an account? <b>Sign in</b>';
     $('authHint').textContent = '';
   });
 
-  $('authSubmit').addEventListener('click', async () => {
+  $('authSubmit')?.addEventListener('click', async () => {
     const email = $('authEmail').value.trim();
     const password = $('authPassword').value;
     if (!email || !password) { $('authHint').textContent = 'Enter an email and password.'; return; }
@@ -1446,14 +1459,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     if (authMode === 'signup') { $('authHint').textContent = 'Check your email to confirm, then wait for approval.'; }
   });
 
-  $('googleSignIn').addEventListener('click', async () => {
+  $('googleSignIn')?.addEventListener('click', async () => {
     await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
   });
 
-  $('signOutBtn').addEventListener('click', async () => {
+  $('signOutBtn')?.addEventListener('click', async () => {
     await supabase.auth.signOut();
   });
-  $('pendingSignOut').addEventListener('click', async () => {
+  $('pendingSignOut')?.addEventListener('click', async () => {
     await supabase.auth.signOut();
   });
 

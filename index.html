@@ -257,7 +257,7 @@
       <div class="sectionLabel">Live</div>
       <div class="profileCard navRow" id="openLiveFilter">
         <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 8v8l6-4-6-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><rect x="3" y="6" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.8"/></svg></div>
-        <div class="cBody"><div class="cValue">Live Filter</div><div class="hint" style="margin:2px 0 0;">Real-time AI video effects on your camera</div></div>
+        <div class="cBody"><div class="cValue">Live Swap</div><div class="hint" style="margin:2px 0 0;">Swap your face or background live, in real time</div></div>
         <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
     </div>
@@ -335,7 +335,7 @@
         </div>
         <button class="saveKeyBtn" id="saveFalKey">Save Fal key</button>
         <p class="hint" id="falKeyStatus" style="margin:8px 0 4px; min-height:16px;"></p>
-        <p class="hint" style="margin:0 0 18px;">Used for the Live Filter feature (real-time video effects). Get a key from your Fal dashboard at <a href="https://fal.ai/dashboard/keys" target="_blank" rel="noopener" style="color:inherit; text-decoration:underline;">fal.ai/dashboard/keys</a> — opens in your browser, not inside this app, so paste it back here after copying.</p>
+        <p class="hint" style="margin:0 0 18px;">Used for the Live Swap feature (real-time face/background swap). Get a key from your Fal dashboard at <a href="https://fal.ai/dashboard/keys" target="_blank" rel="noopener" style="color:inherit; text-decoration:underline;">fal.ai/dashboard/keys</a> — opens in your browser, not inside this app, so paste it back here after copying.</p>
       </div>
     </div>
 
@@ -422,10 +422,10 @@
         <button class="backBtn" id="closeLiveFilter" aria-label="Back">
           <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
-        <div class="subScreenTitle">Live Filter</div>
+        <div class="subScreenTitle">Live Swap</div>
       </div>
       <div class="subScreenBody">
-        <p class="hint" style="margin:0 0 16px; text-align:left;">Runs your camera through Fal.ai's Lucy 2.5 model in real time — restyle the scene, swap backgrounds, or turn yourself into a reference character.</p>
+        <p class="hint" style="margin:0 0 16px; text-align:left;">Swap your live camera in real time — take on a reference photo's look, or restyle your own background.</p>
 
         <div class="profileCard navRow" id="openLfImageUpload">
           <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M4 8a2 2 0 0 1 2-2h1.5l1-1.5h7l1 1.5H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.2" stroke="currentColor" stroke-width="1.8"/></svg></div>
@@ -435,6 +435,17 @@
         <input type="file" id="lfImageInput" accept="image/png,image/jpeg,image/webp" style="display:none;" />
         <img id="lfImagePreview" style="display:none; width:100%; max-width:220px; border-radius:14px; margin:4px 0 18px; border:1px solid var(--line);" />
 
+        <div class="profileCard" id="lfBgSourceCard" style="display:none;">
+          <div class="cBody">
+            <div class="cLabel">Background</div>
+            <div style="display:flex; gap:8px; margin-top:8px;">
+              <button type="button" class="lfBgSourceBtn active" id="lfBgSourceMine" style="flex:1; padding:10px; border-radius:10px; border:1px solid var(--line); background:transparent; color:#fff; font:inherit;">My camera</button>
+              <button type="button" class="lfBgSourceBtn" id="lfBgSourceRef" style="flex:1; padding:10px; border-radius:10px; border:1px solid var(--line); background:transparent; color:#fff; font:inherit;">Reference photo</button>
+            </div>
+            <p class="hint" style="margin:8px 0 0;">My camera keeps your real surroundings and only applies the prompt below. Reference photo swaps in that photo's background/character instead.</p>
+          </div>
+        </div>
+
         <div class="profileCard">
           <div class="cBody">
             <div class="cLabel">Prompt (optional)</div>
@@ -442,8 +453,8 @@
           </div>
         </div>
 
-        <p class="hint" id="lfKeyHint" style="margin:14px 0 0; display:none;">Add your Fal API key in <b>Profile → API</b> first.</p>
-        <button class="saveKeyBtn" id="lfStartBtn" style="margin-top:18px;">Start Live Filter</button>
+        <p class="hint" id="lfKeyHint" style="margin:14px 0 0; display:none;">Add your API key in <b>Profile → API</b> first.</p>
+        <button class="saveKeyBtn" id="lfStartBtn" style="margin-top:18px;">Start Live Swap</button>
         <p class="hint" id="lfStartStatus" style="margin:8px 0 0; min-height:16px;"></p>
       </div>
     </div>
@@ -475,8 +486,8 @@
     <button class="tabBtn" data-tab="recent" aria-label="Recent">
       <svg viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M22 12c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2s10 4.477 10 10zm-4.581 3.324a1 1 0 0 0-.525-1.313L13 12.341V6.5a1 1 0 0 0-2 0v6.17c0 .6.357 1.143.909 1.379l4.197 1.8a1 1 0 0 0 1.313-.525z" fill="currentColor"/></svg>
     </button>
-    <button class="tabBtn" data-tab="features" aria-label="Features">
-      <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" fill="#000000"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="m 13.265625 10.476562 l 2.1875 -2.476562 h 0.546875 v 5.003906 h -0.535156 z m -6.265625 -3.476562 h 5 c 0.554688 0 1 0.445312 1 1 v 5 c 0 0.554688 -0.445312 1 -1 1 h -5 c -0.554688 0 -1 -0.445312 -1 -1 v -5 c 0 -0.554688 0.445312 -1 1 -1 z m 0 0" fill="#2e3436"></path> <path d="m 4 1.996094 c -0.554688 0 -1 0.445312 -1 1 v 5.007812 c 0 0.550782 0.445312 1 1 1 h 0.996094 v -1.003906 c 0 -1.050781 0.953125 -2.007812 2.003906 -2.003906 h 3 v -3 c 0 -0.554688 -0.445312 -1 -1 -1 z m -4 1.007812 v 5.003906 h 0.480469 l 2.253906 -2.585937 l -2.125 -2.417969 z m 0 0" fill="#2e3434" fill-opacity="0.34902"></path> </g></svg>
+    <button class="tabBtn" data-tab="features" aria-label="Live Swap">
+      <svg viewBox="0 0 16 16" fill="none"><path d="m 13.265625 10.476562 l 2.1875 -2.476562 h 0.546875 v 5.003906 h -0.535156 z m -6.265625 -3.476562 h 5 c 0.554688 0 1 0.445312 1 1 v 5 c 0 0.554688 -0.445312 1 -1 1 h -5 c -0.554688 0 -1 -0.445312 -1 -1 v -5 c 0 -0.554688 0.445312 -1 1 -1 z m 0 0" fill="currentColor"></path><path d="m 4 1.996094 c -0.554688 0 -1 0.445312 -1 1 v 5.007812 c 0 0.550782 0.445312 1 1 1 h 0.996094 v -1.003906 c 0 -1.050781 0.953125 -2.007812 2.003906 -2.003906 h 3 v -3 c 0 -0.554688 -0.445312 -1 -1 -1 z m -4 1.007812 v 5.003906 h 0.480469 l 2.253906 -2.585937 l -2.125 -2.417969 z m 0 0" fill="currentColor" fill-opacity="0.55"></path></svg>
     </button>
     <button class="tabBtn" data-tab="profile" aria-label="Profile">
       <span class="tabAvatarRing">
