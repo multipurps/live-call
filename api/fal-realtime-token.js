@@ -25,7 +25,12 @@ export default async function handler(req, res) {
     const resp = await fetch('https://rest.fal.ai/tokens/realtime', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Key ${falKey}` },
-      body: JSON.stringify({ allowed_apps: [app], duration: 120 }),
+      // Fal's own docs show `allowed_apps: [app]`, but the live endpoint's
+      // actual validation (confirmed via its own 422 response) wants a
+      // single `app` string field instead - `allowed_apps` doesn't exist on
+      // this schema at all. Sending both so this keeps working even if a
+      // future Fal update reintroduces allowed_apps.
+      body: JSON.stringify({ app, allowed_apps: [app], duration: 120 }),
     });
     const raw = await resp.text();
     let data = {};
