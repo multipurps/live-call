@@ -1147,7 +1147,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   const lfCallScreen = $('lfCallScreen'), lfIdle = $('lfIdle'), lfStatus = $('lfStatus'), lfBottom = $('lfBottom');
   const lfRemoteVideo = $('lfRemoteVideo'), lfLiveDot = $('lfLiveDot');
-  let lfConnection = null, lfLocalStream = null, lfPc = null;
+  let lfConnection = null, lfLocalStream = null, lfPc = null, lfConnectTimer = null, lfGotIceServers = false;
+
+  function lfClearConnectTimer(){
+    if (lfConnectTimer) { clearTimeout(lfConnectTimer); lfConnectTimer = null; }
+  }
 
   // Fal's `fal.realtime.connect` client is only a signaling *relay* for this
   // model (and its VTON sibling) - it does not open the WebRTC peer connection
@@ -1161,9 +1165,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   // Source: fal.ai/models/decart/lucy2-vton/realtime (same signaling shape
   // documented for decart/lucy-2-5/realtime).
   async function handleLfResult(result){
+    // Temporary: surface every message type Fal actually sends so a failed
+    // connection tells us exactly which step it got stuck on, instead of
+    // guessing again. Safe to trim once this is confirmed working end-to-end.
+    console.log('[LiveFilter] onResult:', result?.type, result);
+
     switch (result.type) {
       case 'iceservers':
       case 'iceServers': {
+        lfClearConnectTimer();
+        lfGotIceServers = true;
+        lfStatus.textContent = 'Got ICE servers, negotiating…';
+
         const servers = (result.iceservers || result.iceServers || result.ice_servers || [])
           .map((s) => ({ urls: s.urls, username: s.username, credential: s.credential }));
 
@@ -1177,6 +1190,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
             lfIdle.style.display = 'none';
             lfLiveDot.classList.add('live');
             lfBottom.classList.remove('hidden');
+          }
+        };
+
+        lfPc.onconnectionstatechange = () => {
+          console.log('[LiveFilter] pc connectionState:', lfPc.connectionState);
+          if (['failed', 'disconnected'].includes(lfPc.connectionState)) {
+            lfStatus.textContent = 'WebRTC connection ' + lfPc.connectionState;
           }
         };
 
@@ -1230,10 +1250,37 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       case 'generation_started':
         break;
       case 'error':
+        lfClearConnectTimer();
         console.error('Fal realtime server error:', result.error);
-        lfStatus.textContent = 'Connection error — check your Fal key/credits';
+        lfStatus.textContent = 'Fal server error: ' + (result.error?.message || result.error || 'unknown');
         break;
+      default:
+        // An unrecognized message type means Fal is sending something this
+        // switch doesn't handle yet - log it instead of silently ignoring it.
+        console.log('[LiveFilter] Unhandled result type:', result?.type, result);
     }
+  }
+
+  // Mints a Fal realtime token directly, outside of the fal client, so a
+  // failure here shows up as a specific, visible error instead of getting
+  // swallowed inside fal.realtime.connect()'s internal tokenProvider call
+  // (which is the leading suspect for a silent "Connecting…" hang that never
+  // reaches Fal at all - if this never resolves/rejects visibly, nothing
+  // downstream ever gets a chance to open the actual WebSocket).
+  async function fetchLfToken(app){
+    console.log('[LiveFilter] requesting token for app:', app);
+    const r = await fetch('/api/fal-realtime-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+      body: JSON.stringify({ app }),
+    });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(`Token request failed (${r.status}): ${body.error || 'no error message'}`);
+    }
+    const token = await r.text();
+    console.log('[LiveFilter] got token, length:', token?.length);
+    return token;
   }
 
   async function startLiveFilter(){
@@ -1246,6 +1293,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     lfIdle.style.display = 'flex';
     lfStatus.textContent = 'Connecting…';
     lfLiveDot.classList.remove('live');
+    lfGotIceServers = false;
+    lfClearConnectTimer();
 
     try {
       lfLocalStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
@@ -1254,43 +1303,68 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       return;
     }
 
+    // Prove the token endpoint itself works, with its own visible error,
+    // before ever handing control to the fal client. If this step fails,
+    // it explains a hang that never touches Fal (the WebSocket to Fal never
+    // opens without a valid token) and points straight at /api/fal-realtime-token
+    // or the saved Fal key rather than the WebRTC signaling logic.
     try {
+      lfStatus.textContent = 'Requesting Fal token…';
+      await fetchLfToken('decart/lucy-2-5/realtime');
+    } catch (e) {
+      console.error('[LiveFilter] token fetch failed:', e);
+      lfStatus.textContent = 'Token error: ' + (e.message || e);
+      return;
+    }
+
+    try {
+      lfStatus.textContent = 'Opening connection…';
       // Fal's realtime client - loaded from esm.sh the same way the Anam SDK
       // is above, so no build step / bundler is needed for this single-file app.
       const { fal } = await import('https://esm.sh/@fal-ai/client@latest');
 
       lfConnection = fal.realtime.connect('decart/lucy-2-5/realtime', {
-        tokenProvider: async (app) => {
-          const r = await fetch('/api/fal-realtime-token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
-            body: JSON.stringify({ app }),
-          });
-          if (!r.ok) throw new Error((await r.json()).error || 'Token request failed');
-          return await r.text();
-        },
+        connectionKey: `lf-${Date.now()}`,
+        throttleInterval: 0,
+        tokenProvider: fetchLfToken,
         tokenExpirationSeconds: 120,
         onResult: handleLfResult,
         onError: (err) => {
-          console.error('Fal realtime error:', err);
-          lfStatus.textContent = 'Connection error — check your Fal key/credits';
+          lfClearConnectTimer();
+          console.error('[LiveFilter] Fal realtime error:', err);
+          lfStatus.textContent = 'Connection error: ' + (err?.message || JSON.stringify(err) || 'unknown');
         },
       });
+
+      // If we never even get the `iceservers` message back, the WebSocket to
+      // Fal itself is the problem (network/CSP/auth) rather than anything in
+      // the WebRTC offer/answer logic below it - surface that distinctly
+      // instead of hanging on "Connecting…" forever.
+      lfConnectTimer = setTimeout(() => {
+        if (!lfGotIceServers) {
+          lfStatus.textContent = 'Timed out waiting for Fal — no response after 15s. Check Profile → API Fal key, and Fal dashboard → Logs.';
+        }
+      }, 15000);
 
       // Only the initial prompt/reference-image payload goes through the Fal
       // relay here - the actual WebRTC offer is sent once `handleLfResult`
       // receives the `iceservers` message above.
-      lfConnection.send({
+      const payload = {
         prompt: prompt || undefined,
         reference_image_url: lfReferenceImageUrl || undefined,
         enable_prompt_expansion: true,
-      });
+      };
+      console.log('[LiveFilter] sending initial payload:', payload);
+      lfConnection.send(payload);
     } catch (e) {
+      lfClearConnectTimer();
+      console.error('[LiveFilter] failed to start:', e);
       lfStatus.textContent = 'Failed to start: ' + (e.message || e);
     }
   }
 
   function endLiveFilter(){
+    lfClearConnectTimer();
     if (lfPc) { try { lfPc.close(); } catch(e){} lfPc = null; }
     if (lfConnection) { try { lfConnection.close ? lfConnection.close() : lfConnection.send({ close: true }); } catch(e){} lfConnection = null; }
     if (lfLocalStream) { lfLocalStream.getTracks().forEach(t => t.stop()); lfLocalStream = null; }
