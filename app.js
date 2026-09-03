@@ -1113,6 +1113,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   // /lib/keys.js) - the plaintext Fal key never reaches this client, only a
   // short-lived realtime token minted by /api/fal-realtime-token.
   let lfReferenceImageUrl = '';
+  let lfReferenceDescription = ''; // strict, non-hallucinated description of the uploaded photo - see /api/describe-reference.js
 
   // Mirrors every diagnostic line onto the on-screen log too, since the
   // person debugging this may only have their phone (no devtools/console
@@ -1151,9 +1152,33 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       if (upErr) { statusEl.textContent = 'Upload failed: ' + upErr.message; return; }
       const { data: pub } = supabase.storage.from('user-uploads').getPublicUrl(path);
       lfReferenceImageUrl = pub.publicUrl;
+      lfReferenceDescription = '';
       $('lfImagePreview').src = lfReferenceImageUrl;
       $('lfImagePreview').style.display = 'block';
-      statusEl.textContent = 'Reference photo added';
+
+      // Auto-describe the photo so the person never has to type a prompt -
+      // Decart's docs say resemblance is weak without a literal description
+      // of the reference in the prompt text, so we build that automatically.
+      statusEl.textContent = 'Analyzing photo…';
+      try {
+        const dr = await fetch('/api/describe-reference', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+          body: JSON.stringify({ imageUrl: lfReferenceImageUrl }),
+        });
+        const dd = await dr.json();
+        if (dr.ok && dd.description) {
+          lfReferenceDescription = dd.description;
+          statusEl.textContent = 'Reference photo ready';
+          lfDebug('Reference described: ' + dd.description);
+        } else {
+          statusEl.textContent = 'Reference photo added (auto-description failed — will still work, just less precisely)';
+          lfDebug('Describe-reference failed: ' + (dd.error || dr.status));
+        }
+      } catch (descErr) {
+        statusEl.textContent = 'Reference photo added (auto-description failed — will still work, just less precisely)';
+        lfDebug('Describe-reference error: ' + (descErr.message || descErr));
+      }
     } catch (e) {
       statusEl.textContent = 'Upload failed: ' + (e.message || e);
     }
@@ -1308,7 +1333,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   async function startLiveFilter(retryCount){
     retryCount = retryCount || 0;
     if (!state.falKeySet) { updateLfKeyHint(); return; }
-    const prompt = $('lfPrompt').value.trim();
+    // The person never has to type anything: if a reference photo is set, its
+    // strict auto-description IS the prompt. Anything typed in the box is an
+    // ADDITIONAL instruction appended after it (e.g. a background change),
+    // never a replacement for the description.
+    const extra = $('lfPrompt').value.trim();
+    let prompt;
+    if (lfReferenceImageUrl && lfReferenceDescription) {
+      prompt = `Substitute the character in the video with ${lfReferenceDescription}.`;
+      if (extra) prompt += ` ${extra}`;
+    } else {
+      prompt = extra || undefined;
+    }
     $('lfStartStatus').textContent = '';
 
     lfCallScreen.classList.add('active');
