@@ -1113,16 +1113,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   // /lib/keys.js) - the plaintext Fal key never reaches this client, only a
   // short-lived realtime token minted by /api/fal-realtime-token.
   let lfReferenceImageUrl = '';
-  let lfUseReferenceBg = true; // default once a reference photo is added: use its background
-
-  function setLfBgSource(useRef){
-    lfUseReferenceBg = useRef;
-    const toggle = $('lfBgSourceToggle');
-    if (toggle) toggle.dataset.on = useRef ? 'true' : 'false';
-    const label = $('lfBgSourceLabel');
-    if (label) label.textContent = useRef ? 'Reference photo' : 'My camera';
-  }
-  $('lfBgSourceToggle')?.addEventListener('click', () => setLfBgSource(!lfUseReferenceBg));
 
   // Mirrors every diagnostic line onto the on-screen log too, since the
   // person debugging this may only have their phone (no devtools/console
@@ -1163,8 +1153,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       lfReferenceImageUrl = pub.publicUrl;
       $('lfImagePreview').src = lfReferenceImageUrl;
       $('lfImagePreview').style.display = 'block';
-      $('lfBgSourceCard').style.display = 'flex';
-      setLfBgSource(true);
       statusEl.textContent = 'Reference photo added';
     } catch (e) {
       statusEl.textContent = 'Upload failed: ' + (e.message || e);
@@ -1317,7 +1305,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     return token;
   }
 
-  async function startLiveFilter(){
+  async function startLiveFilter(retryCount){
+    retryCount = retryCount || 0;
     if (!state.falKeySet) { updateLfKeyHint(); return; }
     const prompt = $('lfPrompt').value.trim();
     $('lfStartStatus').textContent = '';
@@ -1328,11 +1317,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     lfLiveDot.classList.remove('live');
     lfGotIceServers = false;
     lfClearConnectTimer();
-    $('lfDebugLog').textContent = '';
+    if (retryCount === 0) $('lfDebugLog').textContent = '';
     lfDebug(`fal client version check: importing esm.sh/@fal-ai/client@latest`);
 
     try {
-      lfLocalStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      if (lfLocalStream) { lfLocalStream.getTracks().forEach(t => t.stop()); lfLocalStream = null; }
+      // Constrained to Decart's documented native input spec for this model
+      // (roughly 1088x624 @ 30fps) - capturing at an arbitrary resolution
+      // makes the model work harder to reconcile mismatched input, which
+      // shows up as both slower responses and less stable/consistent output.
+      lfLocalStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 1088 }, height: { ideal: 624 }, frameRate: { ideal: 30, max: 30 } },
+      });
     } catch (e) {
       lfStatus.textContent = 'Camera permission is required';
       return;
@@ -1376,12 +1372,21 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
       // If we never even get the `iceservers` message back, the WebSocket to
       // Fal itself is the problem (network/CSP/auth) rather than anything in
-      // the WebRTC offer/answer logic below it - surface that distinctly
-      // instead of hanging on "Connecting…" forever.
+      // the WebRTC offer/answer logic below it. A single stalled attempt is
+      // common enough (cold start, transient network blip) that it's worth
+      // one silent automatic retry before making the person manually restart -
+      // only surface the error if it stalls twice in a row.
       lfConnectTimer = setTimeout(() => {
         if (!lfGotIceServers) {
-          lfDebug('45s elapsed, no iceservers/error/any message ever received from onResult or onError');
-          lfStatus.textContent = 'Timed out — no response after 45s. Check your API key in Profile → API.';
+          if (retryCount < 1) {
+            lfDebug('45s elapsed, no response - retrying once automatically');
+            lfStatus.textContent = 'No response yet, retrying…';
+            if (lfConnection) { try { lfConnection.close ? lfConnection.close() : null; } catch(e){} lfConnection = null; }
+            startLiveFilter(retryCount + 1);
+          } else {
+            lfDebug('45s elapsed again on retry, no response - giving up');
+            lfStatus.textContent = 'Timed out — no response after retrying. Check your API key in Profile → API.';
+          }
         }
       }, 45000);
 
@@ -1390,8 +1395,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       // receives the `iceservers` message above.
       const payload = {
         prompt: prompt || undefined,
-        reference_image_url: (lfUseReferenceBg && lfReferenceImageUrl) || undefined,
-        enable_prompt_expansion: true,
+        reference_image_url: lfReferenceImageUrl || undefined,
+        // Off, not on: expansion rewrites/pads out what's sent with invented
+        // extra detail, which is a plausible reason identity swap sometimes
+        // only partially applies (clothes change, face doesn't) - keeping
+        // the request literal keeps the reference's intent from getting
+        // diluted by auto-added description.
+        enable_prompt_expansion: false,
       };
       lfDebug(`sending initial payload: ${JSON.stringify(payload)}`);
       lfConnection.send(payload);
@@ -1415,7 +1425,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     lfCallScreen.classList.remove('active');
   }
 
-  $('lfStartBtn')?.addEventListener('click', startLiveFilter);
+  $('lfStartBtn')?.addEventListener('click', () => startLiveFilter());
   $('lfEndBtn')?.addEventListener('click', endLiveFilter);
   lfCallScreen.addEventListener('click', (e) => {
     if (e.target.closest('#lfTop') || e.target.closest('#lfBottom')) return;
