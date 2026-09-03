@@ -538,12 +538,23 @@
   }
   #lfStatus{font-size:13px; color:var(--dim); min-height:16px;}
   .pulseCircle{
-    width:64px; height:64px; border-radius:50%; margin-bottom:6px;
+    width:76px; height:76px; border-radius:50%; margin-bottom:6px;
     background:var(--coffee-light); border:1px solid var(--line);
     display:flex; align-items:center; justify-content:center; color:#fff;
-    animation:callPulseAnim 1.8s ease-in-out infinite;
+    overflow:hidden;
   }
-  .pulseCircle svg{width:28px; height:28px;}
+  .pulseCircle img{width:46px; height:46px; object-fit:contain; animation:lfHeartbeat 1.7s ease-in-out infinite;}
+  .pulseCircle.error{border-color:rgba(255,80,80,0.4);}
+  .pulseCircle.error img{animation:none; opacity:0.55; filter:grayscale(1);}
+  @keyframes lfHeartbeat{
+    0%{transform:scale(1);}
+    14%{transform:scale(1.14);}
+    28%{transform:scale(1);}
+    42%{transform:scale(1.08);}
+    70%{transform:scale(1);}
+    100%{transform:scale(1);}
+  }
+  #lfStatus.error{color:#ff8a80;}
   #lfTop{
     position:absolute; left:0; right:0; top:0;
     padding-top:max(env(safe-area-inset-top), 10px);

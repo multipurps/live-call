@@ -1115,10 +1115,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   let lfReferenceImageUrl = '';
   let lfReferenceDescription = ''; // strict, non-hallucinated description of the uploaded photo - see /api/describe-reference.js
 
-  // Mirrors every diagnostic line onto the on-screen log too, since the
-  // person debugging this may only have their phone (no devtools/console
-  // access) - so a screenshot of the call screen has to be enough to see
-  // exactly which step got stuck.
+  // Mirrors every diagnostic line onto a hidden on-screen log (not shown to
+  // the person by default - raw provider/model/token details shouldn't be
+  // visible in a screenshot). Tap the pulse logo 5x during a call to reveal
+  // it, same pattern as the "tap logo 5x" diagnostic already used at boot.
   function lfDebug(msg){
     console.log('[LiveFilter]', msg);
     const el = $('lfDebugLog');
@@ -1126,6 +1126,43 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     const t = new Date().toISOString().slice(11, 19);
     el.textContent += `[${t}] ${msg}\n`;
   }
+  let lfDebugTapCount = 0, lfDebugTapTimer = null;
+  $('lfPulse')?.addEventListener('click', () => {
+    lfDebugTapCount++;
+    clearTimeout(lfDebugTapTimer);
+    lfDebugTapTimer = setTimeout(() => { lfDebugTapCount = 0; }, 1500);
+    if (lfDebugTapCount >= 5) {
+      lfDebugTapCount = 0;
+      const el = $('lfDebugLog');
+      if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+  });
+
+  // Maps raw provider/network errors to clean, non-technical copy - the raw
+  // text still goes to lfDebug() (console + hidden log) for our own diagnosis.
+  function lfFriendlyError(raw){
+    const s = String(raw || '').toLowerCase();
+    if (s.includes('capacity') || s.includes('busy')) return 'Servers are busy right now — please try again in a moment.';
+    if (s.includes('token') || s.includes('key') || s.includes('401') || s.includes('unauthorized')) return 'We couldn\u2019t verify your account. Check your API key in Profile \u2192 API.';
+    if (s.includes('camera') || s.includes('permission')) return 'Camera access is required to start Live Swap.';
+    if (s.includes('timed out') || s.includes('timeout')) return 'This is taking longer than expected. Please try again.';
+    if (s.includes('lost') || s.includes('disconnected') || s.includes('failed')) return 'Connection lost. Please try again.';
+    return 'Something went wrong starting Live Swap. Please try again.';
+  }
+  function lfShowError(raw){
+    lfClearConnectTimer();
+    lfDebug('error shown to user: ' + raw);
+    $('lfPulse')?.classList.add('error');
+    lfStatus.classList.add('error');
+    lfStatus.textContent = lfFriendlyError(raw);
+    $('lfRetryBtn').style.display = 'inline-block';
+  }
+  function lfClearError(){
+    $('lfPulse')?.classList.remove('error');
+    lfStatus.classList.remove('error');
+    $('lfRetryBtn').style.display = 'none';
+  }
+  $('lfRetryBtn')?.addEventListener('click', () => { lfClearError(); startLiveFilter(); });
 
   function updateLfKeyHint(){
     $('lfKeyHint').style.display = state.falKeySet ? 'none' : 'block';
@@ -1214,7 +1251,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       case 'iceServers': {
         lfClearConnectTimer();
         lfGotIceServers = true;
-        lfStatus.textContent = 'Got ICE servers, negotiating…';
+        lfStatus.textContent = 'Connecting…';
 
         const servers = (result.iceservers || result.iceServers || result.ice_servers || [])
           .map((s) => ({ urls: s.urls, username: s.username, credential: s.credential }));
@@ -1235,7 +1272,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         lfPc.onconnectionstatechange = () => {
           console.log('[LiveFilter] pc connectionState:', lfPc.connectionState);
           if (['failed', 'disconnected'].includes(lfPc.connectionState)) {
-            lfStatus.textContent = 'WebRTC connection ' + lfPc.connectionState;
+            lfIdle.style.display = 'flex';
+            lfBottom.classList.add('hidden');
+            lfLiveDot.classList.remove('live');
+            lfShowError('connection lost');
           }
         };
 
@@ -1291,7 +1331,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       case 'error':
         lfClearConnectTimer();
         console.error('Fal realtime server error:', result.error);
-        lfStatus.textContent = 'Swap error: ' + (result.error?.message || result.error || 'unknown');
+        lfShowError(result.error?.message || result.error || 'unknown');
         break;
       default:
         // An unrecognized message type means Fal is sending something this
@@ -1347,6 +1387,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
     $('lfStartStatus').textContent = '';
 
+    lfClearError();
     lfCallScreen.classList.add('active');
     lfIdle.style.display = 'flex';
     lfStatus.textContent = 'Connecting…';
@@ -1366,7 +1407,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         video: { facingMode: 'user', width: { ideal: 1088 }, height: { ideal: 624 }, frameRate: { ideal: 30, max: 30 } },
       });
     } catch (e) {
-      lfStatus.textContent = 'Camera permission is required';
+      lfShowError('camera permission');
       return;
     }
 
@@ -1380,7 +1421,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       await fetchLfToken('decart/lucy-2-5/realtime');
     } catch (e) {
       lfDebug(`token fetch failed: ${e.message || e}`);
-      lfStatus.textContent = 'Token error: ' + (e.message || e);
+      lfShowError('key ' + (e.message || e));
       return;
     }
 
@@ -1401,7 +1442,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
           lfClearConnectTimer();
           const msg = err?.message || (() => { try { return JSON.stringify(err); } catch { return String(err); } })();
           lfDebug(`onError fired: ${msg}`);
-          lfStatus.textContent = 'Connection error: ' + msg;
+          lfShowError(msg);
         },
       });
       lfDebug(`fal.realtime.connect() returned, connection object: ${lfConnection ? 'created' : 'null/undefined'}`);
@@ -1416,12 +1457,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         if (!lfGotIceServers) {
           if (retryCount < 1) {
             lfDebug('45s elapsed, no response - retrying once automatically');
-            lfStatus.textContent = 'No response yet, retrying…';
+            lfStatus.textContent = 'Still connecting…';
             if (lfConnection) { try { lfConnection.close ? lfConnection.close() : null; } catch(e){} lfConnection = null; }
             startLiveFilter(retryCount + 1);
           } else {
             lfDebug('45s elapsed again on retry, no response - giving up');
-            lfStatus.textContent = 'Timed out — no response after retrying. Check your API key in Profile → API.';
+            lfShowError('timed out');
           }
         }
       }, 45000);
@@ -1445,7 +1486,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     } catch (e) {
       lfClearConnectTimer();
       lfDebug(`failed to start (exception): ${e.message || e}`);
-      lfStatus.textContent = 'Failed to start: ' + (e.message || e);
+      lfShowError(e.message || e);
     }
   }
 
