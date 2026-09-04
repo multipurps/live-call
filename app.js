@@ -1130,10 +1130,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   // Runs the user's camera through Fal's real-time video-to-video model over
   // WebRTC. Uses the same per-user Vault key pattern as Anam (see /api/keys.js,
   // /lib/keys.js) - the plaintext Fal key never reaches this client, only a
-  // short-lived realtime token minted by /api/fal-realtime-token. (Briefly
-  // went direct to Decart for a lower per-second rate - see git history
-  // around decart-realtime-token.js for that era - but Decart's direct API
-  // watermarks output, so this is back on Fal.)
+  // short-lived realtime token minted by /api/fal-realtime-token.
   let lfReferenceImageUrl = '';
   let lfReferenceDescription = ''; // strict, non-hallucinated description of the uploaded photo - see /api/describe-reference.js
 
@@ -1245,53 +1242,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   const lfCallScreen = $('lfCallScreen'), lfIdle = $('lfIdle'), lfStatus = $('lfStatus'), lfBottom = $('lfBottom');
   const lfRemoteVideo = $('lfRemoteVideo'), lfLiveDot = $('lfLiveDot');
-  let lfConnection = null, lfPc = null, lfLocalStream = null, lfConnectTimer = null, lfGotIceServers = false;
-  let lfBlackFrameTimer = null, lfBlackRetryUsed = false, lfIntentionalDisconnect = false;
+  let lfConnection = null, lfLocalStream = null, lfPc = null, lfConnectTimer = null, lfGotIceServers = false;
 
   function lfClearConnectTimer(){
     if (lfConnectTimer) { clearTimeout(lfConnectTimer); lfConnectTimer = null; }
-  }
-  function lfClearBlackFrameWatch(){
-    if (lfBlackFrameTimer) { clearInterval(lfBlackFrameTimer); lfBlackFrameTimer = null; }
-  }
-
-  // A real scenario worth guarding regardless of provider: the remote video
-  // connects and plays but stays visibly black with no error ever raised
-  // (a stalled/failed decode on the far end). Sample a tiny corner of the
-  // video every couple seconds, and if it's still black after ~10s,
-  // reconnect once rather than leaving the person staring at nothing.
-  function lfStartBlackFrameWatch(){
-    lfClearBlackFrameWatch();
-    let checks = 0;
-    const canvas = document.createElement('canvas');
-    canvas.width = 16; canvas.height = 16;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    lfBlackFrameTimer = setInterval(() => {
-      checks++;
-      if (!lfRemoteVideo.videoWidth) return;
-      try {
-        ctx.drawImage(lfRemoteVideo, 0, 0, 16, 16);
-        const data = ctx.getImageData(0, 0, 16, 16).data;
-        let sum = 0;
-        for (let i = 0; i < data.length; i += 4) sum += data[i] + data[i + 1] + data[i + 2];
-        const avg = sum / ((data.length / 4) * 3);
-        if (avg > 8) { lfDebug(`black-frame watch: picture detected (avg=${avg.toFixed(1)}), stopping watch`); lfClearBlackFrameWatch(); return; }
-        if (checks >= 5) {
-          lfClearBlackFrameWatch();
-          if (lfBlackRetryUsed) {
-            lfDebug('black-frame watch: still black after retry - leaving as-is, not retrying again');
-            return;
-          }
-          lfBlackRetryUsed = true;
-          lfDebug('black-frame watch: ~10s of black frames - reconnecting once');
-          endLiveFilter();
-          startLiveFilter(1);
-        }
-      } catch (e) {
-        lfDebug(`black-frame watch: canvas sample failed (${e.message || e}), stopping watch`);
-        lfClearBlackFrameWatch();
-      }
-    }, 2000);
   }
 
   // Fal's `fal.realtime.connect` client is only a signaling *relay* for this
@@ -1306,6 +1260,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   // Source: fal.ai/models/decart/lucy2-vton/realtime (same signaling shape
   // documented for decart/lucy-2-5/realtime).
   async function handleLfResult(result){
+    // Temporary: surface every message type Fal actually sends so a failed
+    // connection tells us exactly which step it got stuck on, instead of
+    // guessing again. Safe to trim once this is confirmed working end-to-end.
     lfDebug(`onResult: ${result?.type} ${JSON.stringify(result).slice(0, 200)}`);
 
     switch (result.type) {
@@ -1313,6 +1270,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       case 'iceServers': {
         lfClearConnectTimer();
         lfGotIceServers = true;
+        lfStatus.textContent = 'Connecting…';
 
         const servers = (result.iceservers || result.iceServers || result.ice_servers || [])
           .map((s) => ({ urls: s.urls, username: s.username, credential: s.credential }));
@@ -1328,13 +1286,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
             lfLiveDot.classList.add('live');
             lfBottom.classList.remove('hidden');
           }
-          lfStartBlackFrameWatch();
         };
 
         lfPc.onconnectionstatechange = () => {
-          lfDebug('pc connectionState: ' + lfPc.connectionState);
+          console.log('[LiveFilter] pc connectionState:', lfPc.connectionState);
           if (['failed', 'disconnected'].includes(lfPc.connectionState)) {
-            if (lfIntentionalDisconnect) { lfDebug('(intentional - not showing as an error)'); return; }
             lfIdle.style.display = 'flex';
             lfBottom.classList.add('hidden');
             lfLiveDot.classList.remove('live');
@@ -1384,20 +1340,22 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         }
         break;
       case 'prompt_ack':
-        if (!result.success) lfDebug('Prompt failed: ' + JSON.stringify(result.error));
+        if (!result.success) console.error('Prompt failed:', result.error);
         break;
       case 'set_image_ack':
-        if (!result.success) lfDebug('Image failed: ' + JSON.stringify(result.error));
+        if (!result.success) console.error('Image failed:', result.error);
         break;
       case 'generation_started':
         break;
       case 'error':
         lfClearConnectTimer();
-        lfDebug('Fal realtime server error: ' + JSON.stringify(result.error));
+        console.error('Fal realtime server error:', result.error);
         lfShowError(result.error?.message || result.error || 'unknown');
         break;
       default:
-        lfDebug('Unhandled result type: ' + result?.type);
+        // An unrecognized message type means Fal is sending something this
+        // switch doesn't handle yet - log it instead of silently ignoring it.
+        console.log('[LiveFilter] Unhandled result type:', result?.type, result);
     }
   }
 
@@ -1449,9 +1407,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     $('lfStartStatus').textContent = '';
 
     lfClearError();
-    lfClearBlackFrameWatch();
-    lfBlackRetryUsed = false;
-    lfIntentionalDisconnect = false;
     lfCallScreen.classList.add('active');
     lfIdle.style.display = 'flex';
     lfStatus.textContent = 'Connecting…';
@@ -1459,6 +1414,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     lfGotIceServers = false;
     lfClearConnectTimer();
     if (retryCount === 0) $('lfDebugLog').textContent = '';
+    lfDebug(`fal client version check: importing esm.sh/@fal-ai/client@latest`);
 
     try {
       if (lfLocalStream) { lfLocalStream.getTracks().forEach(t => t.stop()); lfLocalStream = null; }
@@ -1466,15 +1422,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       // (roughly 1088x624 @ 30fps) - capturing at an arbitrary resolution
       // makes the model work harder to reconcile mismatched input, which
       // shows up as both slower responses and less stable/consistent output.
-      // No SDK import is needed before this call, so getUserMedia() can be
-      // the first (and only) await before the tap's user-activation window
-      // would matter - unlike the Decart SDK path, nothing here risks iOS
-      // silently denying the permission prompt.
       lfLocalStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 1088 }, height: { ideal: 624 }, frameRate: { ideal: 30, max: 30 } },
       });
     } catch (e) {
-      lfDebug(`camera permission failed: ${e.message || e}`);
       lfShowError('camera permission');
       return;
     }
@@ -1526,7 +1477,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
           if (retryCount < 1) {
             lfDebug('45s elapsed, no response - retrying once automatically');
             lfStatus.textContent = 'Still connecting…';
-            lfIntentionalDisconnect = true;
             if (lfConnection) { try { lfConnection.close ? lfConnection.close() : null; } catch(e){} lfConnection = null; }
             startLiveFilter(retryCount + 1);
           } else {
@@ -1560,9 +1510,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   }
 
   function endLiveFilter(){
-    lfIntentionalDisconnect = true;
     lfClearConnectTimer();
-    lfClearBlackFrameWatch();
     if (lfPc) { try { lfPc.close(); } catch(e){} lfPc = null; }
     if (lfConnection) { try { lfConnection.close ? lfConnection.close() : lfConnection.send({ close: true }); } catch(e){} lfConnection = null; }
     if (lfLocalStream) { lfLocalStream.getTracks().forEach(t => t.stop()); lfLocalStream = null; }
