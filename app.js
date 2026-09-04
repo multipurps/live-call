@@ -1357,15 +1357,27 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     let models;
     try {
       if (lfLocalStream) { lfLocalStream.getTracks().forEach(t => t.stop()); lfLocalStream = null; }
+      // iOS Safari requires getUserMedia() to run with nothing awaited before
+      // it, still inside the tap's user-activation window - an earlier await
+      // (like the SDK import below) silently kills the permission prompt
+      // instead of ever showing it. So this has to be the very first await
+      // in the whole function, using safe generic constraints; the model's
+      // exact width/height/fps get applied to the already-live track after,
+      // via applyConstraints - which doesn't need a fresh user gesture.
+      lfLocalStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' },
+      });
+      lfDebug('importing esm.sh/@decartai/sdk@latest');
       ({ models } = await import('https://esm.sh/@decartai/sdk@latest'));
       const model = models.realtime('lucy-2.5');
-      // Native input spec for this exact model comes straight from the SDK
-      // (fps/width/height) rather than a hardcoded guess - capturing at a
-      // mismatched resolution makes the model work harder to reconcile the
-      // input, which shows up as both slower responses and less stable output.
-      lfLocalStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: model.width, height: model.height, frameRate: { ideal: model.fps, max: model.fps } },
-      });
+      const track = lfLocalStream.getVideoTracks()[0];
+      if (track && model.width && model.height) {
+        try {
+          await track.applyConstraints({ width: model.width, height: model.height, frameRate: { ideal: model.fps, max: model.fps } });
+        } catch (e) {
+          lfDebug(`applyConstraints to model spec failed, continuing with default camera resolution: ${e.message || e}`);
+        }
+      }
     } catch (e) {
       lfDebug(`camera/SDK-load failed: ${e.message || e}`);
       lfShowError('camera permission');
