@@ -517,9 +517,13 @@
     width:64px; height:64px; border-radius:50%;
     background:#ff3b30; display:flex; align-items:center; justify-content:center;
   }
-  /* -------- Live Filter fullscreen render (Fal.ai Lucy 2.5) --------
+  /* -------- Live Filter fullscreen render (Decart Lucy 2.5, direct) --------
      Mirrors #callScreen: full-bleed video, nothing else on screen once live,
-     tap anywhere outside the top pill / bottom controls to show or hide them. */
+     tap anywhere outside the top pill / bottom controls to show or hide them.
+     No manual transform:scaleX(-1) here - @decartai/sdk's realtime.connect()
+     is called with `mirror: "auto"`, which already returns a correctly
+     selfie-mirrored stream (raise your left hand, see it on your left), so a
+     CSS flip on top of that would just un-mirror it again. */
   #lfCallScreen{
     position:absolute; inset:0; height:var(--app-height, 100dvh); background:var(--coffee);
     display:none; z-index:50;
@@ -528,10 +532,6 @@
   #lfRemoteVideo{
     position:absolute; inset:0; width:100%; height:100%;
     object-fit:cover; border:0; background:#000;
-    transform:scaleX(-1); /* front camera is sent unmirrored (true orientation) so a
-      call partner sees you correctly - but for this self-view feature we flip the
-      *display* only, to match the mirror behavior every phone camera app uses for
-      its own selfie preview (raise your left hand, see it on your left). */
   }
   #lfIdle{
     position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;

@@ -250,7 +250,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     // Vault and never leave the server after the moment they're first saved (see
     // /api/keys.js, /lib/keys.js). Populated by loadKeyStatus() below.
     anamKeySet: false,
-    falKeySet: false,
+    decartKeySet: false,
   };
   let currentUser = null;
   let currentChatId = null;
@@ -286,10 +286,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       const data = await r.json();
       if (!r.ok) return;
       state.anamKeySet = !!data.anam;
-      state.falKeySet = !!data.fal;
+      state.decartKeySet = !!data.decart;
     } catch (e) { /* leave as false - UI just shows "paste your key" */ }
     $('anamApiKey').placeholder = state.anamKeySet ? 'Key saved — enter a new one to replace' : 'Paste your Anam API key';
-    $('falApiKey').placeholder = state.falKeySet ? 'Key saved — enter a new one to replace' : 'Paste your Fal API key';
+    $('decartApiKey').placeholder = state.decartKeySet ? 'Key saved — enter a new one to replace' : 'Paste your Decart API key';
   }
 
   async function loadSettings(){
@@ -311,7 +311,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       await persist(); // first login — create the row
     }
     $('anamApiKey').value = '';
-    $('falApiKey').value = '';
+    $('decartApiKey').value = '';
     $('profileName').value = state.displayName;
     $('profileCountry').value = state.country;
     $('profileLanguage').value = state.language;
@@ -465,7 +465,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
   }
   $('saveAnamKey')?.addEventListener('click', () => saveProviderKey('anam', 'anamApiKey', 'saveAnamKey', () => { loadAnamAvatars(); loadAnamVoices(); }));
-  $('saveFalKey')?.addEventListener('click', () => saveProviderKey('fal', 'falApiKey', 'saveFalKey', () => updateLfKeyHint()));
+  $('saveDecartKey')?.addEventListener('click', () => saveProviderKey('decart', 'decartApiKey', 'saveDecartKey', () => updateLfKeyHint()));
   document.querySelectorAll('.eyeToggle').forEach(btn => {
     btn.addEventListener('click', () => {
       const input = $(btn.dataset.revealFor);
@@ -1126,11 +1126,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     $('callTop').classList.toggle('hidden');
   });
 
-  // ---------------------------------------------------------------- Live Filter (Fal.ai / Decart Lucy 2.5)
-  // Runs the user's camera through Fal's real-time video-to-video model over
-  // WebRTC. Uses the same per-user Vault key pattern as Anam (see /api/keys.js,
-  // /lib/keys.js) - the plaintext Fal key never reaches this client, only a
-  // short-lived realtime token minted by /api/fal-realtime-token.
+  // ---------------------------------------------------------------- Live Filter (Decart Lucy 2.5, direct)
+  // Runs the user's camera through Decart's real-time video-to-video model
+  // over WebRTC, using Decart's own @decartai/sdk directly (previously
+  // proxied through Fal - see git history around fal-realtime-token.js for
+  // that era). Uses the same per-user Vault key pattern as Anam (see
+  // /api/keys.js, /lib/keys.js) - the plaintext Decart key never reaches this
+  // client, only a short-lived client token minted by /api/decart-realtime-token.
   let lfReferenceImageUrl = '';
   let lfReferenceDescription = ''; // strict, non-hallucinated description of the uploaded photo - see /api/describe-reference.js
 
@@ -1184,8 +1186,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   $('lfRetryBtn')?.addEventListener('click', () => { lfClearError(); startLiveFilter(); });
 
   function updateLfKeyHint(){
-    $('lfKeyHint').style.display = state.falKeySet ? 'none' : 'block';
-    $('lfStartBtn').disabled = !state.falKeySet;
+    $('lfKeyHint').style.display = state.decartKeySet ? 'none' : 'block';
+    $('lfStartBtn').disabled = !state.decartKeySet;
   }
 
   $('openLfImageUpload')?.addEventListener('click', () => $('lfImageInput').click());
@@ -1242,140 +1244,73 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   const lfCallScreen = $('lfCallScreen'), lfIdle = $('lfIdle'), lfStatus = $('lfStatus'), lfBottom = $('lfBottom');
   const lfRemoteVideo = $('lfRemoteVideo'), lfLiveDot = $('lfLiveDot');
-  let lfConnection = null, lfLocalStream = null, lfPc = null, lfConnectTimer = null, lfGotIceServers = false;
+  let lfRealtimeClient = null, lfLocalStream = null, lfConnectTimer = null, lfGotStream = false;
+  let lfBlackFrameTimer = null, lfBlackRetryUsed = false, lfIntentionalDisconnect = false;
 
   function lfClearConnectTimer(){
     if (lfConnectTimer) { clearTimeout(lfConnectTimer); lfConnectTimer = null; }
   }
-
-  // Fal's `fal.realtime.connect` client is only a signaling *relay* for this
-  // model (and its VTON sibling) - it does not open the WebRTC peer connection
-  // for you. `onResult` delivers the raw signaling messages Decart's realtime
-  // service sends back (iceServers, sdp offer/answer, ice candidates,
-  // ice-restart, prompt/image acks, errors), and the app is expected to build
-  // its own RTCPeerConnection, attach the local camera track, exchange
-  // SDP/ICE via `connection.send(...)`, and render the incoming remote track
-  // into a <video> itself. There is no `stream`/`outputVideo` shorthand for
-  // this endpoint - that only exists on Decart's native SDK, not @fal-ai/client.
-  // Source: fal.ai/models/decart/lucy2-vton/realtime (same signaling shape
-  // documented for decart/lucy-2-5/realtime).
-  async function handleLfResult(result){
-    // Temporary: surface every message type Fal actually sends so a failed
-    // connection tells us exactly which step it got stuck on, instead of
-    // guessing again. Safe to trim once this is confirmed working end-to-end.
-    lfDebug(`onResult: ${result?.type} ${JSON.stringify(result).slice(0, 200)}`);
-
-    switch (result.type) {
-      case 'iceservers':
-      case 'iceServers': {
-        lfClearConnectTimer();
-        lfGotIceServers = true;
-        lfStatus.textContent = 'Connecting…';
-
-        const servers = (result.iceservers || result.iceServers || result.ice_servers || [])
-          .map((s) => ({ urls: s.urls, username: s.username, credential: s.credential }));
-
-        lfPc = new RTCPeerConnection({ iceServers: servers });
-        lfLocalStream.getTracks().forEach((track) => lfPc.addTrack(track, lfLocalStream));
-
-        lfPc.ontrack = (e) => {
-          lfRemoteVideo.srcObject = e.streams[0];
-          if (lfRemoteVideo.style.display !== 'block') {
-            lfRemoteVideo.style.display = 'block';
-            lfIdle.style.display = 'none';
-            lfLiveDot.classList.add('live');
-            lfBottom.classList.remove('hidden');
-          }
-        };
-
-        lfPc.onconnectionstatechange = () => {
-          console.log('[LiveFilter] pc connectionState:', lfPc.connectionState);
-          if (['failed', 'disconnected'].includes(lfPc.connectionState)) {
-            lfIdle.style.display = 'flex';
-            lfBottom.classList.add('hidden');
-            lfLiveDot.classList.remove('live');
-            lfShowError('connection lost');
-          }
-        };
-
-        lfPc.onicecandidate = (e) => {
-          if (e.candidate) {
-            lfConnection.send({
-              type: 'icecandidate',
-              candidate: {
-                candidate: e.candidate.candidate,
-                sdpMid: e.candidate.sdpMid,
-                sdpMLineIndex: e.candidate.sdpMLineIndex,
-              },
-            });
-          }
-        };
-
-        const offer = await lfPc.createOffer();
-        await lfPc.setLocalDescription(offer);
-        lfConnection.send({ type: 'offer', sdp: offer.sdp });
-        break;
-      }
-      case 'answer':
-        if (lfPc) await lfPc.setRemoteDescription({ type: 'answer', sdp: result.sdp });
-        break;
-      case 'icecandidate':
-        if (lfPc) await lfPc.addIceCandidate(new RTCIceCandidate(result.candidate));
-        break;
-      case 'ice-restart':
-        if (result.turn_config && lfPc) {
-          lfPc.setConfiguration({
-            iceServers: [
-              { urls: 'stun:stun.l.google.com:19302' },
-              {
-                urls: result.turn_config.server_url,
-                username: result.turn_config.username,
-                credential: result.turn_config.credential,
-              },
-            ],
-          });
-          const offer = await lfPc.createOffer({ iceRestart: true });
-          await lfPc.setLocalDescription(offer);
-          lfConnection.send({ type: 'offer', sdp: offer.sdp });
-        }
-        break;
-      case 'prompt_ack':
-        if (!result.success) console.error('Prompt failed:', result.error);
-        break;
-      case 'set_image_ack':
-        if (!result.success) console.error('Image failed:', result.error);
-        break;
-      case 'generation_started':
-        break;
-      case 'error':
-        lfClearConnectTimer();
-        console.error('Fal realtime server error:', result.error);
-        lfShowError(result.error?.message || result.error || 'unknown');
-        break;
-      default:
-        // An unrecognized message type means Fal is sending something this
-        // switch doesn't handle yet - log it instead of silently ignoring it.
-        console.log('[LiveFilter] Unhandled result type:', result?.type, result);
-    }
+  function lfClearBlackFrameWatch(){
+    if (lfBlackFrameTimer) { clearInterval(lfBlackFrameTimer); lfBlackFrameTimer = null; }
   }
 
-  // Mints a Fal realtime token directly, outside of the fal client, so a
-  // failure here shows up as a specific, visible error instead of getting
-  // swallowed inside fal.realtime.connect()'s internal tokenProvider call
-  // (which is the leading suspect for a silent "Connecting…" hang that never
-  // reaches Fal at all - if this never resolves/rejects visibly, nothing
-  // downstream ever gets a chance to open the actual WebSocket).
-  async function fetchLfToken(app){
-    lfDebug(`requesting token for app: ${app}`);
-    const r = await fetch('/api/fal-realtime-token', {
+  // Decart's own SDK docs mention a real scenario where the remote video
+  // connects and plays but stays visibly black with no error ever raised
+  // (an older-SDK/metadata-worker mismatch on the viewer side) - so even
+  // with the SDK handling the WebRTC/signaling lifecycle itself now, this
+  // safety net is still worth keeping: sample a tiny corner of the video
+  // every couple seconds, and if it's still black after ~10s, reconnect
+  // once rather than leaving the person staring at nothing with no cue.
+  function lfStartBlackFrameWatch(){
+    lfClearBlackFrameWatch();
+    let checks = 0;
+    const canvas = document.createElement('canvas');
+    canvas.width = 16; canvas.height = 16;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    lfBlackFrameTimer = setInterval(() => {
+      checks++;
+      if (!lfRemoteVideo.videoWidth) return;
+      try {
+        ctx.drawImage(lfRemoteVideo, 0, 0, 16, 16);
+        const data = ctx.getImageData(0, 0, 16, 16).data;
+        let sum = 0;
+        for (let i = 0; i < data.length; i += 4) sum += data[i] + data[i + 1] + data[i + 2];
+        const avg = sum / ((data.length / 4) * 3);
+        if (avg > 8) { lfDebug(`black-frame watch: picture detected (avg=${avg.toFixed(1)}), stopping watch`); lfClearBlackFrameWatch(); return; }
+        if (checks >= 5) {
+          lfClearBlackFrameWatch();
+          if (lfBlackRetryUsed) {
+            lfDebug('black-frame watch: still black after retry - leaving as-is, not retrying again');
+            return;
+          }
+          lfBlackRetryUsed = true;
+          lfDebug('black-frame watch: ~10s of black frames - reconnecting once');
+          endLiveFilter();
+          startLiveFilter(1);
+        }
+      } catch (e) {
+        lfDebug(`black-frame watch: canvas sample failed (${e.message || e}), stopping watch`);
+        lfClearBlackFrameWatch();
+      }
+    }, 2000);
+  }
+
+  // Mints a Decart client token directly, outside the SDK, so a failure here
+  // shows up as a specific, visible error rather than getting swallowed
+  // inside the SDK's connection setup - same lesson learned the hard way
+  // going through Fal's tokenProvider (a silent hang that never reaches the
+  // provider at all is much harder to diagnose than a clear rejected fetch).
+  async function fetchDecartToken(){
+    lfDebug('requesting Decart client token');
+    const r = await fetch('/api/decart-realtime-token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
-      body: JSON.stringify({ app }),
+      body: JSON.stringify({}),
     });
     if (!r.ok) {
       const body = await r.json().catch(() => ({}));
       const fp = body.keyFingerprint ? ` [key: ${body.keyFingerprint}]` : '';
-      const msg = `Token request failed (${r.status}) for app "${app}": ${body.error || 'no error message'}${fp}`;
+      const msg = `Token request failed (${r.status}): ${body.error || 'no error message'}${fp}`;
       lfDebug(msg);
       throw new Error(msg);
     }
@@ -1385,13 +1320,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       lfDebug(msg);
       throw new Error(msg);
     }
-    lfDebug(`got token for app "${app}", length: ${token?.length}, prefix: ${token?.slice(0, 12)}…`);
+    lfDebug(`got token, length: ${token?.length}, prefix: ${token?.slice(0, 12)}…`);
     return token;
   }
 
   async function startLiveFilter(retryCount){
     retryCount = retryCount || 0;
-    if (!state.falKeySet) { updateLfKeyHint(); return; }
+    if (!state.decartKeySet) { updateLfKeyHint(); return; }
     // The person never has to type anything: if a reference photo is set, its
     // strict auto-description IS the prompt. Anything typed in the box is an
     // ADDITIONAL instruction appended after it (e.g. a background change),
@@ -1407,37 +1342,44 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     $('lfStartStatus').textContent = '';
 
     lfClearError();
+    lfClearBlackFrameWatch();
+    lfBlackRetryUsed = false;
+    lfIntentionalDisconnect = false;
     lfCallScreen.classList.add('active');
     lfIdle.style.display = 'flex';
     lfStatus.textContent = 'Connecting…';
     lfLiveDot.classList.remove('live');
-    lfGotIceServers = false;
+    lfGotStream = false;
     lfClearConnectTimer();
     if (retryCount === 0) $('lfDebugLog').textContent = '';
-    lfDebug(`fal client version check: importing esm.sh/@fal-ai/client@latest`);
+    lfDebug('importing esm.sh/@decartai/sdk@latest');
 
+    let models;
     try {
       if (lfLocalStream) { lfLocalStream.getTracks().forEach(t => t.stop()); lfLocalStream = null; }
-      // Constrained to Decart's documented native input spec for this model
-      // (roughly 1088x624 @ 30fps) - capturing at an arbitrary resolution
-      // makes the model work harder to reconcile mismatched input, which
-      // shows up as both slower responses and less stable/consistent output.
+      ({ models } = await import('https://esm.sh/@decartai/sdk@latest'));
+      const model = models.realtime('lucy-2.5');
+      // Native input spec for this exact model comes straight from the SDK
+      // (fps/width/height) rather than a hardcoded guess - capturing at a
+      // mismatched resolution makes the model work harder to reconcile the
+      // input, which shows up as both slower responses and less stable output.
       lfLocalStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 1088 }, height: { ideal: 624 }, frameRate: { ideal: 30, max: 30 } },
+        video: { facingMode: 'user', width: model.width, height: model.height, frameRate: { ideal: model.fps, max: model.fps } },
       });
     } catch (e) {
+      lfDebug(`camera/SDK-load failed: ${e.message || e}`);
       lfShowError('camera permission');
       return;
     }
 
     // Prove the token endpoint itself works, with its own visible error,
-    // before ever handing control to the fal client. If this step fails,
-    // it explains a hang that never touches Fal (the WebSocket to Fal never
-    // opens without a valid token) and points straight at /api/fal-realtime-token
-    // or the saved Fal key rather than the WebRTC signaling logic.
+    // before ever handing control to the SDK. If this step fails, it points
+    // straight at /api/decart-realtime-token or the saved Decart key rather
+    // than the realtime connection itself.
+    let token;
     try {
       lfStatus.textContent = 'Connecting…';
-      await fetchLfToken('decart/lucy-2-5/realtime');
+      token = await fetchDecartToken();
     } catch (e) {
       lfDebug(`token fetch failed: ${e.message || e}`);
       lfShowError('key ' + (e.message || e));
@@ -1446,62 +1388,85 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
     try {
       lfStatus.textContent = 'Opening connection…';
-      // Fal's realtime client - loaded from esm.sh the same way the Anam SDK
-      // is above, so no build step / bundler is needed for this single-file app.
-      const { fal } = await import('https://esm.sh/@fal-ai/client@latest');
-      lfDebug('fal client module loaded');
+      const { createDecartClient } = await import('https://esm.sh/@decartai/sdk@latest');
+      const client = createDecartClient({ apiKey: token });
+      const model = models.realtime('lucy-2.5');
+      lfDebug('decart client module loaded');
 
-      lfConnection = fal.realtime.connect('decart/lucy-2-5/realtime', {
-        connectionKey: `lf-${Date.now()}`,
-        throttleInterval: 0,
-        tokenProvider: (app) => { lfDebug(`tokenProvider invoked by fal client with app="${app}"`); return fetchLfToken(app); },
-        tokenExpirationSeconds: 120,
-        onResult: handleLfResult,
-        onError: (err) => {
-          lfClearConnectTimer();
-          const msg = err?.message || (() => { try { return JSON.stringify(err); } catch { return String(err); } })();
-          lfDebug(`onError fired: ${msg}`);
-          lfShowError(msg);
-        },
-      });
-      lfDebug(`fal.realtime.connect() returned, connection object: ${lfConnection ? 'created' : 'null/undefined'}`);
-
-      // If we never even get the `iceservers` message back, the WebSocket to
-      // Fal itself is the problem (network/CSP/auth) rather than anything in
-      // the WebRTC offer/answer logic below it. A single stalled attempt is
-      // common enough (cold start, transient network blip) that it's worth
-      // one silent automatic retry before making the person manually restart -
-      // only surface the error if it stalls twice in a row.
+      // A single stalled attempt is common enough (cold start, transient
+      // network blip) that it's worth one silent automatic retry before
+      // making the person manually restart - only surface the error if it
+      // stalls twice in a row. The SDK's own connect() promise is what we're
+      // timing out here, since an unresolved connect() would otherwise hang
+      // this whole function forever with no feedback.
       lfConnectTimer = setTimeout(() => {
-        if (!lfGotIceServers) {
+        if (!lfGotStream) {
           if (retryCount < 1) {
-            lfDebug('45s elapsed, no response - retrying once automatically');
+            lfDebug('45s elapsed, no remote stream - retrying once automatically');
             lfStatus.textContent = 'Still connecting…';
-            if (lfConnection) { try { lfConnection.close ? lfConnection.close() : null; } catch(e){} lfConnection = null; }
+            lfIntentionalDisconnect = true;
+            if (lfRealtimeClient) { try { lfRealtimeClient.disconnect(); } catch(e){} lfRealtimeClient = null; }
             startLiveFilter(retryCount + 1);
           } else {
-            lfDebug('45s elapsed again on retry, no response - giving up');
+            lfDebug('45s elapsed again on retry, no remote stream - giving up');
             lfShowError('timed out');
           }
         }
       }, 45000);
 
-      // Only the initial prompt/reference-image payload goes through the Fal
-      // relay here - the actual WebRTC offer is sent once `handleLfResult`
-      // receives the `iceservers` message above.
-      const payload = {
-        prompt: prompt || undefined,
-        reference_image_url: lfReferenceImageUrl || undefined,
-        // Off, not on: expansion rewrites/pads out what's sent with invented
-        // extra detail, which is a plausible reason identity swap sometimes
-        // only partially applies (clothes change, face doesn't) - keeping
-        // the request literal keeps the reference's intent from getting
-        // diluted by auto-added description.
-        enable_prompt_expansion: false,
-      };
-      lfDebug(`sending initial payload: ${JSON.stringify(payload)}`);
-      lfConnection.send(payload);
-      lfDebug('initial payload sent, waiting for onResult/onError…');
+      lfRealtimeClient = await client.realtime.connect(lfLocalStream, {
+        model,
+        mirror: 'auto',
+        initialState: {
+          prompt: {
+            text: prompt,
+            // Off, not on: expansion rewrites/pads out what's sent with
+            // invented extra detail, which is a plausible reason identity
+            // swap sometimes only partially applies (clothes change, face
+            // doesn't) - keeping the request literal keeps the reference's
+            // intent from getting diluted by auto-added description.
+            enhance: false,
+          },
+          image: lfReferenceImageUrl || undefined,
+        },
+        onRemoteStream: (transformedStream) => {
+          lfClearConnectTimer();
+          lfGotStream = true;
+          lfRemoteVideo.srcObject = transformedStream;
+          if (lfRemoteVideo.style.display !== 'block') {
+            lfRemoteVideo.style.display = 'block';
+            lfIdle.style.display = 'none';
+            lfLiveDot.classList.add('live');
+            lfBottom.classList.remove('hidden');
+          }
+          lfStartBlackFrameWatch();
+        },
+        onError: (err) => {
+          const msg = err?.message || (() => { try { return JSON.stringify(err); } catch { return String(err); } })();
+          lfDebug(`onError fired: ${err?.code ? `[${err.code}] ` : ''}${msg}`);
+          lfShowError(msg);
+        },
+        onDisconnect: (reason) => {
+          lfDebug(`onDisconnect fired: ${reason}`);
+          lfClearBlackFrameWatch();
+          // A disconnect we triggered ourselves (hangup button, or our own
+          // black-frame-watch/timeout retry calling endLiveFilter() first)
+          // isn't an error - only show one for a disconnect the SDK decided
+          // to make on its own (server-side drop, network loss, etc).
+          if (lfIntentionalDisconnect) { lfDebug('(intentional - not showing as an error)'); return; }
+          lfIdle.style.display = 'flex';
+          lfBottom.classList.add('hidden');
+          lfLiveDot.classList.remove('live');
+          lfShowError('connection lost');
+        },
+      });
+      lfDebug(`client.realtime.connect() returned, client object: ${lfRealtimeClient ? 'created' : 'null/undefined'}`);
+
+      lfRealtimeClient.on('connectionChange', (connState) => lfDebug(`connectionChange: ${connState}`));
+      lfRealtimeClient.on('error', (error) => {
+        lfDebug(`realtime error event: [${error?.code}] ${error?.message}`);
+        lfShowError(error?.message || 'unknown');
+      });
     } catch (e) {
       lfClearConnectTimer();
       lfDebug(`failed to start (exception): ${e.message || e}`);
@@ -1510,9 +1475,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   }
 
   function endLiveFilter(){
+    lfIntentionalDisconnect = true;
     lfClearConnectTimer();
-    if (lfPc) { try { lfPc.close(); } catch(e){} lfPc = null; }
-    if (lfConnection) { try { lfConnection.close ? lfConnection.close() : lfConnection.send({ close: true }); } catch(e){} lfConnection = null; }
+    lfClearBlackFrameWatch();
+    if (lfRealtimeClient) { try { lfRealtimeClient.disconnect(); } catch(e){} lfRealtimeClient = null; }
     if (lfLocalStream) { lfLocalStream.getTracks().forEach(t => t.stop()); lfLocalStream = null; }
     lfRemoteVideo.srcObject = null;
     lfRemoteVideo.style.display = 'none';
