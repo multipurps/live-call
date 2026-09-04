@@ -250,6 +250,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     // Vault and never leave the server after the moment they're first saved (see
     // /api/keys.js, /lib/keys.js). Populated by loadKeyStatus() below.
     anamKeySet: false,
+    anamKeyLocked: false,
     falKeySet: false,
   };
   let currentUser = null;
@@ -287,8 +288,17 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       if (!r.ok) return;
       state.anamKeySet = !!data.anam;
       state.falKeySet = !!data.fal;
+      state.anamKeyLocked = !!data.anamKeyLocked;
     } catch (e) { /* leave as false - UI just shows "paste your key" */ }
-    $('anamApiKey').placeholder = state.anamKeySet ? 'Key saved — enter a new one to replace' : 'Paste your Anam API key';
+    if (state.anamKeyLocked) {
+      $('anamApiKey').placeholder = 'Locked by admin — contact support to change this';
+      $('anamApiKey').disabled = true;
+      $('saveAnamKey').disabled = true;
+    } else {
+      $('anamApiKey').placeholder = state.anamKeySet ? 'Key saved — enter a new one to replace' : 'Paste your Anam API key';
+      $('anamApiKey').disabled = false;
+      $('saveAnamKey').disabled = false;
+    }
     $('falApiKey').placeholder = state.falKeySet ? 'Key saved — enter a new one to replace' : 'Paste your Fal API key';
   }
 

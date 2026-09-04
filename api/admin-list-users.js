@@ -23,5 +23,12 @@ export default async function handler(req, res) {
     .order('created_at', { ascending: false });
 
   if (error) return res.status(500).json({ error: error.message });
-  return res.status(200).json({ users: data });
+
+  const { data: settingsRows } = await supabase
+    .from('video_call_settings')
+    .select('user_id, anam_key_locked');
+  const lockedByUser = Object.fromEntries((settingsRows || []).map(r => [r.user_id, !!r.anam_key_locked]));
+  const users = data.map(u => ({ ...u, anam_key_locked: !!lockedByUser[u.user_id] }));
+
+  return res.status(200).json({ users });
 }

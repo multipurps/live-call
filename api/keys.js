@@ -83,6 +83,12 @@ export default async function handler(req, res) {
       const key = await getProviderKey(supabase, userId, p);
       status[p] = !!key;
     }
+    const { data: settings } = await supabase
+      .from('video_call_settings')
+      .select('anam_key_locked')
+      .eq('user_id', userId)
+      .maybeSingle();
+    status.anamKeyLocked = !!settings?.anam_key_locked;
     return res.status(200).json(status);
   }
 
@@ -90,6 +96,16 @@ export default async function handler(req, res) {
     const { provider, key } = req.body || {};
     if (!PROVIDERS.includes(provider)) return res.status(400).json({ error: 'Unknown provider' });
     if (!key || !key.trim()) return res.status(400).json({ error: 'Empty key' });
+    if (provider === 'anam') {
+      const { data: settings } = await supabase
+        .from('video_call_settings')
+        .select('anam_key_locked')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (settings?.anam_key_locked) {
+        return res.status(403).json({ error: 'Your Anam key is locked and can\u2019t be changed. Contact support if you need this updated.' });
+      }
+    }
     const { error } = await saveProviderKey(supabase, userId, provider, key.trim());
     if (error) return res.status(500).json({ error: error.message || String(error) });
     if (provider === 'anam') await pushHumanizerDoc(supabase, userId, key.trim());
