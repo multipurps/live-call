@@ -962,7 +962,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   const callScreen = $('callScreen'), callIdle = $('callIdle'), callStatus = $('callStatus'), callBottom = $('callBottom');
   const remoteVideo = $('remoteVideo'), liveDot = $('liveDot');
-  let anamClient = null, micStream = null, audioCtx = null, callStartedAt = null;
+  let anamClient = null, micStream = null, audioCtx = null, callStartedAt = null, callStarting = false;
 
   function primeAudioSession(){
     try {
@@ -977,6 +977,17 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   }
 
   async function startCall(){
+    // Guards against the actual root cause of the duplicate-notification bug:
+    // repeated taps on the call button (impatience during a slow connect, or a
+    // double-tap) each spawned their own Anam session with its own
+    // CONNECTION_CLOSED listener. When they all eventually closed, each one
+    // independently fired its own /api/call-summary request and push
+    // notification - which is exactly the "~50 notifications, same result
+    // reworded" symptom (each session had no real transcript, so each got
+    // the same generic fallback summary, just from a separate LLM call).
+    if (callStarting || callScreen.classList.contains('active')) return;
+    callStarting = true;
+    try {
     // Prefer whatever is still typed in the box; if it's empty (e.g. already sent as a
     // chat message, which clears the box), fall back to what's actually in the chat.
     const typed = $('briefInput').value.trim();
@@ -1005,11 +1016,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     } catch (e) {
       stopConnectingMessages();
       callStatus.textContent = 'Microphone permission is required';
+      callScreen.classList.remove('active');
       return;
     }
 
     callStartedAt = Date.now();
     await startAnam();
+    } finally {
+      callStarting = false;
+    }
   }
 
   // Cycles a few short phrases instead of a single static "Connecting…" - the call
@@ -1068,28 +1083,32 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   }
 
   function endCall(){
+    // Idempotent: null callStartedAt out immediately so a second CONNECTION_CLOSED
+    // (or a stray call to endCall from anywhere else) can't fire a second
+    // summary/push for the same call.
+    if (!callStartedAt) return;
     stopConnectingMessages();
-    const durationSec = callStartedAt ? Math.round((Date.now() - callStartedAt) / 1000) : 0;
-    if (callStartedAt) {
-      addHistory({
+    const durationSec = Math.round((Date.now() - callStartedAt) / 1000);
+    const startedHistoryUpdate = (async () => {
+      const historyId = await addHistory({
         provider: 'anam',
         time: new Date().toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }),
         summary: durationSec > 0 ? `Call ended after ${durationSec}s` : 'Call ended immediately',
-      }).then(async (historyId) => {
-        // Fire-and-forget on purpose: the summary takes a few seconds (Anam's
-        // session report + our own summarization pass), and the push
-        // notification - not this request staying open - is what actually
-        // reaches the user if they've already left the app.
-        if (!historyId || durationSec <= 0) return;
-        try {
-          await fetch('/api/call-summary', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
-            body: JSON.stringify({ historyId }),
-          });
-        } catch (e) { console.error('call-summary request failed:', e); }
       });
-    }
+      // Fire-and-forget on purpose: the summary takes a few seconds (Anam's
+      // session report + our own summarization pass), and the push
+      // notification - not this request staying open - is what actually
+      // reaches the user if they've already left the app.
+      if (!historyId || durationSec <= 0) return;
+      try {
+        await fetch('/api/call-summary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+          body: JSON.stringify({ historyId }),
+        });
+      } catch (e) { console.error('call-summary request failed:', e); }
+    })();
+    callStartedAt = null;
     if (anamClient) { try { anamClient.stopStreaming(); } catch(e){} anamClient = null; }
     if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
     if (audioCtx) { try { audioCtx.close(); } catch(e){} audioCtx = null; }
