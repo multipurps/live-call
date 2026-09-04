@@ -10,6 +10,40 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   const $ = (id) => document.getElementById(id);
 
+  // ---------- desktop / OBS detection ----------
+  // isElectronShell(): actually running inside the desktop app (see /desktop) -
+  // window.electronAPI only exists there, exposed by its preload script.
+  // isDesktopBrowser(): a plain desktop browser, not the shell and not mobile -
+  // used only to show a "there's a desktop app" hint, since OBS features
+  // need the actual shell (a webpage alone can't run a local server for OBS
+  // to connect to).
+  function isElectronShell(){ return !!(window.electronAPI && window.electronAPI.isDesktopApp); }
+  function isDesktopBrowser(){
+    if (isElectronShell()) return false;
+    const ua = navigator.userAgent || '';
+    return !/Mobi|Android|iPhone|iPad|iPod/i.test(ua);
+  }
+
+  function initDesktopHint(){
+    const el = $('desktopHint');
+    if (!el) return;
+    if (isElectronShell()) {
+      // Real desktop shell, but the OBS bridge itself isn't wired up yet
+      // (see /desktop/obs-server.js) - say so honestly rather than showing
+      // an OBS control that doesn't do anything yet.
+      $('desktopHintText').textContent = 'Desktop app — OBS output is still being built, not available yet.';
+      el.style.display = 'flex';
+    } else if (isDesktopBrowser() && !localStorage.getItem('lc_desktop_hint_dismissed')) {
+      $('desktopHintText').textContent = 'On a desktop? A desktop app (with OBS support coming) is in this project\u2019s /desktop folder.';
+      el.style.display = 'flex';
+    }
+    $('desktopHintClose')?.addEventListener('click', () => {
+      el.style.display = 'none';
+      localStorage.setItem('lc_desktop_hint_dismissed', '1');
+    });
+  }
+  initDesktopHint();
+
   // ---------- splash ----------
   // Always shown (unconditional - no "only for returning sessions" check here,
   // unlike Personal Studio's splash), for at least MIN_SPLASH_MS, and hidden

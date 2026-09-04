@@ -1,0 +1,25 @@
+{
+  "name": "live-call-desktop",
+  "version": "0.1.0",
+  "description": "Desktop shell for Live Call & Swap - same app as the web/PWA version, plus a local WHEP bridge so OBS Studio can pull in the live call or Live Swap video as a source.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "@eyevinn/whip-endpoint": "^0.7.0"
+  },
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.multipurps.livecall.desktop",
+    "productName": "Live Call & Swap",
+    "files": ["main.js", "preload.js", "obs-server.js"],
+    "mac": { "category": "public.app-category.video" },
+    "win": { "target": "nsis" },
+    "linux": { "target": "AppImage" }
+  }
+}
