@@ -517,13 +517,13 @@
     width:64px; height:64px; border-radius:50%;
     background:#ff3b30; display:flex; align-items:center; justify-content:center;
   }
-  /* -------- Live Filter fullscreen render (Decart Lucy 2.5, direct) --------
+  /* -------- Live Filter fullscreen render (Fal.ai / Decart Lucy 2.5) --------
      Mirrors #callScreen: full-bleed video, nothing else on screen once live,
      tap anywhere outside the top pill / bottom controls to show or hide them.
-     No manual transform:scaleX(-1) here - @decartai/sdk's realtime.connect()
-     is called with `mirror: "auto"`, which already returns a correctly
-     selfie-mirrored stream (raise your left hand, see it on your left), so a
-     CSS flip on top of that would just un-mirror it again. */
+     Manual transform:scaleX(-1) below flips the *display* only for a proper
+     selfie-mirror (raise your left hand, see it on your left) - Fal's raw
+     peer connection track is unmirrored true-orientation video, unlike
+     Decart's own SDK which mirrors this itself. */
   #lfCallScreen{
     position:absolute; inset:0; height:var(--app-height, 100dvh); background:var(--coffee);
     display:none; z-index:50;
@@ -532,6 +532,12 @@
   #lfRemoteVideo{
     position:absolute; inset:0; width:100%; height:100%;
     object-fit:cover; border:0; background:#000;
+    transform:scaleX(-1); /* front camera is sent unmirrored (true orientation) so a
+      call partner sees you correctly - but for this self-view feature we flip the
+      *display* only, to match the mirror behavior every phone camera app uses for
+      its own selfie preview (raise your left hand, see it on your left). Decart's
+      SDK did this itself (mirror:'auto'); Fal's raw peer connection track doesn't,
+      so this has to come back now that we're off Decart. */
   }
   #lfIdle{
     position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
