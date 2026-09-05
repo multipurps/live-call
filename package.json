@@ -2,8 +2,16 @@
   "name": "live-call",
   "version": "1.0.0",
   "private": true,
+  "scripts": {
+    "build": "node build.js"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
     "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "clean-css": "^5.3.3",
+    "html-minifier-terser": "^7.2.0",
+    "terser": "^5.51.2"
   }
 }
