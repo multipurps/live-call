@@ -2,7 +2,7 @@
 // admin.html) from their readable .src. counterparts, minified and with
 // comments/variable names stripped so the served bundle doesn't read like
 // documentation of the app's architecture and provider choices to anyone
-// who loads the URL or views source. Run `npm run build` after editing any
+// who loads the URL or views source. Run `npm run minify` after editing any
 // *.src.* file - the .src. files are what should be edited and reviewed;
 // the plain-named files are generated output and get overwritten every run.
 const fs = require('fs');

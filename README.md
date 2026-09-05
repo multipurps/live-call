@@ -11,7 +11,7 @@ source. **Edit the `.src.` files instead** (`app.src.js`, `boot.src.js`,
 
 ```
 npm install   # first time only
-npm run build
+npm run minify
 ```
 
 ...to regenerate the served files before committing. Committing only a
