@@ -8,7 +8,7 @@
     "dist": "electron-builder"
   },
   "dependencies": {
-    "@eyevinn/whip-endpoint": "^0.7.0"
+    "koffi": "^2.9.0"
   },
   "devDependencies": {
     "electron": "^32.0.0",
@@ -17,7 +17,7 @@
   "build": {
     "appId": "com.multipurps.livecall.desktop",
     "productName": "Live Call & Swap",
-    "files": ["main.js", "preload.js", "obs-server.js"],
+    "files": ["main.js", "preload.js", "unity-capture-sender.js"],
     "mac": { "category": "public.app-category.video" },
     "win": { "target": "nsis" },
     "linux": { "target": "AppImage" }

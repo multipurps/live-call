@@ -1,23 +1,43 @@
 # Live Call & Swap — Desktop
 
 Electron shell around the same web app used on mobile/PWA. Reuses 100% of the
-existing `index.html`/`app.js`/`styles.css` by loading the deployed URL — no
-separate copy of the app to maintain.
+existing app by loading the deployed URL — no separate copy to maintain.
 
-## Current state (be honest with yourself before shipping this)
+## How OBS integration actually works (corrected from an earlier, wrong plan)
 
-- **Works now:** the shell itself. `npm install && npm start` opens the real
-  app in a desktop window, and the app detects it's running in this shell
-  (`window.electronAPI.isDesktopApp`).
-- **Not built yet:** the actual OBS bridge. `obs-server.js` is a stub with
-  a header explaining why — the obvious-looking library (`@eyevinn/whip-endpoint`)
-  turned out to require a separate SFU media server running alongside it, not
-  something that fits a single-user desktop app. The real path is a
-  hand-built WHEP server on `werift` (pure-JS WebRTC for Node, no external
-  media server needed) — see the comment in that file for the shape of it.
-  This needs to be built and tested against a real OBS instance before it's
-  trusted; it was not possible to verify end-to-end in the environment this
-  was written in (no GUI, no OBS installed).
+Not WHIP/WHEP (an earlier version of this doc proposed that — wrong tool for
+this job, dropped). **It's a virtual camera**, the same mechanism apps like
+Avatarify and Snap Camera use: this app writes raw video frames into a
+shared-memory region that a separate, pre-built capture filter
+([UnityCaptureFilter](https://github.com/schellingb/UnityCapture) — despite
+the name, no Unity engine involved, just a DirectShow filter DLL) exposes to
+Windows as a normal camera device. OBS then just picks it from the same
+dropdown as any real webcam.
+
+## Current state
+
+- **Works now:** the shell itself (`npm install && npm start` opens the real
+  app), and `unity-capture-sender.js` — a from-scratch port of
+  UnityCaptureFilter's actual shared-memory protocol (named mutex/events +
+  a fixed-offset header struct, read directly from its source, not guessed).
+- **Set up required, one-time, per machine:** download a UnityCaptureFilter
+  release from the link above and run its `Install.bat` — this registers
+  the actual camera device Windows/OBS will see. No compiler needed for
+  this step, it's a pre-built DLL + script.
+- **Not yet verified:** the sender code has not been run against a real
+  UnityCaptureFilter install or real OBS — there's no Windows machine in the
+  environment this was written in. The protocol is byte-for-byte from the
+  real source, but "should be correct" is not the same as "tested." If
+  frames don't appear once wired up, check (in order): the filter is
+  actually installed (`Install.bat` ran without error), OBS's source is
+  pointed at the right device name, and that koffi loaded correctly
+  (`npm start` console will show errors if not).
+- **macOS:** deliberately not attempted the same way. macOS requires any
+  code installing a system-level camera device to be signed and notarized
+  by Apple (Developer Program, $99/year) — there's no equivalent
+  "just run a script" path there. `obsCaptureAvailable` is `false` on macOS
+  for this reason; building that path is separate work once there's a way
+  to sign it.
 
 ## Running it
 

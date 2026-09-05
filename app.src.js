@@ -27,14 +27,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   function initDesktopHint(){
     const el = $('desktopHint');
     if (!el) return;
-    if (isElectronShell()) {
-      // Real desktop shell, but the OBS bridge itself isn't wired up yet
-      // (see /desktop/obs-server.js) - say so honestly rather than showing
-      // an OBS control that doesn't do anything yet.
-      $('desktopHintText').textContent = 'Desktop app — OBS output is still being built, not available yet.';
+    if (isElectronShell() && !window.electronAPI.obsCaptureAvailable) {
+      // Real desktop shell, but OBS output isn't available on this platform
+      // yet (currently Windows-only - see /desktop/README.md for why macOS
+      // needs a different, signed approach).
+      $('desktopHintText').textContent = 'Desktop app — OBS output isn\u2019t available on this platform yet.';
       el.style.display = 'flex';
     } else if (isDesktopBrowser() && !localStorage.getItem('lc_desktop_hint_dismissed')) {
-      $('desktopHintText').textContent = 'On a desktop? A desktop app (with OBS support coming) is in this project\u2019s /desktop folder.';
+      $('desktopHintText').textContent = 'On a desktop? A desktop app with OBS support is in this project\u2019s /desktop folder.';
       el.style.display = 'flex';
     }
     $('desktopHintClose')?.addEventListener('click', () => {
@@ -43,6 +43,52 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     });
   }
   initDesktopHint();
+
+  // ---------- OBS virtual-camera bridge (desktop shell, Windows only for now) ----------
+  // Grabs frames off a <video> element onto an offscreen canvas and hands
+  // the raw RGBA pixels to window.electronAPI.sendFrameToObs(), which the
+  // desktop shell's main process writes into a UnityCaptureFilter virtual
+  // camera device (see /desktop/unity-capture-sender.js) for OBS to pick up
+  // as a normal Video Capture Device source.
+  function createObsBridge(videoEl){
+    let rafId = null, canvas = null, ctx = null;
+    function tick(){
+      if (!videoEl.videoWidth) { rafId = requestAnimationFrame(tick); return; }
+      if (!canvas) { canvas = document.createElement('canvas'); ctx = canvas.getContext('2d', { willReadFrequently: true }); }
+      if (canvas.width !== videoEl.videoWidth || canvas.height !== videoEl.videoHeight) {
+        canvas.width = videoEl.videoWidth;
+        canvas.height = videoEl.videoHeight;
+      }
+      ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+      const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      window.electronAPI.sendFrameToObs(canvas.width, canvas.height, frame.data.buffer);
+      rafId = requestAnimationFrame(tick);
+    }
+    return {
+      start(){ if (!rafId) tick(); },
+      stop(){ if (rafId) { cancelAnimationFrame(rafId); rafId = null; } },
+    };
+  }
+
+  function wireObsButton(btnId, videoEl){
+    const btn = $(btnId);
+    if (!btn) return;
+    if (!isElectronShell() || !window.electronAPI.obsCaptureAvailable) return; // stays hidden (display:none from markup)
+    btn.style.display = 'inline-block';
+    const bridge = createObsBridge(videoEl);
+    let on = false;
+    btn.addEventListener('click', () => {
+      on = !on;
+      btn.classList.toggle('active', on);
+      btn.textContent = on ? 'Sending to OBS' : 'Send to OBS';
+      if (on) bridge.start(); else bridge.stop();
+    });
+  }
+  // Wired once at boot - the video elements exist in the DOM from page load
+  // (they're just display:none / not srcObject-populated until a call starts),
+  // so this doesn't need to wait for a call to actually be active.
+  wireObsButton('callObsBtn', $('remoteVideo'));
+  wireObsButton('lfObsBtn', $('lfRemoteVideo'));
 
   // ---------- splash ----------
   // Always shown (unconditional - no "only for returning sessions" check here,
