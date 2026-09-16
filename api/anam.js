@@ -70,9 +70,12 @@ improvise naturally, adding small consistent sensory details if it fits. Never
 say you don't have a body, a location, or senses - that breaks the call for no
 reason and isn't what a person on the phone would ever say.`;
 
-function buildSystemPrompt(userTask) {
-  if (!userTask) return `${BASE_HUMANIZER_PROMPT}\n\n# Task\nJust have a normal, friendly conversation.`;
-  return `${BASE_HUMANIZER_PROMPT}\n\n# Task\n${userTask}`;
+function buildSystemPrompt(userTask, memoryFacts) {
+  const memoryBlock = memoryFacts
+    ? `\n\n# What you remember about this person\nFrom past calls, you know the following about them. Use it naturally where\nrelevant - the way a person recalls things about someone they've talked to\nbefore, not by reciting a list. Never announce that you "have notes" or\n"remember from before" unprompted; just talk like someone who already knows\nthem.\n${memoryFacts}`
+    : '';
+  if (!userTask) return `${BASE_HUMANIZER_PROMPT}${memoryBlock}\n\n# Task\nJust have a normal, friendly conversation.`;
+  return `${BASE_HUMANIZER_PROMPT}${memoryBlock}\n\n# Task\n${userTask}`;
 }
 
 async function parseJsonSafe(r) {
@@ -122,6 +125,14 @@ export default async function handler(req, res) {
       const { avatarId, voiceId, systemPrompt } = req.body || {};
       if (!avatarId) return res.status(400).json({ error: 'avatarId is required' });
       try {
+        // Prefetch: pull whatever's been learned about this person from past
+        // calls (see /api/call-summary.js's sync step, and sql/008_avatar_memory.sql)
+        // and fold it into this call's system prompt.
+        const { data: memRow } = await supabase
+          .from('avatar_memory')
+          .select('facts')
+          .eq('user_id', userId)
+          .maybeSingle();
         const r = await fetch('https://api.anam.ai/v1/auth/session-token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeaders },
@@ -134,7 +145,7 @@ export default async function handler(req, res) {
               // Anam auto-generates its own opening greeting by default, unrelated to
               // systemPrompt - skipGreeting keeps it silent until the user speaks first,
               // so its first reply is actually grounded in the given task.
-              systemPrompt: buildSystemPrompt(systemPrompt),
+              systemPrompt: buildSystemPrompt(systemPrompt, memRow?.facts || ''),
               skipGreeting: true,
             },
           }),

@@ -73,6 +73,38 @@ the call ended. 2-4 sentences. No headers, no bullet points, just a short natura
   return data?.choices?.[0]?.message?.content?.trim() || 'Call ended - no summary could be generated.';
 }
 
+// Sync step: fold anything durable from this call into the persona's
+// standing memory of this person (see sql/008_avatar_memory.sql and
+// api/anam.js's prefetch on the next call). The model gets the EXISTING
+// memory alongside the new transcript and returns the merged, deduplicated
+// result - this is what keeps it from growing forever the way a plain
+// append would; each call is a chance to consolidate, not just add.
+async function extractMemory(transcriptText, existingFacts) {
+  if (!transcriptText) return existingFacts; // nothing new to learn from a silent/failed call
+  const apiKey = process.env.GROQ_API_KEY;
+  const systemPrompt = `You maintain a persona's standing memory of one specific person across calls.
+Given the EXISTING memory (may be empty) and a NEW call transcript, output the updated memory: merge in
+any new durable facts (their name, preferences, ongoing situations, things they care about, recurring
+topics), and drop anything that was clearly one-off or no longer relevant. Keep it as short plain
+bullet points - facts only, no commentary, no "the caller said". If nothing durable came up this call,
+just return the existing memory unchanged. Output ONLY the bullet list, nothing else.`;
+  const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: 'openai/gpt-oss-120b',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `EXISTING MEMORY:\n${existingFacts || '(none yet)'}\n\nNEW TRANSCRIPT:\n${transcriptText}` },
+      ],
+      temperature: 0.3,
+      max_completion_tokens: 500,
+    }),
+  });
+  const data = await r.json();
+  return data?.choices?.[0]?.message?.content?.trim() || existingFacts;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
@@ -100,7 +132,16 @@ export default async function handler(req, res) {
   if (!sessionId) return res.status(200).json({ summary: null, reason: 'No recent session found' });
 
   const transcript = await pollTranscript(anamKey, sessionId);
-  const summary = await summarize(transcriptToText(transcript));
+  const transcriptText = transcriptToText(transcript);
+  const summary = await summarize(transcriptText);
+
+  // Sync: merge whatever's durable from this call into standing memory,
+  // so the next call (see api/anam.js's prefetch) starts already knowing it.
+  const { data: memRow } = await supabase.from('avatar_memory').select('facts').eq('user_id', userId).maybeSingle();
+  const updatedFacts = await extractMemory(transcriptText, memRow?.facts || '');
+  if (updatedFacts !== (memRow?.facts || '')) {
+    await supabase.from('avatar_memory').upsert({ user_id: userId, facts: updatedFacts, updated_at: new Date().toISOString() });
+  }
 
   const { error: updateErr } = await supabase
     .from('video_call_history')
