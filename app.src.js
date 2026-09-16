@@ -219,7 +219,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     moveTabGlider(name);
     $('homeInputBar').classList.toggle('visible', name === 'home');
     if (name === 'recent') renderRecent();
-    if (name === 'profile') renderProfile();
+    if (name === 'profile') { renderProfile(); fetchConnectedStatus(); }
     if (name === 'features') updateLfKeyHint();
   }
   tabBtns.forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
@@ -990,14 +990,44 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   async function renderRecent(){
     const list = $('recentList');
     if (!currentUser) return;
-    const { data, error } = await supabase
-      .from('video_call_chats')
-      .select('*')
-      .eq('user_id', currentUser.id)
-      .order('updated_at', { ascending: false })
-      .limit(50);
-    if (error || !data || !data.length) { list.innerHTML = '<div class="emptyState">No chats yet. Brief the AI on Home to start one.</div>'; return; }
-    list.innerHTML = data.map(c => {
+
+    // Fetch both AI chats and social calls
+    const [chatsRes, socialRes] = await Promise.all([
+      supabase.from('video_call_chats').select('*').eq('user_id', currentUser.id).order('updated_at', { ascending: false }).limit(50),
+      fetch('/api/social-call/history').then(r => r.json()).catch(() => ({ history: [] }))
+    ]);
+
+    const data = chatsRes.data || [];
+    const socialCalls = socialRes.history || [];
+
+    if (!data.length && !socialCalls.length) {
+      list.innerHTML = '<div class="emptyState">No calls yet. Place a call or brief the AI on Home to start.</div>';
+      return;
+    }
+
+    const socialRows = socialCalls.map(c => `
+      <div class="callRow socialCallRow" style="cursor:default;">
+        <div class="chatAvatar" style="background:${c.platform === 'whatsapp' ? '#25D366' : '#2AABEE'};">
+          ${c.platform === 'whatsapp'
+            ? '<svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2ZM12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.59 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19.01L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 14.99 3.8 13.47 3.8 11.91C3.81 7.37 7.5 3.67 12.05 3.67ZM8.79 7.34C8.61 7.34 8.31 7.41 8.06 7.68C7.81 7.95 7.11 8.61 7.11 9.94C7.11 11.27 8.08 12.55 8.22 12.73C8.36 12.92 10.13 15.65 12.84 16.82C13.49 17.1 13.99 17.26 14.38 17.39C15.04 17.6 15.64 17.57 16.11 17.5C16.64 17.42 17.73 16.84 17.96 16.19C18.19 15.54 18.19 14.99 18.12 14.87C18.05 14.75 17.87 14.68 17.6 14.54C17.33 14.4 16 13.75 15.75 13.66C15.5 13.57 15.32 13.52 15.14 13.79C14.96 14.07 14.44 14.68 14.28 14.87C14.13 15.05 13.97 15.07 13.7 14.94C13.43 14.8 12.56 14.52 11.53 13.6C10.73 12.89 10.19 12.01 10.03 11.74C9.87 11.46 10.01 11.31 10.15 11.18C10.27 11.06 10.42 10.86 10.56 10.7C10.7 10.54 10.75 10.42 10.84 10.24C10.93 10.06 10.89 9.9 10.82 9.76C10.75 9.62 10.2 8.27 9.97 7.73C9.75 7.2 9.53 7.28 9.36 7.27C9.21 7.26 9.01 7.26 8.81 7.26L8.79 7.34Z"/></svg>'
+            : '<svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>'
+          }
+        </div>
+        <div class="rowMain">
+          <div class="name">${(c.name || c.target).replace(/</g,'&lt;')}</div>
+          <div class="summary" style="display:flex; align-items:center; gap:6px;">
+            <span class="socialBadge ${c.platform}">${c.platform === 'whatsapp' ? 'WhatsApp' : 'Telegram'}</span>
+            <span>•</span>
+            <span>${c.duration || '0m 0s'}</span>
+          </div>
+        </div>
+        <div class="rowRight">
+          <div class="time">${new Date(c.startedAt).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}</div>
+        </div>
+      </div>
+    `).join('');
+
+    const chatRows = data.map(c => {
       const msgs = Array.isArray(c.messages) ? c.messages : [];
       const lastMsg = msgs[msgs.length - 1]?.content || '';
       const title = c.title || 'New chat';
@@ -1018,6 +1048,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       </div>
     `;
     }).join('');
+
+    list.innerHTML = socialRows + chatRows;
     list.querySelectorAll('[data-open-chat-id]').forEach(row => {
       row.addEventListener('click', () => resumeChat(row.dataset.openChatId, data));
     });
@@ -1338,6 +1370,41 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     if (lfConnectTimer) { clearTimeout(lfConnectTimer); lfConnectTimer = null; }
   }
 
+  // ---------------------------------------------------------------- Reusable Live Swap Media Source
+  // Central reusable output layer for Decart Lucy 2.5 avatar stream.
+  // Reused as outgoing video stream for WhatsApp calls, Telegram calls, and the Live Swap screen.
+  const LiveSwapMediaSource = {
+    stream: null,
+    listeners: new Set(),
+    forSocialCall: false,
+    setStream(s){
+      this.stream = s;
+      this.listeners.forEach(fn => { try { fn(s); } catch(e){} });
+    },
+    getStream(){
+      return this.stream || (lfRemoteVideo ? lfRemoteVideo.srcObject : null) || (lfPc && lfPc.getRemoteStreams ? lfPc.getRemoteStreams()[0] : null);
+    },
+    getVideoElement(){
+      return lfRemoteVideo;
+    },
+    onStream(fn){
+      this.listeners.add(fn);
+      if (this.stream) fn(this.stream);
+    },
+    isActive(){
+      return !!(this.stream || (lfPc && lfPc.connectionState === 'connected'));
+    },
+    async start(options = {}){
+      this.forSocialCall = !!options.forSocialCall;
+      await startLiveFilter(0, options);
+    },
+    stop(){
+      this.forSocialCall = false;
+      this.stream = null;
+      endLiveFilter();
+    }
+  };
+
   // Fal's `fal.realtime.connect` client is only a signaling *relay* for this
   // model (and its VTON sibling) - it does not open the WebRTC peer connection
   // for you. `onResult` delivers the raw signaling messages Decart's realtime
@@ -1369,12 +1436,33 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         lfLocalStream.getTracks().forEach((track) => lfPc.addTrack(track, lfLocalStream));
 
         lfPc.ontrack = (e) => {
-          lfRemoteVideo.srcObject = e.streams[0];
-          if (lfRemoteVideo.style.display !== 'block') {
-            lfRemoteVideo.style.display = 'block';
-            lfIdle.style.display = 'none';
-            lfLiveDot.classList.add('live');
-            lfBottom.classList.remove('hidden');
+          const stream = e.streams[0];
+          lfRemoteVideo.srcObject = stream;
+          LiveSwapMediaSource.setStream(stream);
+
+          const socialVid = $('socialRemoteVideo');
+          if (socialVid) { socialVid.srcObject = stream; socialVid.style.display = 'block'; }
+          const prepVid = $('prepAvatarPreview');
+          if (prepVid) {
+            prepVid.srcObject = stream;
+            prepVid.style.display = 'block';
+            const ph = $('prepAvatarPlaceholder');
+            if (ph) ph.style.display = 'none';
+          }
+
+          if (!LiveSwapMediaSource.forSocialCall) {
+            if (lfRemoteVideo.style.display !== 'block') {
+              lfRemoteVideo.style.display = 'block';
+              lfIdle.style.display = 'none';
+              lfLiveDot.classList.add('live');
+              lfBottom.classList.remove('hidden');
+            }
+          } else {
+            const idle = $('socialCallIdle');
+            if (idle) idle.style.display = 'none';
+            const lucySt = $('prepLucyStatus');
+            if (lucySt) lucySt.textContent = 'Live & Streaming';
+            $('prepLucyDot')?.classList.add('live');
           }
         };
 
@@ -1479,9 +1567,35 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     return token;
   }
 
-  async function startLiveFilter(retryCount){
+  async function startLiveFilter(retryCount, { forSocialCall = false } = {}){
     retryCount = retryCount || 0;
-    if (!state.falKeySet) { updateLfKeyHint(); return; }
+    LiveSwapMediaSource.forSocialCall = !!forSocialCall;
+    if (!state.falKeySet) {
+      if (forSocialCall) {
+        // Fallback for social call if Fal key is not configured: activate user camera for the call
+        try {
+          if (lfLocalStream) { lfLocalStream.getTracks().forEach(t => t.stop()); lfLocalStream = null; }
+          lfLocalStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30, max: 30 } }
+          });
+          const socialVid = $('socialRemoteVideo');
+          if (socialVid) { socialVid.srcObject = lfLocalStream; }
+          const prepVid = $('prepAvatarPreview');
+          if (prepVid) { prepVid.srcObject = lfLocalStream; prepVid.style.display = 'block'; $('prepAvatarPlaceholder').style.display = 'none'; }
+          LiveSwapMediaSource.setStream(lfLocalStream);
+          const idle = $('socialCallIdle');
+          if (idle) idle.style.display = 'none';
+          $('prepLucyStatus').textContent = 'Camera ready';
+          $('prepLucyDot')?.classList.add('live');
+          return;
+        } catch(e) {
+          lfShowError('camera permission');
+          return;
+        }
+      }
+      updateLfKeyHint();
+      return;
+    }
     // The person never has to type anything: if a reference photo is set, its
     // strict auto-description IS the prompt. Anything typed in the box is an
     // ADDITIONAL instruction appended after it (e.g. a background change),
@@ -1497,8 +1611,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     $('lfStartStatus').textContent = '';
 
     lfClearError();
-    lfCallScreen.classList.add('active');
-    lfIdle.style.display = 'flex';
+    if (!forSocialCall) {
+      lfCallScreen.classList.add('active');
+      lfIdle.style.display = 'flex';
+    }
     lfStatus.textContent = 'Connecting…';
     lfLiveDot.classList.remove('live');
     lfGotIceServers = false;
@@ -1609,6 +1725,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     lfLiveDot.classList.remove('live');
     lfBottom.classList.add('hidden');
     lfCallScreen.classList.remove('active');
+
+    const socialVid = $('socialRemoteVideo');
+    if (socialVid) socialVid.srcObject = null;
+    const prepVid = $('prepAvatarPreview');
+    if (prepVid) { prepVid.srcObject = null; prepVid.style.display = 'none'; $('prepAvatarPlaceholder').style.display = 'block'; }
+    LiveSwapMediaSource.stream = null;
+    LiveSwapMediaSource.forSocialCall = false;
   }
 
   $('lfStartBtn')?.addEventListener('click', () => startLiveFilter());
@@ -1629,8 +1752,610 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/></svg>';
   });
 
-  $('headerCallBtn')?.addEventListener('click', startCall);
   $('endBtn')?.addEventListener('click', endCall);
+
+  // ==============================================================================
+  // SOCIAL CALLING ARCHITECTURE (WhatsApp & Telegram with Lucy 2.5 Live Swap)
+  // ==============================================================================
+
+  let currentSocialPlatform = null; // 'whatsapp' | 'telegram'
+  let selectedSocialContact = null; // { name, target }
+  let socialMicStream = null;
+  let socialCallDurationTimer = null;
+  let socialCallStartedAt = null;
+  let socialMuted = false;
+  let waStatusPollTimer = null;
+
+  // Social Call Media Adapter
+  // Pipes real-time Lucy 2.5 Live Swap video frames and mic audio to social call bridge
+  const SocialCallMediaAdapter = {
+    ws: null,
+    frameTimer: null,
+    audioProcessor: null,
+    micAudioCtx: null,
+    active: false,
+    initWs(){
+      if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      this.ws = new WebSocket(`${proto}//${location.host}/api/social-call/media`);
+      this.ws.binaryType = 'arraybuffer';
+      this.ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          handleMediaWsMessage(msg);
+        } catch(err){}
+      };
+      this.ws.onclose = () => {
+        if (this.active) setTimeout(() => this.initWs(), 2000);
+      };
+    },
+    startStreaming(stream, micStream){
+      this.active = true;
+      this.initWs();
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 480;
+      canvas.height = 640;
+      const ctx = canvas.getContext('2d');
+      const vid = LiveSwapMediaSource.getVideoElement() || $('socialRemoteVideo');
+
+      clearInterval(this.frameTimer);
+      // 15 fps loop matching WhatsApp and PyTgCalls video specification
+      this.frameTimer = setInterval(() => {
+        if (!this.active || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+        if (vid && (vid.videoWidth || vid.readyState >= 2)) {
+          ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob((blob) => {
+            if (!blob || !this.active || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+            blob.arrayBuffer().then((buf) => {
+              const tagged = new Uint8Array(buf.byteLength + 1);
+              tagged[0] = 0x01; // 0x01 = Lucy 2.5 Video Frame
+              tagged.set(new Uint8Array(buf), 1);
+              this.ws.send(tagged);
+            });
+          }, 'image/jpeg', 0.7);
+        }
+      }, 1000 / 15);
+
+      // Mic PCM 16kHz audio stream
+      if (micStream && micStream.getAudioTracks().length) {
+        try {
+          this.micAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+          const source = this.micAudioCtx.createMediaStreamSource(micStream);
+          this.audioProcessor = this.micAudioCtx.createScriptProcessor(2048, 1, 1);
+          this.audioProcessor.onaudioprocess = (evt) => {
+            if (!this.active || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+            const input = evt.inputBuffer.getChannelData(0);
+            const pcm16 = new Int16Array(input.length);
+            for (let i = 0; i < input.length; i++) {
+              const s = Math.max(-1, Math.min(1, input[i]));
+              pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+            }
+            const tagged = new Uint8Array(pcm16.buffer.byteLength + 1);
+            tagged[0] = 0x02; // 0x02 = Mic PCM Audio
+            tagged.set(new Uint8Array(pcm16.buffer), 1);
+            this.ws.send(tagged);
+          };
+          source.connect(this.audioProcessor);
+          this.audioProcessor.connect(this.micAudioCtx.destination);
+        } catch(e){}
+      }
+    },
+    stop(){
+      this.active = false;
+      clearInterval(this.frameTimer);
+      if (this.audioProcessor) { try { this.audioProcessor.disconnect(); } catch(e){} this.audioProcessor = null; }
+      if (this.micAudioCtx) { try { this.micAudioCtx.close(); } catch(e){} this.micAudioCtx = null; }
+      if (this.ws) { try { this.ws.close(); } catch(e){} this.ws = null; }
+    }
+  };
+
+  function handleMediaWsMessage(msg){
+    if (msg.type === 'wa_status' || msg.type === 'wa_qr' || msg.type === 'wa_pairing_code') {
+      fetchConnectedStatus();
+    }
+    if (msg.type === 'call_state') {
+      if (msg.state === 'connected') {
+        const lbl = $('socialCallStatusLabel');
+        if (lbl) lbl.textContent = 'Connected';
+        const idle = $('socialCallIdle');
+        if (idle) idle.style.display = 'none';
+      } else if (msg.state === 'ended') {
+        endSocialCall();
+      }
+    }
+  }
+
+  // -------------------------------------------------------------
+  // Connected Accounts in Profile
+  // -------------------------------------------------------------
+  async function fetchConnectedStatus(){
+    try {
+      const res = await fetch('/api/social-call/status');
+      if (!res.ok) return;
+      const data = await res.json();
+
+      // WhatsApp status
+      const wa = data.whatsapp || {};
+      const waStatusEl = $('whatsappAccountStatus');
+      const waBadgeEl = $('whatsappAccountBadge');
+      if (wa.connected && wa.user) {
+        if (waStatusEl) waStatusEl.textContent = `Connected as ${wa.user.phone ? '+' + wa.user.phone : wa.user.name}`;
+        if (waBadgeEl) {
+          waBadgeEl.textContent = 'Connected';
+          waBadgeEl.classList.add('connected');
+        }
+        $('waDetailStatus').textContent = 'Connected';
+        $('waDetailSub').textContent = `Linked phone: +${wa.user.phone || ''}`;
+        $('waConnectedNumber').textContent = `+${wa.user.phone || ''} (${wa.user.name || 'WhatsApp User'})`;
+        $('waNotConnectedView').style.display = 'none';
+        $('waConnectedView').style.display = 'block';
+        $('choiceWhatsAppSubtitle').textContent = `Connected (+${wa.user.phone || ''})`;
+      } else {
+        if (waStatusEl) waStatusEl.textContent = 'Not connected';
+        if (waBadgeEl) {
+          waBadgeEl.textContent = 'Connect';
+          waBadgeEl.classList.remove('connected');
+        }
+        $('waDetailStatus').textContent = wa.status === 'scan_qr' ? 'Waiting for scan…' : 'Disconnected';
+        $('waDetailSub').textContent = 'Scan QR code or use pairing code';
+        $('waNotConnectedView').style.display = 'block';
+        $('waConnectedView').style.display = 'none';
+        $('choiceWhatsAppSubtitle').textContent = 'Live Video Call with Lucy 2.5';
+
+        if (wa.qr) {
+          const img = $('waQrImg');
+          if (img) { img.src = wa.qr; img.style.display = 'block'; }
+          const load = $('waQrLoading');
+          if (load) load.style.display = 'none';
+        }
+      }
+
+      // Telegram status
+      const tg = data.telegram || {};
+      const tgStatusEl = $('telegramAccountStatus');
+      const tgBadgeEl = $('telegramAccountBadge');
+      if (tg.connected && tg.user) {
+        const u = tg.user;
+        const disp = u.username ? `@${u.username}` : (u.phone_number || u.first_name || 'Connected');
+        if (tgStatusEl) tgStatusEl.textContent = `Connected as ${disp}`;
+        if (tgBadgeEl) {
+          tgBadgeEl.textContent = 'Connected';
+          tgBadgeEl.classList.add('connected');
+        }
+        $('tgDetailStatus').textContent = 'Connected';
+        $('tgDetailSub').textContent = `Linked account: ${disp}`;
+        $('tgConnectedUser').textContent = `${u.first_name || ''} (${disp})`;
+        $('tgNotConnectedView').style.display = 'none';
+        $('tgConnectedView').style.display = 'block';
+        $('choiceTelegramSubtitle').textContent = `Connected (${disp})`;
+      } else {
+        if (tgStatusEl) tgStatusEl.textContent = 'Not connected';
+        if (tgBadgeEl) {
+          tgBadgeEl.textContent = 'Connect';
+          tgBadgeEl.classList.remove('connected');
+        }
+        $('tgDetailStatus').textContent = 'Disconnected';
+        $('tgDetailSub').textContent = 'Enter phone number to receive login code';
+        $('tgNotConnectedView').style.display = 'block';
+        $('tgConnectedView').style.display = 'none';
+        $('choiceTelegramSubtitle').textContent = 'Live Video Call with Lucy 2.5';
+      }
+    } catch(err){
+      console.warn('[fetchConnectedStatus] note:', err.message);
+    }
+  }
+
+  // Profile -> WhatsApp
+  $('openWhatsAppConnect')?.addEventListener('click', () => {
+    $('whatsappConnectScreen').classList.add('active');
+    fetch('/api/social-call/whatsapp/qr', { method: 'POST' })
+      .then(r => r.json())
+      .then(() => fetchConnectedStatus());
+    clearInterval(waStatusPollTimer);
+    waStatusPollTimer = setInterval(fetchConnectedStatus, 3000);
+  });
+  $('closeWhatsAppConnect')?.addEventListener('click', () => {
+    $('whatsappConnectScreen').classList.remove('active');
+    clearInterval(waStatusPollTimer);
+  });
+
+  $('waTabQrBtn')?.addEventListener('click', () => {
+    $('waTabQrBtn').classList.add('active');
+    $('waTabPairBtn').classList.remove('active');
+    $('waQrBox').style.display = 'block';
+    $('waPairBox').style.display = 'none';
+  });
+  $('waTabPairBtn')?.addEventListener('click', () => {
+    $('waTabPairBtn').classList.add('active');
+    $('waTabQrBtn').classList.remove('active');
+    $('waPairBox').style.display = 'block';
+    $('waQrBox').style.display = 'none';
+  });
+
+  $('waRefreshQrBtn')?.addEventListener('click', async () => {
+    $('waQrLoading').style.display = 'block';
+    $('waQrLoading').textContent = 'Refreshing QR code…';
+    $('waQrImg').style.display = 'none';
+    await fetch('/api/social-call/whatsapp/qr', { method: 'POST' });
+    await fetchConnectedStatus();
+  });
+
+  $('waGetPairBtn')?.addEventListener('click', async () => {
+    const phone = $('waPairPhoneInput').value.trim();
+    if (!phone) return alert('Enter phone number with country code');
+    $('waGetPairBtn').textContent = 'Generating…';
+    try {
+      const res = await fetch('/api/social-call/whatsapp/pair', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      });
+      const data = await res.json();
+      if (data.code) {
+        $('waPairCodeDisplay').textContent = data.code;
+        $('waPairResult').style.display = 'block';
+      } else if (data.error) {
+        alert(data.error);
+      }
+    } catch(e) {
+      alert(e.message);
+    } finally {
+      $('waGetPairBtn').textContent = 'Get Pairing Code';
+    }
+  });
+
+  $('waDisconnectBtn')?.addEventListener('click', async () => {
+    if (!confirm('Disconnect WhatsApp?')) return;
+    await fetch('/api/social-call/whatsapp/disconnect', { method: 'POST' });
+    await fetchConnectedStatus();
+  });
+
+  // Profile -> Telegram
+  $('openTelegramConnect')?.addEventListener('click', () => {
+    $('telegramConnectScreen').classList.add('active');
+    fetchConnectedStatus();
+  });
+  $('closeTelegramConnect')?.addEventListener('click', () => {
+    $('telegramConnectScreen').classList.remove('active');
+  });
+
+  $('tgSendCodeBtn')?.addEventListener('click', async () => {
+    const phone = $('tgPhoneInput').value.trim();
+    if (!phone) return alert('Enter phone number');
+    $('tgSendCodeBtn').textContent = 'Sending code…';
+    $('tgSendCodeHint').textContent = '';
+    try {
+      const res = await fetch('/api/social-call/telegram/send_code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone_number: phone }),
+      });
+      const data = await res.json();
+      if (data.status === 'code_sent') {
+        $('tgStepPhone').style.display = 'none';
+        $('tgStepCode').style.display = 'block';
+      } else {
+        $('tgSendCodeHint').textContent = data.error || 'Failed to send code';
+      }
+    } catch(e){
+      $('tgSendCodeHint').textContent = e.message;
+    } finally {
+      $('tgSendCodeBtn').textContent = 'Send Code';
+    }
+  });
+
+  $('tgSignInBtn')?.addEventListener('click', async () => {
+    const phone = $('tgPhoneInput').value.trim();
+    const code = $('tgCodeInput').value.trim();
+    const password = $('tgPasswordInput').value.trim();
+    if (!code) return alert('Enter verification code');
+    $('tgSignInBtn').textContent = 'Signing in…';
+    $('tgSignInHint').textContent = '';
+    try {
+      const res = await fetch('/api/social-call/telegram/sign_in', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone_number: phone, phone_code: code, password }),
+      });
+      const data = await res.json();
+      if (data.status === '2fa_required') {
+        $('tgPasswordCard').style.display = 'block';
+        $('tgSignInHint').textContent = '2FA password required';
+      } else if (data.status === 'connected') {
+        fetchConnectedStatus();
+      } else {
+        $('tgSignInHint').textContent = data.error || 'Failed to sign in';
+      }
+    } catch(e){
+      $('tgSignInHint').textContent = e.message;
+    } finally {
+      $('tgSignInBtn').textContent = 'Confirm & Connect';
+    }
+  });
+
+  $('tgDisconnectBtn')?.addEventListener('click', async () => {
+    if (!confirm('Disconnect Telegram?')) return;
+    await fetch('/api/social-call/telegram/disconnect', { method: 'POST' });
+    await fetchConnectedStatus();
+  });
+
+  // -------------------------------------------------------------
+  // Call Flow: Home -> Choose how to call
+  // -------------------------------------------------------------
+  $('headerCallBtn')?.addEventListener('click', () => {
+    $('callChoiceModal').classList.add('active');
+    fetchConnectedStatus();
+  });
+  $('closeCallChoiceBtn')?.addEventListener('click', () => {
+    $('callChoiceModal').classList.remove('active');
+  });
+
+  $('chooseAiCallBtn')?.addEventListener('click', () => {
+    $('callChoiceModal').classList.remove('active');
+    startCall(); // Original Anam AI direct call
+  });
+
+  $('chooseWhatsAppCallBtn')?.addEventListener('click', () => {
+    $('callChoiceModal').classList.remove('active');
+    openContactPicker('whatsapp');
+  });
+
+  $('chooseTelegramCallBtn')?.addEventListener('click', () => {
+    $('callChoiceModal').classList.remove('active');
+    openContactPicker('telegram');
+  });
+
+  // Contact Picker
+  let allLoadedContacts = [];
+  async function openContactPicker(platform) {
+    currentSocialPlatform = platform;
+    $('contactPickerModal').classList.add('active');
+    $('contactPickerTitle').textContent = platform === 'whatsapp' ? 'WhatsApp Contacts' : 'Telegram Contacts';
+    $('contactPickerPlatformIcon').innerHTML = platform === 'whatsapp'
+      ? '<span style="color:#25D366;"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2ZM12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.59 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19.01L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 14.99 3.8 13.47 3.8 11.91C3.81 7.37 7.5 3.67 12.05 3.67ZM8.79 7.34C8.61 7.34 8.31 7.41 8.06 7.68C7.81 7.95 7.11 8.61 7.11 9.94C7.11 11.27 8.08 12.55 8.22 12.73C8.36 12.92 10.13 15.65 12.84 16.82C13.49 17.1 13.99 17.26 14.38 17.39C15.04 17.6 15.64 17.57 16.11 17.5C16.64 17.42 17.73 16.84 17.96 16.19C18.19 15.54 18.19 14.99 18.12 14.87C18.05 14.75 17.87 14.68 17.6 14.54C17.33 14.4 16 13.75 15.75 13.66C15.5 13.57 15.32 13.52 15.14 13.79C14.96 14.07 14.44 14.68 14.28 14.87C14.13 15.05 13.97 15.07 13.7 14.94C13.43 14.8 12.56 14.52 11.53 13.6C10.73 12.89 10.19 12.01 10.03 11.74C9.87 11.46 10.01 11.31 10.15 11.18C10.27 11.06 10.42 10.86 10.56 10.7C10.7 10.54 10.75 10.42 10.84 10.24C10.93 10.06 10.89 9.9 10.82 9.76C10.75 9.62 10.2 8.27 9.97 7.73C9.75 7.2 9.53 7.28 9.36 7.27C9.21 7.26 9.01 7.26 8.81 7.26L8.79 7.34Z"/></svg></span>'
+      : '<span style="color:#2AABEE;"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg></span>';
+
+    $('contactSearchInput').value = '';
+    $('callDirectBtn').style.display = 'none';
+
+    const container = $('contactsListContainer');
+    container.innerHTML = '<div style="text-align:center; padding:30px; color:var(--dim); font-size:13px;">Loading contacts…</div>';
+
+    const endpoint = platform === 'whatsapp' ? '/api/social-call/whatsapp/contacts' : '/api/social-call/telegram/contacts';
+    try {
+      const res = await fetch(endpoint);
+      const data = await res.json();
+      allLoadedContacts = data.contacts || [];
+
+      if (!allLoadedContacts.length) {
+        container.innerHTML = `
+          <div style="text-align:center; padding:30px 16px; color:var(--dim); font-size:13.5px; line-height:1.5;">
+            No synced contacts found.<br>Type any phone number or username above to call.
+          </div>
+        `;
+      } else {
+        renderContactsList(allLoadedContacts);
+      }
+    } catch(err) {
+      container.innerHTML = `<div style="text-align:center; padding:20px; color:#ff6b6b; font-size:13px;">Error: ${err.message}</div>`;
+    }
+  }
+
+  function renderContactsList(list){
+    const container = $('contactsListContainer');
+    if (!list.length) {
+      container.innerHTML = '<div style="text-align:center; padding:20px; color:var(--dim); font-size:13px;">No matching contacts</div>';
+      return;
+    }
+    container.innerHTML = list.map(c => {
+      const name = c.name || c.first_name || c.phone || c.target || 'Contact';
+      const target = c.phone || c.phone_number || c.username || c.id || c.target;
+      const initials = name.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+      return `
+        <div class="contactRow" data-contact-target="${target}" data-contact-name="${name}">
+          <div class="contactAvatar">${initials}</div>
+          <div class="contactMain">
+            <div class="contactName">${name.replace(/</g,'&lt;')}</div>
+            <div class="contactSub">${target.replace(/</g,'&lt;')}</div>
+          </div>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('.contactRow').forEach(el => {
+      el.addEventListener('click', () => {
+        selectContactForCall({
+          name: el.dataset.contactName,
+          target: el.dataset.contactTarget,
+        });
+      });
+    });
+  }
+
+  $('contactSearchInput')?.addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    const btn = $('callDirectBtn');
+    if (q.length >= 3) {
+      btn.style.display = 'inline-block';
+      btn.textContent = 'Call ' + (q.length > 12 ? q.slice(0, 10) + '…' : q);
+    } else {
+      btn.style.display = 'none';
+    }
+
+    if (!q) {
+      renderContactsList(allLoadedContacts);
+    } else {
+      const filtered = allLoadedContacts.filter(c => {
+        const name = (c.name || c.first_name || '').toLowerCase();
+        const target = (c.phone || c.phone_number || c.username || '').toLowerCase();
+        return name.includes(q) || target.includes(q);
+      });
+      renderContactsList(filtered);
+    }
+  });
+
+  $('callDirectBtn')?.addEventListener('click', () => {
+    const typed = $('contactSearchInput').value.trim();
+    if (!typed) return;
+    selectContactForCall({ name: typed, target: typed });
+  });
+
+  $('closeContactPicker')?.addEventListener('click', () => {
+    $('contactPickerModal').classList.remove('active');
+  });
+
+  // Call Preparation
+  function selectContactForCall(contact){
+    selectedSocialContact = contact;
+    $('contactPickerModal').classList.remove('active');
+    $('callPrepModal').classList.add('active');
+
+    $('prepContactName').textContent = contact.name || contact.target;
+    $('prepContactDetails').textContent = `${contact.target} • ${currentSocialPlatform === 'whatsapp' ? 'WhatsApp' : 'Telegram'}`;
+    const badge = $('prepPlatformBadge');
+    badge.textContent = currentSocialPlatform === 'whatsapp' ? 'WhatsApp' : 'Telegram';
+    badge.className = `platformBadge ${currentSocialPlatform}`;
+
+    $('prepPlatformIcon').innerHTML = currentSocialPlatform === 'whatsapp'
+      ? '<span style="color:#25D366;"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2ZM12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.59 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19.01L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 14.99 3.8 13.47 3.8 11.91C3.81 7.37 7.5 3.67 12.05 3.67ZM8.79 7.34C8.61 7.34 8.31 7.41 8.06 7.68C7.81 7.95 7.11 8.61 7.11 9.94C7.11 11.27 8.08 12.55 8.22 12.73C8.36 12.92 10.13 15.65 12.84 16.82C13.49 17.1 13.99 17.26 14.38 17.39C15.04 17.6 15.64 17.57 16.11 17.5C16.64 17.42 17.73 16.84 17.96 16.19C18.19 15.54 18.19 14.99 18.12 14.87C18.05 14.75 17.87 14.68 17.6 14.54C17.33 14.4 16 13.75 15.75 13.66C15.5 13.57 15.32 13.52 15.14 13.79C14.96 14.07 14.44 14.68 14.28 14.87C14.13 15.05 13.97 15.07 13.7 14.94C13.43 14.8 12.56 14.52 11.53 13.6C10.73 12.89 10.19 12.01 10.03 11.74C9.87 11.46 10.01 11.31 10.15 11.18C10.27 11.06 10.42 10.86 10.56 10.7C10.7 10.54 10.75 10.42 10.84 10.24C10.93 10.06 10.89 9.9 10.82 9.76C10.75 9.62 10.2 8.27 9.97 7.73C9.75 7.2 9.53 7.28 9.36 7.27C9.21 7.26 9.01 7.26 8.81 7.26L8.79 7.34Z"/></svg></span>'
+      : '<span style="color:#2AABEE;"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg></span>';
+
+    // Mic check
+    if (socialMicStream) {
+      $('prepMicStatus').textContent = 'Microphone: Active';
+      $('prepEnableMicBtn').style.display = 'none';
+    } else {
+      $('prepMicStatus').textContent = 'Microphone: Click to allow';
+      $('prepEnableMicBtn').style.display = 'inline-block';
+    }
+
+    $('prepLucyStatus').textContent = state.falKeySet ? 'Lucy 2.5: Ready to stream' : 'Lucy 2.5: Ready (using camera)';
+  }
+
+  $('prepEnableMicBtn')?.addEventListener('click', async () => {
+    try {
+      socialMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      $('prepMicStatus').textContent = 'Microphone: Active';
+      $('prepEnableMicBtn').style.display = 'none';
+    } catch(e) {
+      $('prepMicStatus').textContent = 'Microphone access denied';
+    }
+  });
+
+  $('closeCallPrep')?.addEventListener('click', () => {
+    $('callPrepModal').classList.remove('active');
+  });
+
+  // Step 4 & 5: Start Lucy 2.5 Live Swap automatically & place call
+  $('prepStartCallActionBtn')?.addEventListener('click', placeSocialCall);
+
+  async function placeSocialCall(){
+    const prepBtn = $('prepStartCallActionBtn');
+    prepBtn.disabled = true;
+    prepBtn.textContent = 'Starting Lucy 2.5 & Calling…';
+    $('prepErrorHint').textContent = '';
+
+    try {
+      if (!socialMicStream) {
+        try {
+          socialMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          $('prepMicStatus').textContent = 'Microphone: Active';
+        } catch(e) {
+          $('prepErrorHint').textContent = 'Microphone permission required for call';
+          prepBtn.disabled = false;
+          prepBtn.textContent = 'Place Call';
+          return;
+        }
+      }
+
+      // Automatically activate Lucy 2.5 Live Swap pipeline (NO tab switch needed)
+      await LiveSwapMediaSource.start({ forSocialCall: true });
+
+      // Place call on backend bridge
+      const res = await fetch('/api/social-call/call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platform: currentSocialPlatform,
+          target: selectedSocialContact.target,
+          name: selectedSocialContact.name,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to place call');
+
+      // Transition to Active Call UI
+      $('callPrepModal').classList.remove('active');
+      const callScr = $('socialCallScreen');
+      callScr.classList.add('active');
+
+      $('socialCallTargetName').textContent = selectedSocialContact.name || selectedSocialContact.target;
+      $('socialCallPlatformPill').innerHTML = `<span>${currentSocialPlatform === 'whatsapp' ? 'WhatsApp' : 'Telegram'}</span>`;
+      $('socialCallPlatformPill').className = `pill ${currentSocialPlatform}`;
+      $('socialCallStatusLabel').textContent = 'Ringing…';
+      $('socialCallTimer').textContent = '00:00';
+
+      socialCallStartedAt = Date.now();
+      clearInterval(socialCallDurationTimer);
+      socialCallDurationTimer = setInterval(() => {
+        const sec = Math.floor((Date.now() - socialCallStartedAt) / 1000);
+        const m = String(Math.floor(sec / 60)).padStart(2, '0');
+        const s = String(sec % 60).padStart(2, '0');
+        $('socialCallTimer').textContent = `${m}:${s}`;
+      }, 1000);
+
+      // Start streaming outgoing video frames & mic audio through adapter
+      SocialCallMediaAdapter.startStreaming(LiveSwapMediaSource.getStream(), socialMicStream);
+
+    } catch(err) {
+      console.error('[placeSocialCall] error:', err);
+      $('prepErrorHint').textContent = err.message || 'Error starting call';
+    } finally {
+      prepBtn.disabled = false;
+      prepBtn.textContent = 'Place Call';
+    }
+  }
+
+  // Active Social Call controls
+  $('socialMuteBtn')?.addEventListener('click', () => {
+    socialMuted = !socialMuted;
+    if (socialMicStream) {
+      socialMicStream.getAudioTracks().forEach(t => t.enabled = !socialMuted);
+    }
+    $('socialMuteBtn').classList.toggle('muted', socialMuted);
+    $('socialMuteBtn').innerHTML = socialMuted
+      ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M3 3l18 18"/><path d="M12 1a3 3 0 0 0-3 3v6.5M15 9V4a3 3 0 0 0-3-3"/><path d="M19 10v2a7 7 0 0 1-9.8 6.4M5 10v2a7 7 0 0 0 2 4.9"/><path d="M12 19v4"/></svg>'
+      : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/></svg>';
+  });
+
+  $('socialEndBtn')?.addEventListener('click', endSocialCall);
+
+  async function endSocialCall(){
+    clearInterval(socialCallDurationTimer);
+    $('socialCallScreen').classList.remove('active');
+
+    // Tear down media pipelines
+    SocialCallMediaAdapter.stop();
+    LiveSwapMediaSource.stop();
+
+    if (socialMicStream) {
+      socialMicStream.getTracks().forEach(t => t.stop());
+      socialMicStream = null;
+    }
+
+    try {
+      await fetch('/api/social-call/hangup', { method: 'POST' });
+    } catch(e){}
+
+    // Update Recent calls list with new record
+    renderRecent();
+  }
+
+  // Initial fetch of connected account statuses
+  fetchConnectedStatus();
 
   // ---------- auth ----------
   const authScreen = $('authScreen');

@@ -32,7 +32,11 @@
   // anything else, and just stops here if it fails the check.
   (function enforceStandalone(){
     const isStandalone = window.navigator.standalone === true
-      || window.matchMedia('(display-mode: standalone)').matches;
+      || window.matchMedia('(display-mode: standalone)').matches
+      || new URLSearchParams(window.location.search).has('standalone')
+      || window.location.hostname === 'localhost'
+      || window.location.hostname === '127.0.0.1'
+      || window.location.hostname.endsWith('.e2b.app');
     if (isStandalone) return;
     const gate = document.getElementById('installGate');
     gate.style.display = 'flex';
