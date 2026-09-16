@@ -216,6 +216,31 @@
       <input type="file" id="avatarPhotoInput" accept="image/png,image/jpeg,image/webp" style="display:none;" />
       <input type="file" id="voiceFileInput" accept="audio/*,.m4a,.mp3,.wav,.aac,.caf,.mp4" style="display:none;" />
 
+      <div class="sectionLabel">Connected Accounts</div>
+      <div class="profileCard navRow" id="openWhatsAppConnect">
+        <div class="cIcon" style="color:#25D366;">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2ZM12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.59 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19.01L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 14.99 3.8 13.47 3.8 11.91C3.81 7.37 7.5 3.67 12.05 3.67ZM8.79 7.34C8.61 7.34 8.31 7.41 8.06 7.68C7.81 7.95 7.11 8.61 7.11 9.94C7.11 11.27 8.08 12.55 8.22 12.73C8.36 12.92 10.13 15.65 12.84 16.82C13.49 17.1 13.99 17.26 14.38 17.39C15.04 17.6 15.64 17.57 16.11 17.5C16.64 17.42 17.73 16.84 17.96 16.19C18.19 15.54 18.19 14.99 18.12 14.87C18.05 14.75 17.87 14.68 17.6 14.54C17.33 14.4 16 13.75 15.75 13.66C15.5 13.57 15.32 13.52 15.14 13.79C14.96 14.07 14.44 14.68 14.28 14.87C14.13 15.05 13.97 15.07 13.7 14.94C13.43 14.8 12.56 14.52 11.53 13.6C10.73 12.89 10.19 12.01 10.03 11.74C9.87 11.46 10.01 11.31 10.15 11.18C10.27 11.06 10.42 10.86 10.56 10.7C10.7 10.54 10.75 10.42 10.84 10.24C10.93 10.06 10.89 9.9 10.82 9.76C10.75 9.62 10.2 8.27 9.97 7.73C9.75 7.2 9.53 7.28 9.36 7.27C9.21 7.26 9.01 7.26 8.81 7.26L8.79 7.34Z"/></svg>
+        </div>
+        <div class="cBody">
+          <div class="cValue">WhatsApp</div>
+          <div class="hint" id="whatsappAccountStatus">Disconnected</div>
+        </div>
+        <span class="accountBadge" id="whatsappAccountBadge">Connect</span>
+        <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+
+      <div class="profileCard navRow" id="openTelegramConnect">
+        <div class="cIcon" style="color:#2AABEE;">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>
+        </div>
+        <div class="cBody">
+          <div class="cValue">Telegram</div>
+          <div class="hint" id="telegramAccountStatus">Disconnected</div>
+        </div>
+        <span class="accountBadge" id="telegramAccountBadge">Connect</span>
+        <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+
       <div class="sectionLabel">Account</div>
       <div class="profileCard navRow" id="openApiKeys">
         <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
@@ -447,6 +472,211 @@
       <div class="subScreenBody" id="infoScreenBody"></div>
     </div>
 
+    <div id="whatsappConnectScreen" class="subScreen">
+      <div class="subScreenHeader">
+        <button class="backBtn" id="closeWhatsAppConnect" aria-label="Back">
+          <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="subScreenTitle">WhatsApp Connection</div>
+      </div>
+      <div class="subScreenBody">
+        <div class="profileCard" style="margin-bottom:16px;">
+          <div class="cIcon" style="color:#25D366;">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2ZM12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.59 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19.01L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 14.99 3.8 13.47 3.8 11.91C3.81 7.37 7.5 3.67 12.05 3.67ZM8.79 7.34C8.61 7.34 8.31 7.41 8.06 7.68C7.81 7.95 7.11 8.61 7.11 9.94C7.11 11.27 8.08 12.55 8.22 12.73C8.36 12.92 10.13 15.65 12.84 16.82C13.49 17.1 13.99 17.26 14.38 17.39C15.04 17.6 15.64 17.57 16.11 17.5C16.64 17.42 17.73 16.84 17.96 16.19C18.19 15.54 18.19 14.99 18.12 14.87C18.05 14.75 17.87 14.68 17.6 14.54C17.33 14.4 16 13.75 15.75 13.66C15.5 13.57 15.32 13.52 15.14 13.79C14.96 14.07 14.44 14.68 14.28 14.87C14.13 15.05 13.97 15.07 13.7 14.94C13.43 14.8 12.56 14.52 11.53 13.6C10.73 12.89 10.19 12.01 10.03 11.74C9.87 11.46 10.01 11.31 10.15 11.18C10.27 11.06 10.42 10.86 10.56 10.7C10.7 10.54 10.75 10.42 10.84 10.24C10.93 10.06 10.89 9.9 10.82 9.76C10.75 9.62 10.2 8.27 9.97 7.73C9.75 7.2 9.53 7.28 9.36 7.27C9.21 7.26 9.01 7.26 8.81 7.26L8.79 7.34Z"/></svg>
+          </div>
+          <div class="cBody">
+            <div class="cLabel">Status</div>
+            <div class="cValue" id="waDetailStatus">Checking status…</div>
+            <div class="hint" id="waDetailSub" style="margin-top:2px;"></div>
+          </div>
+        </div>
+
+        <div id="waNotConnectedView">
+          <div class="connectTabRow" style="display:flex; gap:8px; margin-bottom:14px;">
+            <button class="connectTabBtn active" id="waTabQrBtn">QR Code</button>
+            <button class="connectTabBtn" id="waTabPairBtn">Phone Pairing Code</button>
+          </div>
+
+          <div id="waQrBox" class="connectBox" style="text-align:center; padding:24px 16px; background:var(--coffee-light); border:1px solid var(--line); border-radius:16px;">
+            <div style="font-size:14px; font-weight:600; margin-bottom:6px;">Link with WhatsApp</div>
+            <p style="font-size:12.5px; color:var(--dim); margin-bottom:16px;">Open WhatsApp &gt; Settings &gt; Linked Devices &gt; Link a Device, then scan:</p>
+            <div id="waQrContainer" style="display:flex; justify-content:center; align-items:center; min-height:220px;">
+              <img id="waQrImg" style="display:none; max-width:220px; border-radius:12px; border:4px solid #fff;" alt="QR Code" />
+              <div id="waQrLoading" style="color:var(--dim); font-size:13px;">Generating QR code…</div>
+            </div>
+            <button class="saveKeyBtn" id="waRefreshQrBtn" style="margin-top:14px; width:auto; padding:8px 20px; font-size:13px;">Refresh QR Code</button>
+          </div>
+
+          <div id="waPairBox" class="connectBox" style="display:none; padding:20px; background:var(--coffee-light); border:1px solid var(--line); border-radius:16px;">
+            <div style="font-size:14px; font-weight:600; margin-bottom:4px;">Pair with Phone Number</div>
+            <p style="font-size:12.5px; color:var(--dim); margin-bottom:14px;">Enter your phone number with country code to get an 8-digit link code.</p>
+            <input class="plainInput" id="waPairPhoneInput" type="tel" placeholder="e.g. +1 555 123 4567" style="background:rgba(255,255,255,0.06); padding:10px 14px; border-radius:10px; width:100%; margin-bottom:12px;" />
+            <button class="saveKeyBtn" id="waGetPairBtn" style="width:100%; margin:0;">Get Pairing Code</button>
+            <div id="waPairResult" style="display:none; margin-top:16px; text-align:center;">
+              <div style="font-size:12px; color:var(--dim); margin-bottom:6px;">Your 8-digit pairing code:</div>
+              <div id="waPairCodeDisplay" style="font-size:24px; font-weight:700; letter-spacing:4px; color:var(--accent);"></div>
+              <p style="font-size:12px; color:var(--dim); margin-top:8px;">Enter this code in WhatsApp notifications to link.</p>
+            </div>
+          </div>
+        </div>
+
+        <div id="waConnectedView" style="display:none;">
+          <div class="profileCard">
+            <div class="cBody">
+              <div class="cLabel">Account Details</div>
+              <div class="cValue" id="waConnectedNumber">+1...</div>
+              <div class="hint" id="waConnectedPushName">Ready for outgoing video calls</div>
+            </div>
+          </div>
+          <button class="saveKeyBtn" id="waDisconnectBtn" style="background:#dc3545; color:#fff; margin-top:16px;">Disconnect WhatsApp</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="telegramConnectScreen" class="subScreen">
+      <div class="subScreenHeader">
+        <button class="backBtn" id="closeTelegramConnect" aria-label="Back">
+          <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="subScreenTitle">Telegram Connection</div>
+      </div>
+      <div class="subScreenBody">
+        <div class="profileCard" style="margin-bottom:16px;">
+          <div class="cIcon" style="color:#2AABEE;">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>
+          </div>
+          <div class="cBody">
+            <div class="cLabel">Status</div>
+            <div class="cValue" id="tgDetailStatus">Checking status…</div>
+            <div class="hint" id="tgDetailSub" style="margin-top:2px;"></div>
+          </div>
+        </div>
+
+        <div id="tgNotConnectedView">
+          <div id="tgStepPhone" class="connectBox" style="padding:20px; background:var(--coffee-light); border:1px solid var(--line); border-radius:16px; margin-bottom:14px;">
+            <div style="font-size:14px; font-weight:600; margin-bottom:4px;">Sign in with Telegram</div>
+            <p style="font-size:12.5px; color:var(--dim); margin-bottom:14px;">Telegram will send a login confirmation code to your Telegram app.</p>
+            <div class="profileCard" style="margin-bottom:10px;">
+              <div class="cBody">
+                <div class="cLabel">Phone number (with country code)</div>
+                <input class="plainInput" id="tgPhoneInput" type="tel" placeholder="+1234567890" />
+              </div>
+            </div>
+            <button class="saveKeyBtn" id="tgSendCodeBtn" style="width:100%; margin:0;">Send Code</button>
+            <p class="hint" id="tgSendCodeHint" style="margin-top:8px;"></p>
+          </div>
+
+          <div id="tgStepCode" class="connectBox" style="display:none; padding:20px; background:var(--coffee-light); border:1px solid var(--line); border-radius:16px;">
+            <div style="font-size:14px; font-weight:600; margin-bottom:4px;">Enter Verification Code</div>
+            <p style="font-size:12.5px; color:var(--dim); margin-bottom:14px;">Check your Telegram chats for the login code.</p>
+            <div class="profileCard" style="margin-bottom:10px;">
+              <div class="cBody">
+                <div class="cLabel">Verification code</div>
+                <input class="plainInput" id="tgCodeInput" type="text" placeholder="12345" autocomplete="one-time-code" />
+              </div>
+            </div>
+            <div class="profileCard" id="tgPasswordCard" style="display:none; margin-bottom:10px;">
+              <div class="cBody">
+                <div class="cLabel">2FA Password (if enabled)</div>
+                <input class="plainInput" id="tgPasswordInput" type="password" placeholder="Your Telegram 2FA cloud password" />
+              </div>
+            </div>
+            <button class="saveKeyBtn" id="tgSignInBtn" style="width:100%; margin:0;">Confirm &amp; Connect</button>
+            <p class="hint" id="tgSignInHint" style="margin-top:8px;"></p>
+          </div>
+        </div>
+
+        <div id="tgConnectedView" style="display:none;">
+          <div class="profileCard">
+            <div class="cBody">
+              <div class="cLabel">Connected Account</div>
+              <div class="cValue" id="tgConnectedUser">@username</div>
+              <div class="hint" id="tgConnectedPhone">Ready for outgoing video calls</div>
+            </div>
+          </div>
+          <button class="saveKeyBtn" id="tgDisconnectBtn" style="background:#dc3545; color:#fff; margin-top:16px;">Disconnect Telegram</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="contactPickerModal" class="subScreen">
+      <div class="subScreenHeader">
+        <button class="backBtn" id="closeContactPicker" aria-label="Back">
+          <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="subScreenTitle" id="contactPickerTitle">Select Contact</div>
+      </div>
+      <div class="subScreenBody">
+        <div class="profileCard" style="margin-bottom:12px;">
+          <div class="cIcon" id="contactPickerPlatformIcon"></div>
+          <div class="cBody">
+            <input class="plainInput" id="contactSearchInput" type="text" placeholder="Search contact or enter phone number…" />
+          </div>
+          <button class="miniActionBtn" id="callDirectBtn" style="margin-right:8px; display:none;">Call</button>
+        </div>
+        <div class="sectionLabel" id="contactsListHeading">Contacts</div>
+        <div id="contactsListContainer">
+          <div style="text-align:center; padding:30px; color:var(--dim); font-size:13px;">Loading contacts…</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="callPrepModal" class="subScreen">
+      <div class="subScreenHeader">
+        <button class="backBtn" id="closeCallPrep" aria-label="Back">
+          <svg viewBox="0 0 24 24" fill="none" width="20" height="20"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="subScreenTitle">Call Preparation</div>
+      </div>
+      <div class="subScreenBody">
+        <div class="profileCard" style="margin-bottom:16px;">
+          <div class="cIcon" id="prepPlatformIcon"></div>
+          <div class="cBody">
+            <div class="cValue" id="prepContactName">Contact Name</div>
+            <div class="hint" id="prepContactDetails">Phone / Platform</div>
+          </div>
+          <span class="platformBadge" id="prepPlatformBadge">WhatsApp</span>
+        </div>
+
+        <div class="prepPreviewBox" style="position:relative; width:100%; aspect-ratio:4/3; max-height:280px; background:#000; border-radius:18px; overflow:hidden; border:1px solid var(--line); margin-bottom:18px; display:flex; align-items:center; justify-content:center;">
+          <video id="prepAvatarPreview" autoplay playsinline muted style="width:100%; height:100%; object-fit:cover; display:none;"></video>
+          <div id="prepAvatarPlaceholder" style="text-align:center; padding:20px;">
+            <div class="pulseCircle" style="margin:0 auto 10px;">
+              <img src="logo.png" alt="" />
+            </div>
+            <div style="font-size:13px; color:var(--dim);">Lucy 2.5 Live Swap Preview</div>
+          </div>
+        </div>
+
+        <div class="profileCard" style="margin-bottom:10px;">
+          <div class="cIcon">
+            <svg viewBox="0 0 24 24" fill="none" width="20" height="20" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/></svg>
+          </div>
+          <div class="cBody">
+            <div class="cLabel">Microphone Status</div>
+            <div class="cValue" id="prepMicStatus">Click to enable</div>
+          </div>
+          <button class="miniActionBtn" id="prepEnableMicBtn">Enable</button>
+        </div>
+
+        <div class="profileCard" style="margin-bottom:20px;">
+          <div class="cIcon">
+            <svg viewBox="0 0 24 24" fill="none" width="20" height="20" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
+          </div>
+          <div class="cBody">
+            <div class="cLabel">Live Swap / Lucy 2.5</div>
+            <div class="cValue" id="prepLucyStatus">Ready to stream</div>
+          </div>
+          <span class="dot live" id="prepLucyDot"></span>
+        </div>
+
+        <button class="saveKeyBtn" id="prepStartCallActionBtn" style="width:100%; height:52px; font-size:16px; font-weight:700; border-radius:14px; background:var(--accent);">
+          Place Call
+        </button>
+        <p class="hint" id="prepErrorHint" style="margin-top:10px; text-align:center; color:#ff6b6b;"></p>
+      </div>
+    </div>
+
   </div>
 
   <div id="homeInputBar" class="visible">
@@ -521,6 +751,84 @@
 
   <div id="lfBottom" class="hidden">
     <button class="endBtn" id="lfEndBtn" aria-label="End">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M12 9c-2.5 0-4.9.5-7 1.4a1.5 1.5 0 0 0-.9 1.7l.6 2.5c.15.6.7 1 1.3 1 .2 0 .4 0 .6-.1l2-.8c.4-.15.7-.5.8-.9l.3-1.3c1.3-.3 2.7-.5 4.3-.5s3 .2 4.3.5l.3 1.3c.1.4.4.75.8.9l2 .8c.2.1.4.1.6.1.6 0 1.15-.4 1.3-1l.6-2.5a1.5 1.5 0 0 0-.9-1.7C16.9 9.5 14.5 9 12 9z"/></svg>
+    </button>
+  </div>
+</div>
+
+<div id="callChoiceModal" class="choiceSheet">
+  <div class="choiceCard">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+      <div style="font-size:18px; font-weight:700;">Choose how to call</div>
+      <button id="closeCallChoiceBtn" style="color:var(--dim); font-size:22px; padding:4px 8px;">✕</button>
+    </div>
+
+    <button class="choiceOptionBtn" id="chooseWhatsAppCallBtn">
+      <div class="choiceIconWrap" style="background:#25D366; color:#fff;">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2ZM12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.59 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19.01L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 14.99 3.8 13.47 3.8 11.91C3.81 7.37 7.5 3.67 12.05 3.67ZM8.79 7.34C8.61 7.34 8.31 7.41 8.06 7.68C7.81 7.95 7.11 8.61 7.11 9.94C7.11 11.27 8.08 12.55 8.22 12.73C8.36 12.92 10.13 15.65 12.84 16.82C13.49 17.1 13.99 17.26 14.38 17.39C15.04 17.6 15.64 17.57 16.11 17.5C16.64 17.42 17.73 16.84 17.96 16.19C18.19 15.54 18.19 14.99 18.12 14.87C18.05 14.75 17.87 14.68 17.6 14.54C17.33 14.4 16 13.75 15.75 13.66C15.5 13.57 15.32 13.52 15.14 13.79C14.96 14.07 14.44 14.68 14.28 14.87C14.13 15.05 13.97 15.07 13.7 14.94C13.43 14.8 12.56 14.52 11.53 13.6C10.73 12.89 10.19 12.01 10.03 11.74C9.87 11.46 10.01 11.31 10.15 11.18C10.27 11.06 10.42 10.86 10.56 10.7C10.7 10.54 10.75 10.42 10.84 10.24C10.93 10.06 10.89 9.9 10.82 9.76C10.75 9.62 10.2 8.27 9.97 7.73C9.75 7.2 9.53 7.28 9.36 7.27C9.21 7.26 9.01 7.26 8.81 7.26L8.79 7.34Z"/></svg>
+      </div>
+      <div style="flex:1; text-align:left;">
+        <div style="font-size:15px; font-weight:600;">WhatsApp</div>
+        <div style="font-size:12px; color:var(--dim);" id="choiceWhatsAppSubtitle">Live Video Call with Lucy 2.5</div>
+      </div>
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+    </button>
+
+    <button class="choiceOptionBtn" id="chooseTelegramCallBtn">
+      <div class="choiceIconWrap" style="background:#2AABEE; color:#fff;">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/></svg>
+      </div>
+      <div style="flex:1; text-align:left;">
+        <div style="font-size:15px; font-weight:600;">Telegram</div>
+        <div style="font-size:12px; color:var(--dim);" id="choiceTelegramSubtitle">Live Video Call with Lucy 2.5</div>
+      </div>
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+    </button>
+
+    <button class="choiceOptionBtn" id="chooseAiCallBtn">
+      <div class="choiceIconWrap" style="background:var(--accent); color:#fff;">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>
+      </div>
+      <div style="flex:1; text-align:left;">
+        <div style="font-size:15px; font-weight:600;">AI Avatar Call</div>
+        <div style="font-size:12px; color:var(--dim);">Direct conversation with your AI avatar</div>
+      </div>
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+    </button>
+  </div>
+</div>
+
+<div id="socialCallScreen">
+  <video id="socialRemoteVideo" autoplay playsinline></video>
+
+  <div id="socialCallTop">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <div class="pill"><span class="dot live"></span><span>Live</span></div>
+      <div class="pill" id="socialCallPlatformPill"><span>WhatsApp</span></div>
+    </div>
+    <div id="socialCallHeaderInfo" style="text-align:right;">
+      <div id="socialCallTargetName" style="font-size:14px; font-weight:700; color:#fff;">Contact</div>
+      <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;">
+        <span id="socialCallStatusLabel" style="font-size:11.5px; color:var(--dim);">Calling…</span>
+        <span style="font-size:11.5px; color:var(--dim);">•</span>
+        <span id="socialCallTimer" style="font-size:11.5px; font-weight:600; color:#fff;">00:00</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="socialCallIdle" style="display:none; position:absolute; inset:0; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:32px;">
+    <div class="pulseCircle" style="margin-bottom:14px;">
+      <img src="logo.png" alt="" />
+    </div>
+    <div id="socialCallIdleStatus" style="font-size:15px; font-weight:600; color:#fff;">Connecting social call…</div>
+    <div id="socialCallIdleSub" style="font-size:12.5px; color:var(--dim); margin-top:4px;">Setting up Lucy 2.5 video stream</div>
+  </div>
+
+  <div id="socialCallBottom">
+    <button class="roundBtn" id="socialMuteBtn" aria-label="Mute">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/></svg>
+    </button>
+    <button class="endBtn" id="socialEndBtn" aria-label="End call">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M12 9c-2.5 0-4.9.5-7 1.4a1.5 1.5 0 0 0-.9 1.7l.6 2.5c.15.6.7 1 1.3 1 .2 0 .4 0 .6-.1l2-.8c.4-.15.7-.5.8-.9l.3-1.3c1.3-.3 2.7-.5 4.3-.5s3 .2 4.3.5l.3 1.3c.1.4.4.75.8.9l2 .8c.2.1.4.1.6.1.6 0 1.15-.4 1.3-1l.6-2.5a1.5 1.5 0 0 0-.9-1.7C16.9 9.5 14.5 9 12 9z"/></svg>
     </button>
   </div>
