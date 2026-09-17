@@ -100,28 +100,22 @@ async def handle_send_code(request):
         if not phone:
             return web.json_response({"error": "Phone number required"}, status=400)
 
-        try:
-            cl = get_client(api_id, api_hash)
-            if not cl.is_connected:
-                await cl.connect()
+        # No fake/demo code fallback here on purpose - a "code_sent" response
+        # backed by no real Telegram request would look like it worked, then
+        # fail confusingly at sign-in with a bogus phone_code_hash. Surface
+        # the real failure (e.g. Telegram unreachable from this deployment)
+        # instead, same as the WhatsApp bridge does.
+        cl = get_client(api_id, api_hash)
+        if not cl.is_connected:
+            await cl.connect()
 
-            sent_code = await cl.send_code(phone)
-            phone_code_hash_cache[phone] = sent_code.phone_code_hash
-            return web.json_response({
-                "status": "code_sent",
-                "phone_code_hash": sent_code.phone_code_hash,
-                "timeout": sent_code.timeout
-            })
-        except Exception as net_err:
-            print(f"[TgBridge] Send code note: {net_err}. Using test code fallback.")
-            phone_code_hash_cache[phone] = "sandbox_hash"
-            return web.json_response({
-                "status": "code_sent",
-                "phone_code_hash": "sandbox_hash",
-                "timeout": 120,
-                "demo": True,
-                "message": "Enter code: 12345"
-            })
+        sent_code = await cl.send_code(phone)
+        phone_code_hash_cache[phone] = sent_code.phone_code_hash
+        return web.json_response({
+            "status": "code_sent",
+            "phone_code_hash": sent_code.phone_code_hash,
+            "timeout": sent_code.timeout
+        })
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
@@ -133,16 +127,9 @@ async def handle_sign_in(request):
         phone_code_hash = data.get("phone_code_hash") or phone_code_hash_cache.get(phone)
         password = data.get("password", "").strip()
 
-        if code == "12345":
-            demo_user = {
-                "id": 99887766,
-                "first_name": "LiveCall",
-                "last_name": "User",
-                "username": "livecall_user",
-                "phone_number": phone or "+15550188"
-            }
-            return web.json_response({"status": "connected", "user": demo_user})
-
+        # No fake/demo sign-in bypass here on purpose - a code that always
+        # "connects" without a real Telegram sign-in would mask the actual
+        # failure. Let a real (or missing) phone_code_hash fail honestly.
         cl = get_client()
         if not cl.is_connected:
             await cl.connect()
