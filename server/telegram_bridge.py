@@ -4,6 +4,19 @@ import sys
 import json
 from aiohttp import web, WSMsgType
 
+# Pyrogram's own import-time code (sync.py's async_to_sync) calls
+# asyncio.get_event_loop() expecting it to auto-create a loop if none exists
+# in the main thread - Python removed that implicit-create behavior in
+# recent versions (confirmed failing here on Python 3.14 specifically:
+# "RuntimeError: There is no current event loop in thread 'MainThread'"),
+# so pyrogram crashes on import before we ever get a chance to run anything.
+# Pre-creating and setting a loop here, before the pyrogram import below,
+# is the standard workaround for this exact incompatibility.
+try:
+    asyncio.get_event_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
+
 try:
     from pyrogram import Client, filters
     from pyrogram.errors import SessionPasswordNeeded, PhoneCodeInvalid, PasswordHashInvalid
