@@ -32,6 +32,7 @@ class WhatsAppBridge extends EventEmitter {
     this.user = null;
     this.connectingPromise = null;
     this.reconnectAttempts = 0;
+    this.lastError = null;
   }
 
   async init() {
@@ -90,6 +91,7 @@ class WhatsAppBridge extends EventEmitter {
             this.status = 'connected';
             this.currentQr = null;
             this.currentQrDataUrl = null;
+            this.lastError = null;
             const me = this.sock.user;
             this.user = {
               id: me?.id ? jidNormalizedUser(me.id) : '',
@@ -113,15 +115,18 @@ class WhatsAppBridge extends EventEmitter {
             if (!isLoggedOut && !isNetworkBlocked && this.reconnectAttempts < 1) {
               this.reconnectAttempts++;
               setTimeout(() => this.connect(), 4000);
-            } else if (!this.currentQrDataUrl) {
-              // Provide testable pairing QR code in environments where web.whatsapp.com is firewalled
-              try {
-                const samplePair = `2@DEMO_LIVE_CALL_PAIRING_${Date.now()},BASE64_IDENTITY`;
-                this.currentQr = samplePair;
-                this.currentQrDataUrl = await QRCode.toDataURL(samplePair, { margin: 2, width: 260 });
-                this.status = 'scan_qr';
-                this.emit('qr', { qr: this.currentQr, dataUrl: this.currentQrDataUrl });
-              } catch (_) {}
+            } else {
+              // No fake fallback QR here - a placeholder string dressed up as a
+              // real pairing QR would display as if it works, then silently
+              // fail when actually scanned. Surface the real failure instead.
+              this.currentQr = null;
+              this.currentQrDataUrl = null;
+              this.status = 'error';
+              const reason = isNetworkBlocked
+                ? 'Could not reach WhatsApp\u2019s servers (network blocked or unreachable from this deployment).'
+                : `Connection closed${statusCode ? ` (code ${statusCode})` : ''}.`;
+              this.lastError = reason;
+              this.emit('status', { status: this.status, error: reason });
             }
           }
         });
@@ -189,33 +194,20 @@ class WhatsAppBridge extends EventEmitter {
   async requestPairingCode(phoneNumber) {
     if (!phoneNumber) throw new Error('Phone number required');
     const cleanPhone = phoneNumber.replace(/\D/g, '');
-    try {
-      if (!this.sock) {
-        await this.connect(cleanPhone);
-      } else {
-        const code = await this.sock.requestPairingCode(cleanPhone);
-        this.pairingCode = code;
-        return code;
-      }
-    } catch (err) {
-      console.warn('[WhatsAppBridge] Pairing code request notice:', err.message);
-      // In firewall-restricted sandbox, generate valid WhatsApp pairing code format (ABCD-1234)
-      const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-      let code = '';
-      for (let i = 0; i < 8; i++) {
-        if (i === 4) code += '-';
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      this.pairingCode = code;
-      this.status = 'awaiting_pair';
-      setTimeout(() => {
-        this.status = 'connected';
-        this.user = { id: `${cleanPhone}@s.whatsapp.net`, name: 'WhatsApp User', phone: cleanPhone };
-        this.emit('connected', this.user);
-      }, 4000);
-      return code;
+    if (!this.sock) {
+      await this.connect(cleanPhone);
     }
-    return this.pairingCode;
+    // No fallback fake code here on purpose - a code WhatsApp never actually
+    // issued would look right but do nothing when entered, and there is no
+    // honest way to simulate "connected" without a real pairing having
+    // happened. If this throws, let it throw - the real error (e.g.
+    // WhatsApp's servers unreachable from this deployment) is more useful
+    // than a fabricated success.
+    const code = await this.sock.requestPairingCode(cleanPhone);
+    this.pairingCode = code;
+    this.status = 'awaiting_pair';
+    this.emit('status', { status: this.status });
+    return code;
   }
 
   getStatus() {
@@ -225,6 +217,7 @@ class WhatsAppBridge extends EventEmitter {
       user: this.user,
       qr: this.currentQrDataUrl,
       pairingCode: this.pairingCode,
+      error: this.lastError || null,
     };
   }
 

@@ -1,0 +1,4 @@
+aiohttp>=3.9
+pyrogram>=2.0
+pytgcalls>=2.1
+tgcrypto>=1.2
