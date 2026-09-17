@@ -241,6 +241,21 @@
         <svg class="cChev" viewBox="0 0 24 24" width="16" height="16"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
 
+      <div class="sectionLabel">Developer</div>
+      <div class="profileCard" id="keepAliveRow">
+        <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.2 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="cBody">
+          <div class="cValue">Keep Backend Awake</div>
+          <div class="hint" id="keepAliveHint">Off — Render free tier sleeps after ~15 min idle</div>
+        </div>
+        <button class="toggleSwitch" id="keepAliveToggle" data-on="false" aria-label="Toggle keep-alive ping" type="button">
+          <svg viewBox="0 0 38 26" fill="none">
+            <rect x="1" y="1" width="36" height="24" rx="12" fill="currentColor" fill-opacity="0.22" stroke="currentColor" stroke-width="1.5"/>
+            <circle cx="10" cy="13" r="8" fill="currentColor"/>
+          </svg>
+        </button>
+      </div>
+
       <div class="sectionLabel">Account</div>
       <div class="profileCard navRow" id="openApiKeys">
         <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
