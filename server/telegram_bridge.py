@@ -218,30 +218,32 @@ async def handle_call(request):
         if not target:
             return web.json_response({"error": "Target contact required"}, status=400)
         
-        try:
-            cl = get_client()
-            if not cl.is_connected:
-                await cl.connect()
-            
-            # Resolve target peer
-            peer = await cl.get_users(target)
-            chat_id = peer.id
+        cl = get_client()
+        if not cl.is_connected:
+            await cl.connect()
 
-            pytg = await init_pytgcalls()
+        # Resolve target peer
+        peer = await cl.get_users(target)
+        chat_id = peer.id
 
-            # Initialize media stream with video enabled
-            stream = MediaStream(
-                ExternalMedia.AUDIO | ExternalMedia.VIDEO,
-                AudioParameters(bitrate=48000, channels=2),
-                VideoParameters(width=640, height=480, frame_rate=15)
-            )
-            await pytg.play(chat_id, stream)
-            active_call = {"chat_id": chat_id, "target": target, "started_at": asyncio.get_event_loop().time()}
-            return web.json_response({"status": "calling", "chat_id": chat_id})
-        except Exception as net_err:
-            print(f"[TgBridge] Live call session setup note: {net_err}")
-            active_call = {"chat_id": target, "target": target, "started_at": asyncio.get_event_loop().time()}
-            return web.json_response({"status": "calling", "chat_id": target})
+        pytg = await init_pytgcalls()
+
+        # Initialize media stream with video enabled
+        stream = MediaStream(
+            ExternalMedia.AUDIO | ExternalMedia.VIDEO,
+            AudioParameters(bitrate=48000, channels=2),
+            VideoParameters(width=640, height=480, frame_rate=15)
+        )
+        # NOTE: PyTgCalls.play() joins/broadcasts into a GROUP OR CHANNEL voice
+        # chat - it does not implement Telegram's private 1:1 call protocol
+        # (phone.requestCall/DH handshake/libtgvoip), so this will not ring a
+        # private contact's phone. No fake "calling" fallback here on purpose -
+        # a status that always looks like it worked would hide that this needs
+        # a real private-calling implementation (or a different, non-ringing
+        # group-voice-chat flow) to actually work.
+        await pytg.play(chat_id, stream)
+        active_call = {"chat_id": chat_id, "target": target, "started_at": asyncio.get_event_loop().time()}
+        return web.json_response({"status": "calling", "chat_id": chat_id})
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
