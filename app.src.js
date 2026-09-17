@@ -2091,6 +2091,44 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   });
 
   // -------------------------------------------------------------
+  // Keep-alive toggle (test-mode only) - see server.mjs for why this exists.
+  // -------------------------------------------------------------
+  function setKeepAliveUI(on){
+    const btn = $('keepAliveToggle');
+    const hint = $('keepAliveHint');
+    if (btn) btn.dataset.on = on ? 'true' : 'false';
+    if (hint) hint.textContent = on
+      ? 'On — pinging every 10 min so Render stays warm'
+      : 'Off — Render free tier sleeps after ~15 min idle';
+  }
+  async function fetchKeepAliveStatus(){
+    try {
+      const res = await fetch(SOCIAL_CALL_API_BASE + '/api/keepalive/status');
+      const data = await res.json();
+      setKeepAliveUI(!!data.enabled);
+    } catch(e){ console.warn('[KeepAlive] status note:', e.message); }
+  }
+  $('keepAliveToggle')?.addEventListener('click', async () => {
+    const btn = $('keepAliveToggle');
+    const next = btn.dataset.on !== 'true';
+    btn.disabled = true;
+    try {
+      const res = await fetch(SOCIAL_CALL_API_BASE + '/api/keepalive/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: next }),
+      });
+      const data = await res.json();
+      setKeepAliveUI(!!data.enabled);
+    } catch(e){
+      alert('Could not update keep-alive: ' + e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  fetchKeepAliveStatus();
+
+  // -------------------------------------------------------------
   // Call Flow: Home -> Choose how to call
   // -------------------------------------------------------------
   $('headerCallBtn')?.addEventListener('click', () => {
