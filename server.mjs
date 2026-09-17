@@ -49,32 +49,35 @@ function saveCallHistory(record) {
 // Active social call state
 let currentActiveCall = null;
 
-// Keep-alive ping (test-mode only, toggled from the app) - see the route
-// handlers below for why this exists. OFF by default; never persisted, so
-// a redeploy or restart always comes back up with it off.
-const RENDER_PUBLIC_URL = 'https://live-call-f3qm.onrender.com';
-let keepAliveEnabled = false;
-let keepAliveTimer = null;
+// Keep-alive ping (test-mode only, toggled from the app).
+//
+// This does NOT run its own internal timer - a setInterval only fires while
+// the Node process is already alive, so it can't wake the service back up
+// once it's actually spun down, and it silently resets to "off" on every
+// restart/redeploy. Instead, the toggle enables/disables a GitHub Actions
+// scheduled workflow (.github/workflows/keepalive.yml) that pings this
+// service from GitHub's infrastructure every 10 min, independent of
+// whatever state this process is in. A disabled workflow simply never
+// runs, so "off" means genuinely undisturbed, not just "not pinging for
+// now until the next restart resets the flag."
+const GITHUB_REPO = 'multipurps/live-call';
+const KEEPALIVE_WORKFLOW_ID = 'keepalive.yml';
 
-function startKeepAlive() {
-  if (keepAliveTimer) return;
-  console.log('[KeepAlive] enabled - pinging self every 10 min');
-  keepAliveTimer = setInterval(async () => {
-    try {
-      await fetch(`${RENDER_PUBLIC_URL}/api/keepalive/ping`);
-      console.log('[KeepAlive] ping ok');
-    } catch (e) {
-      console.warn('[KeepAlive] ping failed:', e.message);
-    }
-  }, 10 * 60 * 1000);
-}
-
-function stopKeepAlive() {
-  if (keepAliveTimer) {
-    clearInterval(keepAliveTimer);
-    keepAliveTimer = null;
-    console.log('[KeepAlive] disabled');
-  }
+async function githubApi(path, method = 'GET') {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) throw new Error('GITHUB_TOKEN not configured on this service');
+  const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}${path}`, {
+    method,
+    headers: {
+      Authorization: `token ${token}`,
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'live-call-keepalive',
+    },
+  });
+  if (res.status === 204) return {};
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `GitHub API error ${res.status}`);
+  return data;
 }
 
 // Start Telegram Bridge Python process
@@ -293,25 +296,32 @@ const server = http.createServer(async (req, res) => {
   }
 
   // -------------------------------------------------------------
-  // Keep-alive ping (test-mode only, toggled from the app)
+  // Keep-alive ping toggle (test-mode only) - see the comment above the
+  // GITHUB_REPO constant for why this drives a GitHub Actions workflow
+  // instead of an internal timer.
   // -------------------------------------------------------------
-  // Render's free plan spins this service down after ~15 min of no external
-  // HTTP traffic, and the next cold start gets a fresh filesystem - wiping
-  // the Telegram/WhatsApp session files on disk. Self-pinging the service's
-  // own public URL every 10 min keeps it warm during active testing. OFF by
-  // default (and reset to OFF on every restart) so it never quietly runs
-  // 24/7 - it has to be switched on each session.
   if (pathname === '/api/keepalive/status' && req.method === 'GET') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ enabled: keepAliveEnabled }));
+    try {
+      const wf = await githubApi(`/actions/workflows/${KEEPALIVE_WORKFLOW_ID}`);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ enabled: wf.state === 'active' }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: err.message }));
+    }
   }
 
   if (pathname === '/api/keepalive/toggle' && req.method === 'POST') {
     const body = await parseBody(req);
-    keepAliveEnabled = !!body.enabled;
-    if (keepAliveEnabled) startKeepAlive(); else stopKeepAlive();
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ enabled: keepAliveEnabled }));
+    const enabled = !!body.enabled;
+    try {
+      await githubApi(`/actions/workflows/${KEEPALIVE_WORKFLOW_ID}/${enabled ? 'enable' : 'disable'}`, 'PUT');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ enabled }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({ error: err.message }));
+    }
   }
 
   if (pathname === '/api/keepalive/ping') {
