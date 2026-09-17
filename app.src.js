@@ -994,7 +994,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     // Fetch both AI chats and social calls
     const [chatsRes, socialRes] = await Promise.all([
       supabase.from('video_call_chats').select('*').eq('user_id', currentUser.id).order('updated_at', { ascending: false }).limit(50),
-      fetch('/api/social-call/history').then(r => r.json()).catch(() => ({ history: [] }))
+      fetch(SOCIAL_CALL_API_BASE + '/api/social-call/history').then(r => r.json()).catch(() => ({ history: [] }))
     ]);
 
     const data = chatsRes.data || [];
@@ -1758,6 +1758,16 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   // SOCIAL CALLING ARCHITECTURE (WhatsApp & Telegram with Lucy 2.5 Live Swap)
   // ==============================================================================
 
+  // The WhatsApp/Telegram bridges (server.mjs + the Baileys/Pyrogram processes)
+  // only run on the long-lived Render service - they can't live on Vercel's
+  // serverless functions, which have no persistent process and no WebSocket
+  // support. This app's static files are served from Vercel, so a *relative*
+  // fetch('/api/social-call/...') resolves against the Vercel origin instead,
+  // which has no matching route and answers with its own 404 HTML page -
+  // res.json() then throws a JSON-parse error on that HTML body. Pointing
+  // these calls at the Render origin explicitly is the fix.
+  const SOCIAL_CALL_API_BASE = 'https://live-call-f3qm.onrender.com';
+
   let currentSocialPlatform = null; // 'whatsapp' | 'telegram'
   let selectedSocialContact = null; // { name, target }
   let socialMicStream = null;
@@ -1776,8 +1786,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     active: false,
     initWs(){
       if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;
-      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      this.ws = new WebSocket(`${proto}//${location.host}/api/social-call/media`);
+      this.ws = new WebSocket(SOCIAL_CALL_API_BASE.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:') + '/api/social-call/media');
       this.ws.binaryType = 'arraybuffer';
       this.ws.onmessage = (e) => {
         try {
@@ -1871,7 +1880,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   // -------------------------------------------------------------
   async function fetchConnectedStatus(){
     try {
-      const res = await fetch('/api/social-call/status');
+      const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/status');
       if (!res.ok) return;
       const data = await res.json();
 
@@ -1949,9 +1958,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   // Profile -> WhatsApp
   $('openWhatsAppConnect')?.addEventListener('click', () => {
     $('whatsappConnectScreen').classList.add('active');
-    fetch('/api/social-call/whatsapp/qr', { method: 'POST' })
+    fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/qr', { method: 'POST' })
       .then(r => r.json())
-      .then(() => fetchConnectedStatus());
+      .then(() => fetchConnectedStatus())
+      .catch((e) => showErrorToast ? showErrorToast(e.message) : console.warn('[WhatsApp QR] note:', e.message));
     clearInterval(waStatusPollTimer);
     waStatusPollTimer = setInterval(fetchConnectedStatus, 3000);
   });
@@ -1977,7 +1987,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     $('waQrLoading').style.display = 'block';
     $('waQrLoading').textContent = 'Refreshing QR code…';
     $('waQrImg').style.display = 'none';
-    await fetch('/api/social-call/whatsapp/qr', { method: 'POST' });
+    await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/qr', { method: 'POST' });
     await fetchConnectedStatus();
   });
 
@@ -1986,7 +1996,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     if (!phone) return alert('Enter phone number with country code');
     $('waGetPairBtn').textContent = 'Generating…';
     try {
-      const res = await fetch('/api/social-call/whatsapp/pair', {
+      const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/pair', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone }),
@@ -2007,7 +2017,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   $('waDisconnectBtn')?.addEventListener('click', async () => {
     if (!confirm('Disconnect WhatsApp?')) return;
-    await fetch('/api/social-call/whatsapp/disconnect', { method: 'POST' });
+    await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/disconnect', { method: 'POST' });
     await fetchConnectedStatus();
   });
 
@@ -2026,7 +2036,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     $('tgSendCodeBtn').textContent = 'Sending code…';
     $('tgSendCodeHint').textContent = '';
     try {
-      const res = await fetch('/api/social-call/telegram/send_code', {
+      const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/telegram/send_code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone_number: phone }),
@@ -2053,7 +2063,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     $('tgSignInBtn').textContent = 'Signing in…';
     $('tgSignInHint').textContent = '';
     try {
-      const res = await fetch('/api/social-call/telegram/sign_in', {
+      const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/telegram/sign_in', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone_number: phone, phone_code: code, password }),
@@ -2076,7 +2086,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   $('tgDisconnectBtn')?.addEventListener('click', async () => {
     if (!confirm('Disconnect Telegram?')) return;
-    await fetch('/api/social-call/telegram/disconnect', { method: 'POST' });
+    await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/telegram/disconnect', { method: 'POST' });
     await fetchConnectedStatus();
   });
 
@@ -2122,7 +2132,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     const container = $('contactsListContainer');
     container.innerHTML = '<div style="text-align:center; padding:30px; color:var(--dim); font-size:13px;">Loading contacts…</div>';
 
-    const endpoint = platform === 'whatsapp' ? '/api/social-call/whatsapp/contacts' : '/api/social-call/telegram/contacts';
+    const endpoint = platform === 'whatsapp' ? (SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/contacts') : (SOCIAL_CALL_API_BASE + '/api/social-call/telegram/contacts');
     try {
       const res = await fetch(endpoint);
       const data = await res.json();
@@ -2274,7 +2284,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       await LiveSwapMediaSource.start({ forSocialCall: true });
 
       // Place call on backend bridge
-      const res = await fetch('/api/social-call/call', {
+      const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/call', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2347,7 +2357,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
 
     try {
-      await fetch('/api/social-call/hangup', { method: 'POST' });
+      await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/hangup', { method: 'POST' });
     } catch(e){}
 
     // Update Recent calls list with new record
