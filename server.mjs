@@ -49,6 +49,34 @@ function saveCallHistory(record) {
 // Active social call state
 let currentActiveCall = null;
 
+// Keep-alive ping (test-mode only, toggled from the app) - see the route
+// handlers below for why this exists. OFF by default; never persisted, so
+// a redeploy or restart always comes back up with it off.
+const RENDER_PUBLIC_URL = 'https://live-call-f3qm.onrender.com';
+let keepAliveEnabled = false;
+let keepAliveTimer = null;
+
+function startKeepAlive() {
+  if (keepAliveTimer) return;
+  console.log('[KeepAlive] enabled - pinging self every 10 min');
+  keepAliveTimer = setInterval(async () => {
+    try {
+      await fetch(`${RENDER_PUBLIC_URL}/api/keepalive/ping`);
+      console.log('[KeepAlive] ping ok');
+    } catch (e) {
+      console.warn('[KeepAlive] ping failed:', e.message);
+    }
+  }, 10 * 60 * 1000);
+}
+
+function stopKeepAlive() {
+  if (keepAliveTimer) {
+    clearInterval(keepAliveTimer);
+    keepAliveTimer = null;
+    console.log('[KeepAlive] disabled');
+  }
+}
+
 // Start Telegram Bridge Python process
 let tgProcess = null;
 function startTelegramBridge() {
@@ -262,6 +290,33 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ status: 'ended' }));
     }
+  }
+
+  // -------------------------------------------------------------
+  // Keep-alive ping (test-mode only, toggled from the app)
+  // -------------------------------------------------------------
+  // Render's free plan spins this service down after ~15 min of no external
+  // HTTP traffic, and the next cold start gets a fresh filesystem - wiping
+  // the Telegram/WhatsApp session files on disk. Self-pinging the service's
+  // own public URL every 10 min keeps it warm during active testing. OFF by
+  // default (and reset to OFF on every restart) so it never quietly runs
+  // 24/7 - it has to be switched on each session.
+  if (pathname === '/api/keepalive/status' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ enabled: keepAliveEnabled }));
+  }
+
+  if (pathname === '/api/keepalive/toggle' && req.method === 'POST') {
+    const body = await parseBody(req);
+    keepAliveEnabled = !!body.enabled;
+    if (keepAliveEnabled) startKeepAlive(); else stopKeepAlive();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ enabled: keepAliveEnabled }));
+  }
+
+  if (pathname === '/api/keepalive/ping') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ ok: true, ts: Date.now() }));
   }
 
   // -------------------------------------------------------------
