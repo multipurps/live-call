@@ -30,6 +30,68 @@ SESSION_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 os.makedirs(SESSION_DIR, exist_ok=True)
 SESSION_FILE = os.path.join(SESSION_DIR, 'tg_user')
 
+# --- Session persistence across Render redeploys ---------------------------
+# This service runs on Render's free plan with no persistent disk, so
+# SESSION_FILE above gets wiped on every cold start/redeploy - Telegram
+# session lives only as long as the current container does. Fixing that
+# properly means not depending on local disk at all: after signing in,
+# export Pyrogram's session_string (a self-contained auth token, no file
+# needed) and store it in this app's existing Supabase project (the same
+# one already used for user data/settings), then load it back on startup
+# instead of relying on SESSION_FILE. Falls back to the old file-based
+# client (unchanged behavior) if SUPABASE_SERVICE_ROLE_KEY isn't set, so
+# this is safe to deploy before that env var exists.
+SUPABASE_URL = 'https://ewgtpxomgkpbmfyddypw.supabase.co'
+SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SERVICE_ROLE_KEY')
+
+async def _supabase_request(method, path, json_body=None, extra_headers=None):
+    if not SUPABASE_SERVICE_KEY:
+        return None
+    headers = {
+        'apikey': SUPABASE_SERVICE_KEY,
+        'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
+        'Content-Type': 'application/json',
+    }
+    if extra_headers:
+        headers.update(extra_headers)
+    import aiohttp as _aiohttp
+    async with _aiohttp.ClientSession() as session:
+        async with session.request(method, f'{SUPABASE_URL}{path}', json=json_body, headers=headers) as resp:
+            if resp.status >= 300:
+                text = await resp.text()
+                print(f"[TgBridge] Supabase {method} {path} -> {resp.status}: {text}", file=sys.stderr)
+                return None
+            try:
+                return await resp.json()
+            except Exception:
+                return None
+
+async def load_saved_session_string():
+    rows = await _supabase_request(
+        'GET',
+        '/rest/v1/app_settings?select=tg_session_string&id=eq.true',
+    )
+    if rows and isinstance(rows, list) and rows[0].get('tg_session_string'):
+        return rows[0]['tg_session_string']
+    return None
+
+async def save_session_string(session_string):
+    from datetime import datetime, timezone
+    await _supabase_request(
+        'POST',
+        '/rest/v1/app_settings',
+        json_body={'id': True, 'tg_session_string': session_string, 'updated_at': datetime.now(timezone.utc).isoformat()},
+        extra_headers={'Prefer': 'resolution=merge-duplicates'},
+    )
+
+async def clear_saved_session_string():
+    await _supabase_request(
+        'PATCH',
+        '/rest/v1/app_settings?id=eq.true',
+        json_body={'tg_session_string': None},
+    )
+# -----------------------------------------------------------------------
+
 # Default public Telegram Web API credentials if user does not provide custom ones
 # (Telegram allows obtaining test/production api_id & api_hash from my.telegram.org)
 DEFAULT_API_ID = int(os.environ.get('TELEGRAM_API_ID', '2040'))
@@ -54,6 +116,23 @@ def get_client(api_id=None, api_hash=None):
     )
     return client
 
+async def get_client_async(api_id=None, api_hash=None):
+    """Like get_client(), but tries to restore a previously saved session
+    string from Supabase first, so a fresh (redeployed) container can come
+    back up already authenticated instead of always starting logged out."""
+    global client
+    if client is not None:
+        return client
+    aid = api_id or DEFAULT_API_ID
+    ahash = api_hash or DEFAULT_API_HASH
+    saved = await load_saved_session_string()
+    if saved:
+        print("[TgBridge] Restoring session from Supabase (skipping local session file)")
+        client = Client(":memory:", api_id=aid, api_hash=ahash, session_string=saved, in_memory=True)
+    else:
+        client = get_client(api_id, api_hash)
+    return client
+
 async def init_pytgcalls():
     global call_py
     if call_py is not None:
@@ -70,7 +149,7 @@ async def init_pytgcalls():
 
 async def handle_status(request):
     try:
-        cl = get_client()
+        cl = await get_client_async()
         if not cl.is_connected:
             try:
                 await cl.connect()
@@ -78,6 +157,13 @@ async def handle_status(request):
                 return web.json_response({"connected": False, "error": str(e)})
         me = await cl.get_me()
         if me:
+            # Session is valid and connected - make sure Supabase has the
+            # latest exportable session string so the next cold start can
+            # restore it too (cheap no-op if already saved and unchanged).
+            try:
+                await save_session_string(await cl.export_session_string())
+            except Exception:
+                pass
             return web.json_response({
                 "connected": True,
                 "user": {
@@ -105,7 +191,7 @@ async def handle_send_code(request):
         # fail confusingly at sign-in with a bogus phone_code_hash. Surface
         # the real failure (e.g. Telegram unreachable from this deployment)
         # instead, same as the WhatsApp bridge does.
-        cl = get_client(api_id, api_hash)
+        cl = await get_client_async(api_id, api_hash)
         if not cl.is_connected:
             await cl.connect()
 
@@ -130,7 +216,7 @@ async def handle_sign_in(request):
         # No fake/demo sign-in bypass here on purpose - a code that always
         # "connects" without a real Telegram sign-in would mask the actual
         # failure. Let a real (or missing) phone_code_hash fail honestly.
-        cl = get_client()
+        cl = await get_client_async()
         if not cl.is_connected:
             await cl.connect()
 
@@ -140,6 +226,13 @@ async def handle_sign_in(request):
             if not password:
                 return web.json_response({"status": "2fa_required", "message": "2FA password required"}, status=200)
             user = await cl.check_password(password)
+
+        # Persist the session immediately so it survives the next Render
+        # redeploy/cold start instead of only living in this container.
+        try:
+            await save_session_string(await cl.export_session_string())
+        except Exception as save_err:
+            print(f"[TgBridge] Note: could not persist session to Supabase: {save_err}", file=sys.stderr)
 
         return web.json_response({
             "status": "connected",
@@ -169,19 +262,24 @@ async def handle_disconnect(request):
             except Exception:
                 pass
             client = None
-        # remove session files
+        # remove local session files (harmless if in-memory/no file was ever written)
         for f in os.listdir(SESSION_DIR):
             try:
                 os.remove(os.path.join(SESSION_DIR, f))
             except Exception:
                 pass
+        # and clear the persisted copy so a future cold start doesn't restore it
+        try:
+            await clear_saved_session_string()
+        except Exception:
+            pass
         return web.json_response({"status": "disconnected"})
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
 async def handle_contacts(request):
     try:
-        cl = get_client()
+        cl = await get_client_async()
         if not cl.is_connected:
             await cl.connect()
         contacts = await cl.get_contacts()
@@ -218,7 +316,7 @@ async def handle_call(request):
         if not target:
             return web.json_response({"error": "Target contact required"}, status=400)
         
-        cl = get_client()
+        cl = await get_client_async()
         if not cl.is_connected:
             await cl.connect()
 
