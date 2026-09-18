@@ -9,13 +9,18 @@
 // honest-failure-only attempt via PyTgCalls, which this replaces for actual
 // call placement.
 //
-// UNVERIFIED: this has not yet been built or run against Render's actual
-// build image, nor tested against a real Telegram account/call. It is
-// written directly against the crates' published documentation and source
-// (see the commit message for what was checked), but native dependency
-// chains like this one (ntgcalls pulls in a compiled WebRTC-based calling
-// engine) commonly need iteration once actually built somewhere with real
-// network/toolchain access, which this sandbox does not have.
+// STATUS: compiles and runs stably on Render (verified via build/runtime
+// logs). Auth (send_code/sign_in/session persistence) and call signaling
+// (request/connect/run_signaling) are implemented against the crates'
+// real source and API, with two real compile errors already found and
+// fixed from an actual Render build (see git history) - not just
+// speculation. NOT yet tested against a real Telegram account/call end to
+// end. The outgoing media path (set_media reading from named pipes that
+// server.mjs now writes the frontend's live capture into) is the newest,
+// least-verified part - format assumptions (16kHz mono audio, 480x640
+// JPEG video) are confirmed correct by reading app.src.js directly, but
+// whether ntgcalls' ffmpeg-backed pipe reading actually behaves well with
+// a live, slowly-filled FIFO (vs. a real file) hasn't been tested yet.
 
 use std::sync::Arc;
 use ferogram::{Client, PasswordToken, SignInError};
@@ -324,20 +329,26 @@ async fn run_call(state: Arc<Mutex<AppState>>, target_user_id: i64) {
     };
 
     // Outgoing media: named pipes server.mjs writes our live capture into.
-    // Audio: raw s16le PCM, 48kHz stereo (audio_raw's fixed format) - built
-    // manually rather than via Media::audio_raw() so we can set
-    // keep_open: true, since that helper defaults to false (fine for a real
-    // file, wrong for a FIFO that should keep being read as data streams in).
-    // Video: MJPEG frames concatenated into a pipe, decoded by ffmpeg - this
-    // path is unverified; a raw external-frame API (like PyTgCalls'
-    // ExternalMedia) is NOT available on P2PCall in this crate version, only
-    // on group calls, so file/pipe-based ingestion via ffmpeg is the only
-    // option here.
+    // Format is dictated by what the frontend's SocialCallMediaAdapter
+    // actually captures and sends (app.src.js), NOT ffmpeg/audio_raw()'s
+    // usual assumptions - confirmed directly from that code:
+    //   Audio: raw s16le PCM, 16kHz MONO (AudioContext sampleRate: 16000,
+    //     createScriptProcessor(2048, 1, 1) - one input/output channel).
+    //     Built manually rather than via Media::audio_raw() both because
+    //     that helper hardcodes 48kHz stereo (wrong here) and because it
+    //     defaults keep_open: false (fine for a real file, wrong for a
+    //     FIFO that should keep being read as data streams in).
+    //   Video: 480x640 (portrait) JPEG frames at 15fps, concatenated into
+    //     a pipe as MJPEG, decoded by ffmpeg - this path is unverified; a
+    //     raw external-frame API (like PyTgCalls' ExternalMedia) is NOT
+    //     available on P2PCall in this crate version, only on group
+    //     calls, so file/pipe-based ingestion via ffmpeg is the only
+    //     option here.
     let media = tgcalls::MediaDescription {
         microphone: Some(tgcalls::AudioDescription {
             media_source: tgcalls::MediaSource::File,
-            sample_rate: 48000,
-            channel_count: 2,
+            sample_rate: 16000,
+            channel_count: 1,
             input: "/tmp/tgcalls_audio.pcm".to_string(),
             keep_open: true,
         }),
@@ -348,7 +359,7 @@ async fn run_call(state: Arc<Mutex<AppState>>, target_user_id: i64) {
     if let Err(e) = call.set_media(StreamMode::Capture, &media).await {
         tracing::warn!("set_media (audio) failed: {}", e);
     }
-    let video_media = Media::video("/tmp/tgcalls_video.mjpeg", 640, 480, 15);
+    let video_media = Media::video("/tmp/tgcalls_video.mjpeg", 480, 640, 15);
     if let Err(e) = call.set_media(StreamMode::Capture, &video_media).await {
         tracing::warn!("set_media (video) failed: {}", e);
     }
