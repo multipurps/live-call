@@ -653,13 +653,18 @@
           <span class="platformBadge" id="prepPlatformBadge">WhatsApp</span>
         </div>
 
+        <div class="connectTabs" style="margin-bottom:14px;">
+          <button class="connectTabBtn active" id="prepSourceLucyBtn">Lucy 2.5</button>
+          <button class="connectTabBtn" id="prepSourceAvatarBtn">Avatar</button>
+        </div>
+
         <div class="prepPreviewBox" style="position:relative; width:100%; aspect-ratio:4/3; max-height:280px; background:#000; border-radius:18px; overflow:hidden; border:1px solid var(--line); margin-bottom:18px; display:flex; align-items:center; justify-content:center;">
           <video id="prepAvatarPreview" autoplay playsinline muted style="width:100%; height:100%; object-fit:cover; display:none;"></video>
           <div id="prepAvatarPlaceholder" style="text-align:center; padding:20px;">
             <div class="pulseCircle" style="margin:0 auto 10px;">
               <img src="logo.png" alt="" />
             </div>
-            <div style="font-size:13px; color:var(--dim);">Lucy 2.5 Live Swap Preview</div>
+            <div style="font-size:13px; color:var(--dim);" id="prepPreviewPlaceholderLabel">Lucy 2.5 Live Swap Preview</div>
           </div>
         </div>
 
@@ -679,7 +684,7 @@
             <svg viewBox="0 0 24 24" fill="none" width="20" height="20" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
           </div>
           <div class="cBody">
-            <div class="cLabel">Live Swap / Lucy 2.5</div>
+            <div class="cLabel" id="prepSourceLabel">Live Swap / Lucy 2.5</div>
             <div class="cValue" id="prepLucyStatus">Ready to stream</div>
           </div>
           <span class="dot live" id="prepLucyDot"></span>
@@ -813,20 +818,26 @@
   </div>
 </div>
 
-<div id="socialCallScreen">
-  <video id="socialRemoteVideo" autoplay playsinline></video>
+<div id="socialCallScreen" data-layout="pip">
+  <video id="socialRemoteVideo" class="socialPipMain" autoplay playsinline></video>
+  <video id="socialSelfVideo" class="socialPipThumb" autoplay playsinline muted></video>
 
   <div id="socialCallTop">
     <div style="display:flex; align-items:center; gap:8px;">
       <div class="pill"><span class="dot live"></span><span>Live</span></div>
       <div class="pill" id="socialCallPlatformPill"><span>WhatsApp</span></div>
     </div>
-    <div id="socialCallHeaderInfo" style="text-align:right;">
-      <div id="socialCallTargetName" style="font-size:14px; font-weight:700; color:#fff;">Contact</div>
-      <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;">
-        <span id="socialCallStatusLabel" style="font-size:11.5px; color:var(--dim);">Calling…</span>
-        <span style="font-size:11.5px; color:var(--dim);">•</span>
-        <span id="socialCallTimer" style="font-size:11.5px; font-weight:600; color:#fff;">00:00</span>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <button class="roundBtn" id="socialLayoutToggleBtn" aria-label="Change call layout" style="width:34px; height:34px;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="13" y="13" width="6" height="6" rx="1" fill="white" stroke="none"/></svg>
+      </button>
+      <div id="socialCallHeaderInfo" style="text-align:right;">
+        <div id="socialCallTargetName" style="font-size:14px; font-weight:700; color:#fff;">Contact</div>
+        <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;">
+          <span id="socialCallStatusLabel" style="font-size:11.5px; color:var(--dim);">Calling…</span>
+          <span style="font-size:11.5px; color:var(--dim);">•</span>
+          <span id="socialCallTimer" style="font-size:11.5px; font-weight:600; color:#fff;">00:00</span>
+        </div>
       </div>
     </div>
   </div>
