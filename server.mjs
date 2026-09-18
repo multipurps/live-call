@@ -12,6 +12,7 @@ const __dirname = path.dirname(__filename);
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = '0.0.0.0';
 const TG_PORT = parseInt(process.env.TG_PORT || '5050', 10);
+const TGCALLS_PORT = parseInt(process.env.TGCALLS_PORT || '5051', 10);
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -101,6 +102,33 @@ function startTelegramBridge() {
   });
 }
 
+// Start the tgcalls_bridge Rust binary - real Telegram P2P calling (see
+// server/tgcalls_bridge/src/main.rs for why this exists separately from
+// telegram_bridge.py: PyTgCalls can't ring a private contact, this can).
+// UNVERIFIED as of this commit - not yet confirmed to even build on Render.
+let tgCallsProcess = null;
+function startTgCallsBridge() {
+  const binPath = path.join(__dirname, 'server', 'tgcalls_bridge', 'target', 'release', 'tgcalls_bridge');
+  if (!fs.existsSync(binPath)) {
+    console.warn('[Server] tgcalls_bridge binary not found (build may have failed or been skipped) - real Telegram calling unavailable, PyTgCalls-only.');
+    return;
+  }
+
+  console.log('[Server] Launching tgcalls_bridge (real Telegram P2P calling) daemon...');
+  tgCallsProcess = spawn(binPath, [], {
+    env: { ...process.env, TGCALLS_PORT: String(TGCALLS_PORT) },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  tgCallsProcess.stdout.on('data', (d) => console.log(`[TgCallsBridge] ${d.toString().trim()}`));
+  tgCallsProcess.stderr.on('data', (d) => console.error(`[TgCallsBridge] ${d.toString().trim()}`));
+
+  tgCallsProcess.on('exit', (code) => {
+    console.warn(`[TgCallsBridge] Exited with code ${code}, restarting in 5s...`);
+    setTimeout(startTgCallsBridge, 5000);
+  });
+}
+
 // Helper to proxy HTTP requests to Telegram bridge
 async function proxyToTg(endpoint, method = 'GET', body = null) {
   const url = `http://127.0.0.1:${TG_PORT}${endpoint}`;
@@ -111,6 +139,19 @@ async function proxyToTg(endpoint, method = 'GET', body = null) {
     return { status: res.status, data: await res.json().catch(() => ({})) };
   } catch (err) {
     return { status: 502, data: { error: `Telegram bridge unavailable: ${err.message}` } };
+  }
+}
+
+// Helper to proxy HTTP requests to the tgcalls_bridge (real P2P calling)
+async function proxyToTgCalls(endpoint, method = 'GET', body = null) {
+  const url = `http://127.0.0.1:${TGCALLS_PORT}${endpoint}`;
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const res = await fetch(url, opts);
+    return { status: res.status, data: await res.json().catch(() => ({})) };
+  } catch (err) {
+    return { status: 502, data: { error: `Real-calling bridge unavailable: ${err.message}` } };
   }
 }
 
@@ -197,9 +238,47 @@ const server = http.createServer(async (req, res) => {
 
     if (subpath === 'whatsapp/disconnect' && req.method === 'POST') {
       const result = await waBridge.disconnect();
+
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify(result));
     }
+
+    // ---------------------------------------------------------------
+    // Real Telegram P2P calling auth (tgcalls_bridge) - a SEPARATE session
+    // from the regular Telegram connection above. That connection (via
+    // telegram_bridge.py/Pyrogram) is used for status/contacts and can't
+    // place a real ringing call; this one (via ferogram/tgcalls) is used
+    // only for actually placing/receiving calls. Two different MTProto
+    // client implementations, so unfortunately two separate sign-ins.
+    // ---------------------------------------------------------------
+    if (subpath === 'telegram/p2p/status' && req.method === 'GET') {
+      const r = await proxyToTgCalls('/status', 'GET');
+      res.writeHead(r.status, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify(r.data));
+    }
+    if (subpath === 'telegram/p2p/send_code' && req.method === 'POST') {
+      const body = await parseBody(req);
+      const r = await proxyToTgCalls('/send_code', 'POST', body);
+      res.writeHead(r.status, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify(r.data));
+    }
+    if (subpath === 'telegram/p2p/sign_in' && req.method === 'POST') {
+      const body = await parseBody(req);
+      const r = await proxyToTgCalls('/sign_in', 'POST', body);
+      res.writeHead(r.status, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify(r.data));
+    }
+    if (subpath === 'telegram/p2p/disconnect' && req.method === 'POST') {
+      const r = await proxyToTgCalls('/disconnect', 'POST');
+      res.writeHead(r.status, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify(r.data));
+    }
+    if (subpath === 'telegram/p2p/call_state' && req.method === 'GET') {
+      const r = await proxyToTgCalls('/call/state', 'GET');
+      res.writeHead(r.status, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify(r.data));
+    }
+
 
     // Telegram endpoints
     if (subpath === 'telegram/status' && req.method === 'GET') {
@@ -257,7 +336,16 @@ const server = http.createServer(async (req, res) => {
         if (platform === 'whatsapp') {
           await waBridge.startCall({ target, video: true });
         } else if (platform === 'telegram') {
-          await proxyToTg('/tg/call', 'POST', { target });
+          // Real P2P ringing via tgcalls_bridge, not PyTgCalls (which can't
+          // ring a private contact - see server/telegram_bridge.py's
+          // handle_call comments). Requires the account to have signed in
+          // separately via the /p2p/* endpoints below - a different session
+          // than the regular Telegram connection used for status/contacts.
+          const numericTarget = Number(target);
+          if (!Number.isFinite(numericTarget)) {
+            throw new Error('Real calling needs a numeric Telegram user id as target');
+          }
+          await proxyToTgCalls('/call', 'POST', { target: numericTarget });
         }
 
         broadcastMediaEvent({ type: 'call_state', state: 'calling', call: currentActiveCall });
@@ -284,7 +372,7 @@ const server = http.createServer(async (req, res) => {
         if (currentActiveCall.platform === 'whatsapp') {
           await waBridge.hangup().catch(() => {});
         } else if (currentActiveCall.platform === 'telegram') {
-          await proxyToTg('/tg/hangup', 'POST').catch(() => {});
+          await proxyToTgCalls('/hangup', 'POST').catch(() => {});
         }
 
         broadcastMediaEvent({ type: 'call_state', state: 'ended' });
@@ -466,5 +554,6 @@ wss.on('connection', (ws) => {
 server.listen(PORT, HOST, () => {
   console.log(`Live Call server running at http://${HOST}:${PORT}`);
   startTelegramBridge();
+  startTgCallsBridge();
   waBridge.init().catch((e) => console.log('[Server] WA init note:', e.message));
 });
