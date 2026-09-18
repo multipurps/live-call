@@ -1,0 +1,20 @@
+[package]
+name = "tgcalls_bridge"
+version = "0.1.0"
+edition = "2021"
+
+# NOTE: this dependency chain (via ntgcalls) needs a modern Rust toolchain
+# (edition2024 support, Rust 1.85+). Render's Rust runtime should install a
+# current stable toolchain via rustup - this is not verified against Render's
+# actual build image yet, only against the crate's published dependency tree.
+[dependencies]
+tgcalls    = "0.2"
+ferogram   = "0.6"
+tokio      = { version = "1", features = ["full"] }
+tiny_http  = "0.12"
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest    = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tracing    = "0.1"
+tracing-subscriber = "0.3"
+anyhow     = "1"
