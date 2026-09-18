@@ -5,7 +5,7 @@
   "scripts": {
     "minify": "node build.js",
     "start": "node server.mjs",
-    "postinstall": "pip3 install -r requirements.txt || pip install -r requirements.txt || echo 'WARNING: could not install Python deps for the Telegram bridge - see requirements.txt'"
+    "postinstall": "pip3 install -r requirements.txt || pip install -r requirements.txt || echo 'WARNING: could not install Python deps for the Telegram bridge - see requirements.txt'; bash server/tgcalls_bridge/build.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
