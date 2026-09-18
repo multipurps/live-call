@@ -1817,7 +1817,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         $('prepLucyStatus').textContent = 'Avatar ready';
         $('prepLucyDot')?.classList.add('live');
       });
-      this.client.addListener(AnamEvent.CONNECTION_CLOSED, () => { this.client = null; });
+      this.client.addListener(AnamEvent.CONNECTION_CLOSED, () => {
+        this.client = null;
+        if ($('socialCallScreen')?.classList.contains('active')) endSocialCall();
+      });
       await this.client.streamToVideoElement('prepAvatarPreview');
 
       // Avatar mode doesn't need your camera for the call itself, but the
