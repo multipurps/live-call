@@ -18,8 +18,6 @@
 // network/toolchain access, which this sandbox does not have.
 
 use std::sync::Arc;
-use std::io::Read;
-
 use ferogram::{Client, PasswordToken, SignInError};
 use serde_json::json;
 use tgcalls::{Media, P2PCall, StreamMode};
@@ -41,7 +39,7 @@ enum CallState {
 
 struct AppState {
     client: Option<Client>,
-    login_token: Option<ferogram::LoginToken>,
+    login_token: Option<ferogram::SendCodeOutcome>,
     password_token: Option<Box<PasswordToken>>,
     call_state: CallState,
     // Set when a call is active so /hangup can actually end it.
@@ -186,9 +184,17 @@ async fn handle_send_code(state: Arc<Mutex<AppState>>, body: serde_json::Value) 
         Err(e) => return json!({ "error": e.to_string() }),
     };
     match client.request_login_code(phone).await {
-        Ok(token) => {
-            st.login_token = Some(token);
+        Ok(ferogram::SendCodeOutcome::CodeRequired(token)) => {
+            st.login_token = Some(ferogram::SendCodeOutcome::CodeRequired(token));
             json!({ "status": "code_sent" })
+        }
+        Ok(ferogram::SendCodeOutcome::AlreadyAuthorized(name)) => {
+            // Already signed in (e.g. a previously restored session) - no
+            // code needed at all, persist immediately.
+            if let Ok(s) = client.export_session_string().await {
+                save_session_string(&s).await;
+            }
+            json!({ "status": "connected", "user": name })
         }
         Err(e) => json!({ "error": e.to_string() }),
     }
@@ -201,8 +207,13 @@ async fn handle_sign_in(state: Arc<Mutex<AppState>>, body: serde_json::Value) ->
     let Some(client) = st.client.clone() else {
         return json!({ "error": "call send_code first" });
     };
-    let Some(token) = st.login_token.clone() else {
+    let Some(outcome) = st.login_token.take() else {
         return json!({ "error": "call send_code first" });
+    };
+    let ferogram::SendCodeOutcome::CodeRequired(token) = outcome else {
+        // AlreadyAuthorized shouldn't reach here - handle_send_code already
+        // resolved that case directly - but handle it gracefully anyway.
+        return json!({ "status": "connected" });
     };
 
     let result = client.sign_in(&token, code).await;
@@ -427,7 +438,28 @@ async fn main() -> anyhow::Result<()> {
                 let target = body.get("target").and_then(|v| v.as_i64());
                 match target {
                     Some(target_id) => {
-                        tokio::spawn(run_call(state.clone(), target_id));
+                        // P2PCall (via ntgcalls) wraps a raw native pointer that
+                        // isn't Send/Sync, so it can't cross tokio's
+                        // multi-threaded work-stealing scheduler - tokio::spawn
+                        // requires the whole future to be Send, which a future
+                        // holding P2PCall across .await points isn't. Instead,
+                        // run the entire call on its own dedicated OS thread
+                        // with its own single-threaded runtime, so P2PCall
+                        // never needs to move between threads at all.
+                        let state_for_call = state.clone();
+                        std::thread::spawn(move || {
+                            let rt = match tokio::runtime::Builder::new_current_thread()
+                                .enable_all()
+                                .build()
+                            {
+                                Ok(rt) => rt,
+                                Err(e) => {
+                                    tracing::error!("failed to build call thread runtime: {}", e);
+                                    return;
+                                }
+                            };
+                            rt.block_on(run_call(state_for_call, target_id));
+                        });
                         json!({ "status": "calling" })
                     }
                     None => json!({ "error": "target (numeric Telegram user id) required" }),
