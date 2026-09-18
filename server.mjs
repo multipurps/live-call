@@ -2,7 +2,7 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { spawn } from 'child_process';
+import { spawn, execFileSync } from 'child_process';
 import { WebSocketServer, WebSocket } from 'ws';
 import { waBridge } from './server/whatsapp_bridge.mjs';
 
@@ -153,6 +153,60 @@ async function proxyToTgCalls(endpoint, method = 'GET', body = null) {
   } catch (err) {
     return { status: 502, data: { error: `Real-calling bridge unavailable: ${err.message}` } };
   }
+}
+
+// ---------------------------------------------------------------
+// tgcalls_bridge media pipes: the outgoing video/audio frames the
+// frontend already sends over the media WebSocket (channel 0x01 = JPEG
+// video frame, 0x02 = PCM mic audio - see wss.on('connection') below)
+// were previously just received and dropped; nothing ever consumed
+// them. For a real Telegram P2P call, tgcalls_bridge's set_media() reads
+// outgoing audio/video from two named pipes (see
+// server/tgcalls_bridge/src/main.rs's run_call) since P2PCall has no
+// live external-frame push API, only file/pipe-backed ingestion via
+// ffmpeg. These functions create those pipes and keep write streams
+// open into them for the duration of an active Telegram call.
+// ---------------------------------------------------------------
+const TGCALLS_AUDIO_PIPE = '/tmp/tgcalls_audio.pcm';
+const TGCALLS_VIDEO_PIPE = '/tmp/tgcalls_video.mjpeg';
+let tgCallsAudioStream = null;
+let tgCallsVideoStream = null;
+
+function makeFreshFifo(fifoPath) {
+  try { fs.unlinkSync(fifoPath); } catch (e) { /* didn't exist - fine */ }
+  execFileSync('mkfifo', [fifoPath]);
+}
+
+function openTgCallsPipes() {
+  // A FIFO's open() blocks until the other end is also opened - that's
+  // expected and harmless here: Node's fs streams don't block the event
+  // loop while waiting, they just fire 'open' once tgcalls_bridge's
+  // ffmpeg reader attaches (which happens inside set_media(), itself
+  // only called after the call actually connects). Frames arriving over
+  // the WS before that just get buffered in the stream's internal
+  // buffer, which is fine for the short ringing/connecting window.
+  try {
+    makeFreshFifo(TGCALLS_AUDIO_PIPE);
+    makeFreshFifo(TGCALLS_VIDEO_PIPE);
+  } catch (e) {
+    console.error('[TgCallsPipes] Failed to create FIFOs (mkfifo unavailable?):', e.message);
+    return;
+  }
+
+  tgCallsAudioStream = fs.createWriteStream(TGCALLS_AUDIO_PIPE);
+  tgCallsVideoStream = fs.createWriteStream(TGCALLS_VIDEO_PIPE);
+  tgCallsAudioStream.on('error', (e) => console.warn('[TgCallsPipes] audio pipe error:', e.message));
+  tgCallsVideoStream.on('error', (e) => console.warn('[TgCallsPipes] video pipe error:', e.message));
+  tgCallsAudioStream.on('open', () => console.log('[TgCallsPipes] audio pipe reader attached'));
+  tgCallsVideoStream.on('open', () => console.log('[TgCallsPipes] video pipe reader attached'));
+  console.log('[TgCallsPipes] Opened audio/video pipes for tgcalls_bridge');
+}
+
+function closeTgCallsPipes() {
+  if (tgCallsAudioStream) { tgCallsAudioStream.destroy(); tgCallsAudioStream = null; }
+  if (tgCallsVideoStream) { tgCallsVideoStream.destroy(); tgCallsVideoStream = null; }
+  try { fs.unlinkSync(TGCALLS_AUDIO_PIPE); } catch (e) {}
+  try { fs.unlinkSync(TGCALLS_VIDEO_PIPE); } catch (e) {}
 }
 
 // Parse request body
@@ -345,6 +399,10 @@ const server = http.createServer(async (req, res) => {
           if (!Number.isFinite(numericTarget)) {
             throw new Error('Real calling needs a numeric Telegram user id as target');
           }
+          // Open the media pipes BEFORE placing the call so they're ready
+          // the moment tgcalls_bridge's set_media() looks for a reader -
+          // opening is non-blocking on this side (see openTgCallsPipes).
+          openTgCallsPipes();
           await proxyToTgCalls('/call', 'POST', { target: numericTarget });
         }
 
@@ -354,6 +412,7 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify({ status: 'call_started', call: currentActiveCall }));
       } catch (err) {
         currentActiveCall = null;
+        closeTgCallsPipes();
         res.writeHead(500, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ error: err.message }));
       }
@@ -373,6 +432,7 @@ const server = http.createServer(async (req, res) => {
           await waBridge.hangup().catch(() => {});
         } else if (currentActiveCall.platform === 'telegram') {
           await proxyToTgCalls('/hangup', 'POST').catch(() => {});
+          closeTgCallsPipes();
         }
 
         broadcastMediaEvent({ type: 'call_state', state: 'ended' });
@@ -527,10 +587,22 @@ wss.on('connection', (ws) => {
       const payload = data.subarray(1);
 
       if (channel === 0x01) {
-        // Lucy 2.5 Video Frame received!
-        // In full pipeline, routed to meowcaller SendVideo() / PyTgCalls send_frame()
+        // Lucy 2.5 / Avatar outgoing video frame (JPEG blob, ~15fps - see
+        // SocialCallMediaAdapter.startStreaming in app.src.js). Previously
+        // received and silently dropped here for every call, WhatsApp and
+        // Telegram alike - nothing ever consumed these bytes. For a real
+        // Telegram P2P call, tgcalls_bridge's set_media() reads outgoing
+        // video from TGCALLS_VIDEO_PIPE as a concatenated-JPEG (MJPEG)
+        // stream, decoded by ffmpeg on that side.
+        if (currentActiveCall?.platform === 'telegram' && tgCallsVideoStream && !tgCallsVideoStream.destroyed) {
+          tgCallsVideoStream.write(payload);
+        }
       } else if (channel === 0x02) {
-        // Microphone PCM audio chunk
+        // Microphone PCM audio chunk (expected raw s16le, 48kHz stereo -
+        // matching tgcalls_bridge's audio_raw-style MediaDescription).
+        if (currentActiveCall?.platform === 'telegram' && tgCallsAudioStream && !tgCallsAudioStream.destroyed) {
+          tgCallsAudioStream.write(payload);
+        }
       }
     } else {
       try {
