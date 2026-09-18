@@ -1580,6 +1580,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
           });
           const socialVid = $('socialRemoteVideo');
           if (socialVid) { socialVid.srcObject = lfLocalStream; }
+          const socialSelfVid = $('socialSelfVideo');
+          if (socialSelfVid) { socialSelfVid.srcObject = lfLocalStream; }
           const prepVid = $('prepAvatarPreview');
           if (prepVid) { prepVid.srcObject = lfLocalStream; prepVid.style.display = 'block'; $('prepAvatarPlaceholder').style.display = 'none'; }
           LiveSwapMediaSource.setStream(lfLocalStream);
@@ -1631,6 +1633,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       lfLocalStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 1088 }, height: { ideal: 624 }, frameRate: { ideal: 30, max: 30 } },
       });
+      const socialSelfVid = $('socialSelfVideo');
+      if (socialSelfVid) { socialSelfVid.srcObject = lfLocalStream; }
     } catch (e) {
       lfShowError('camera permission');
       return;
@@ -1728,6 +1732,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
     const socialVid = $('socialRemoteVideo');
     if (socialVid) socialVid.srcObject = null;
+    const socialSelfVid = $('socialSelfVideo');
+    if (socialSelfVid) socialSelfVid.srcObject = null;
     const prepVid = $('prepAvatarPreview');
     if (prepVid) { prepVid.srcObject = null; prepVid.style.display = 'none'; $('prepAvatarPlaceholder').style.display = 'block'; }
     LiveSwapMediaSource.stream = null;
@@ -1770,8 +1776,95 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   let currentSocialPlatform = null; // 'whatsapp' | 'telegram'
   let selectedSocialContact = null; // { name, target }
+  let selectedCallSource = 'lucy'; // 'lucy' | 'avatar' - which outgoing source to use for a social call
   let socialMicStream = null;
   let socialCallDurationTimer = null;
+
+  // Headless Anam avatar source for social calls - mirrors LiveSwapMediaSource's
+  // shape (getStream/getVideoElement/start/stop) so the rest of the social-call
+  // code can treat "Lucy 2.5" and "Avatar" interchangeably. Deliberately uses
+  // its own client/video element, separate from callScreen's own anamClient/
+  // remoteVideo, so starting a social avatar call can never interfere with
+  // the regular AI-avatar call screen (which stays exactly as it was).
+  const SocialAnamSource = {
+    client: null,
+    videoEl: null,
+    getVideoElement(){ return this.videoEl; },
+    getStream(){ return this.videoEl && this.videoEl.captureStream ? this.videoEl.captureStream() : null; },
+    isActive(){ return !!this.client; },
+    async start(){
+      const vid = $('prepAvatarPreview');
+      this.videoEl = vid;
+      if (!state.anamKeySet) throw new Error('Add your Anam API key in Profile settings first.');
+      if (!state.anamAvatarId) throw new Error('Pick an avatar first.');
+      const resp = await fetch('/api/anam', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+        body: JSON.stringify({ action: 'session', avatarId: state.anamAvatarId, voiceId: state.anamVoiceId, systemPrompt: promptWithLanguage() }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error('Anam error: ' + JSON.stringify(data.error));
+
+      const { createClient, AnamEvent } = await import('https://esm.sh/@anam-ai/js-sdk@latest');
+      this.client = createClient(data.sessionToken);
+      vid.muted = false;
+      vid.volume = 1.0;
+      vid.style.display = 'block';
+      $('prepAvatarPlaceholder').style.display = 'none';
+      const idle = $('socialCallIdle');
+      this.client.addListener(AnamEvent.VIDEO_PLAY_STARTED, () => {
+        if (idle) idle.style.display = 'none';
+        $('prepLucyStatus').textContent = 'Avatar ready';
+        $('prepLucyDot')?.classList.add('live');
+      });
+      this.client.addListener(AnamEvent.CONNECTION_CLOSED, () => { this.client = null; });
+      await this.client.streamToVideoElement('prepAvatarPreview');
+
+      // Avatar mode doesn't need your camera for the call itself, but the
+      // self-view PIP still needs something to show - best-effort only,
+      // never blocks the call if the camera isn't available/granted.
+      try {
+        if (!lfLocalStream) {
+          lfLocalStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+          });
+        }
+        const selfVid = $('socialSelfVideo');
+        if (selfVid) selfVid.srcObject = lfLocalStream;
+      } catch(e) { /* self-view preview only - fine to skip */ }
+    },
+    stop(){
+      if (this.client) { try { this.client.stopStreaming(); } catch(e){} this.client = null; }
+      if (this.videoEl) { this.videoEl.style.display = 'none'; }
+      const ph = $('prepAvatarPlaceholder');
+      if (ph) ph.style.display = 'block';
+      if (lfLocalStream) { lfLocalStream.getTracks().forEach(t => t.stop()); lfLocalStream = null; }
+      const selfVid = $('socialSelfVideo');
+      if (selfVid) selfVid.srcObject = null;
+    },
+  };
+
+  function activeSocialSource(){
+    return selectedCallSource === 'avatar' ? SocialAnamSource : LiveSwapMediaSource;
+  }
+
+  $('prepSourceLucyBtn')?.addEventListener('click', () => {
+    selectedCallSource = 'lucy';
+    $('prepSourceLucyBtn').classList.add('active');
+    $('prepSourceAvatarBtn').classList.remove('active');
+    $('prepSourceLabel').textContent = 'Live Swap / Lucy 2.5';
+    $('prepPreviewPlaceholderLabel').textContent = 'Lucy 2.5 Live Swap Preview';
+    $('prepLucyStatus').textContent = 'Ready to stream';
+  });
+  $('prepSourceAvatarBtn')?.addEventListener('click', () => {
+    selectedCallSource = 'avatar';
+    $('prepSourceAvatarBtn').classList.add('active');
+    $('prepSourceLucyBtn').classList.remove('active');
+    $('prepSourceLabel').textContent = 'AI Avatar (Anam)';
+    $('prepPreviewPlaceholderLabel').textContent = 'AI Avatar Preview';
+    $('prepLucyStatus').textContent = state.anamAvatarId ? 'Ready to stream' : 'Pick an avatar in Profile first';
+  });
+
   let socialCallStartedAt = null;
   let socialMuted = false;
   let waStatusPollTimer = null;
@@ -1806,7 +1899,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       canvas.width = 480;
       canvas.height = 640;
       const ctx = canvas.getContext('2d');
-      const vid = LiveSwapMediaSource.getVideoElement() || $('socialRemoteVideo');
+      const vid = activeSocialSource().getVideoElement() || $('socialRemoteVideo');
 
       clearInterval(this.frameTimer);
       // 15 fps loop matching WhatsApp and PyTgCalls video specification
@@ -2318,8 +2411,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         }
       }
 
-      // Automatically activate Lucy 2.5 Live Swap pipeline (NO tab switch needed)
-      await LiveSwapMediaSource.start({ forSocialCall: true });
+      // Activate whichever outgoing source was picked - Lucy 2.5 (live face
+      // swap of your own camera) or an Anam AI avatar - as the automatic
+      // Step 4 & 5 (NO tab switch needed).
+      await activeSocialSource().start({ forSocialCall: true });
 
       // Place call on backend bridge
       const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/call', {
@@ -2340,6 +2435,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       const callScr = $('socialCallScreen');
       callScr.classList.add('active');
 
+      // Reset layout to defaults for this call: PIP mode, remote as big
+      // view, self-view back in its default corner (undoes any drag/swap
+      // left over from a previous call).
+      callScr.dataset.layout = 'pip';
+      const remoteVid = $('socialRemoteVideo'), selfVid = $('socialSelfVideo');
+      if (remoteVid && selfVid) {
+        remoteVid.className = 'socialPipMain';
+        selfVid.className = 'socialPipThumb';
+        remoteVid.style.left = ''; remoteVid.style.top = ''; remoteVid.style.right = '';
+        selfVid.style.left = ''; selfVid.style.top = ''; selfVid.style.right = '16px';
+      }
+
       $('socialCallTargetName').textContent = selectedSocialContact.name || selectedSocialContact.target;
       $('socialCallPlatformPill').innerHTML = `<span>${currentSocialPlatform === 'whatsapp' ? 'WhatsApp' : 'Telegram'}</span>`;
       $('socialCallPlatformPill').className = `pill ${currentSocialPlatform}`;
@@ -2356,7 +2463,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       }, 1000);
 
       // Start streaming outgoing video frames & mic audio through adapter
-      SocialCallMediaAdapter.startStreaming(LiveSwapMediaSource.getStream(), socialMicStream);
+      SocialCallMediaAdapter.startStreaming(activeSocialSource().getStream(), socialMicStream);
 
     } catch(err) {
       console.error('[placeSocialCall] error:', err);
@@ -2381,6 +2488,76 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   $('socialEndBtn')?.addEventListener('click', endSocialCall);
 
+  // -------------------------------------------------------------
+  // Social call layout: PIP (tap the small self-view to swap it with the
+  // big view, drag it anywhere) or split-screen (two fixed equal panes).
+  // Both replace the idea of a separate "flip" button - self-view and the
+  // outgoing view are always visible together, in one arrangement or
+  // the other.
+  // -------------------------------------------------------------
+  (function setupSocialCallLayout(){
+    const screen = $('socialCallScreen');
+    const videoA = $('socialRemoteVideo'), videoB = $('socialSelfVideo');
+    if (!screen || !videoA || !videoB) return;
+
+    $('socialLayoutToggleBtn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      screen.dataset.layout = screen.dataset.layout === 'split' ? 'pip' : 'split';
+    });
+
+    // Tap-to-swap which video is "main" (big) vs "thumb" (small PIP), and
+    // drag-to-reposition the thumb - both only meaningful in PIP mode.
+    // Handlers are on both elements since either can be the thumb after a
+    // swap; each checks its own current role at pointerdown time.
+    let dragEl = null, moved = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+
+    function onPointerDown(e){
+      const el = e.currentTarget;
+      if (screen.dataset.layout !== 'pip' || !el.classList.contains('socialPipThumb')) return;
+      dragEl = el; moved = false;
+      el.classList.add('dragging');
+      const rect = el.getBoundingClientRect();
+      startX = e.clientX; startY = e.clientY;
+      startLeft = rect.left; startTop = rect.top;
+      el.style.right = 'auto';
+      el.setPointerCapture?.(e.pointerId);
+    }
+    function onPointerMove(e){
+      if (!dragEl || dragEl !== e.currentTarget) return;
+      const dx = e.clientX - startX, dy = e.clientY - startY;
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
+      if (!moved) return;
+      const rect = dragEl.getBoundingClientRect();
+      const maxLeft = screen.clientWidth - rect.width;
+      const maxTop = screen.clientHeight - rect.height;
+      dragEl.style.left = `${Math.min(Math.max(0, startLeft + dx), maxLeft)}px`;
+      dragEl.style.top = `${Math.min(Math.max(0, startTop + dy), maxTop)}px`;
+    }
+    function onPointerUp(e){
+      const el = e.currentTarget;
+      if (!dragEl || dragEl !== el) return;
+      dragEl = null;
+      el.classList.remove('dragging');
+      if (!moved) {
+        // A real tap, not a drag - swap main/thumb roles.
+        const main = screen.querySelector('.socialPipMain');
+        if (main && main !== el) {
+          main.classList.remove('socialPipMain'); main.classList.add('socialPipThumb');
+          el.classList.remove('socialPipThumb'); el.classList.add('socialPipMain');
+          // Reset the now-thumb element back to its default corner position.
+          main.style.left = ''; main.style.top = ''; main.style.right = '16px';
+          el.style.left = ''; el.style.top = ''; el.style.right = '';
+        }
+      }
+    }
+    [videoA, videoB].forEach((el) => {
+      el.addEventListener('pointerdown', onPointerDown);
+      el.addEventListener('pointermove', onPointerMove);
+      el.addEventListener('pointerup', onPointerUp);
+      el.addEventListener('pointercancel', onPointerUp);
+    });
+  })();
+
   async function endSocialCall(){
     clearInterval(socialCallDurationTimer);
     $('socialCallScreen').classList.remove('active');
@@ -2388,6 +2565,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     // Tear down media pipelines
     SocialCallMediaAdapter.stop();
     LiveSwapMediaSource.stop();
+    SocialAnamSource.stop();
 
     if (socialMicStream) {
       socialMicStream.getTracks().forEach(t => t.stop());
