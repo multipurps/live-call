@@ -1816,6 +1816,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         if (idle) idle.style.display = 'none';
         $('prepLucyStatus').textContent = 'Avatar ready';
         $('prepLucyDot')?.classList.add('live');
+        // The bug: Anam's SDK streams into prepAvatarPreview (which also
+        // feeds the OUTGOING call capture), but nothing ever mirrored that
+        // onto socialRemoteVideo - the actual on-screen big view during a
+        // call. Only LiveSwapMediaSource's own WebRTC handler ever touched
+        // socialRemoteVideo, so Avatar mode's screen stayed black even
+        // though the avatar itself was working and being sent out fine.
+        const remoteVid = $('socialRemoteVideo');
+        if (remoteVid && vid.srcObject) remoteVid.srcObject = vid.srcObject;
       });
       this.client.addListener(AnamEvent.CONNECTION_CLOSED, () => {
         this.client = null;
@@ -1844,6 +1852,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       if (lfLocalStream) { lfLocalStream.getTracks().forEach(t => t.stop()); lfLocalStream = null; }
       const selfVid = $('socialSelfVideo');
       if (selfVid) selfVid.srcObject = null;
+      const remoteVid = $('socialRemoteVideo');
+      if (remoteVid) remoteVid.srcObject = null;
     },
   };
 
@@ -2197,6 +2207,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   $('openTelegramConnect')?.addEventListener('click', () => {
     $('telegramConnectScreen').classList.add('active');
     fetchConnectedStatus();
+    fetchP2pStatus();
   });
   $('closeTelegramConnect')?.addEventListener('click', () => {
     $('telegramConnectScreen').classList.remove('active');
@@ -2260,6 +2271,87 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     if (!confirm('Disconnect Telegram?')) return;
     await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/telegram/disconnect', { method: 'POST' });
     await fetchConnectedStatus();
+  });
+
+  // -------------------------------------------------------------
+  // Real Calling (P2P) sign-in - a separate Telegram session from the one
+  // above, used only for actually placing/ringing calls (tgcalls_bridge).
+  // Without this, calls were failing silently before ever ringing -
+  // there was no way to authenticate this engine at all until now.
+  // -------------------------------------------------------------
+  async function fetchP2pStatus(){
+    try {
+      const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/telegram/p2p/status');
+      const data = await res.json();
+      const connected = !!data.connected;
+      $('tgP2pStatus').textContent = connected ? 'Connected' : (data.error ? 'Error' : 'Not connected');
+      $('tgP2pNotConnectedView').style.display = connected ? 'none' : 'block';
+      $('tgP2pConnectedView').style.display = connected ? 'block' : 'none';
+    } catch(e){
+      $('tgP2pStatus').textContent = 'Unavailable';
+    }
+  }
+
+  $('tgP2pSendCodeBtn')?.addEventListener('click', async () => {
+    const phone = $('tgP2pPhoneInput').value.trim();
+    if (!phone) return alert('Enter phone number');
+    $('tgP2pSendCodeBtn').textContent = 'Sending code…';
+    $('tgP2pSendCodeHint').textContent = '';
+    try {
+      const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/telegram/p2p/send_code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      });
+      const data = await res.json();
+      if (data.status === 'code_sent') {
+        $('tgP2pStepPhone').style.display = 'none';
+        $('tgP2pStepCode').style.display = 'block';
+      } else if (data.status === 'connected') {
+        // Already authorized (e.g. a restored session) - no code needed.
+        fetchP2pStatus();
+      } else {
+        $('tgP2pSendCodeHint').textContent = data.error || 'Failed to send code';
+      }
+    } catch(e){
+      $('tgP2pSendCodeHint').textContent = e.message;
+    } finally {
+      $('tgP2pSendCodeBtn').textContent = 'Send Code';
+    }
+  });
+
+  $('tgP2pSignInBtn')?.addEventListener('click', async () => {
+    const code = $('tgP2pCodeInput').value.trim();
+    const password = $('tgP2pPasswordInput').value.trim();
+    if (!code) return alert('Enter verification code');
+    $('tgP2pSignInBtn').textContent = 'Signing in…';
+    $('tgP2pSignInHint').textContent = '';
+    try {
+      const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/telegram/p2p/sign_in', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, password }),
+      });
+      const data = await res.json();
+      if (data.status === '2fa_required') {
+        $('tgP2pPasswordCard').style.display = 'block';
+        $('tgP2pSignInHint').textContent = '2FA password required';
+      } else if (data.status === 'connected') {
+        fetchP2pStatus();
+      } else {
+        $('tgP2pSignInHint').textContent = data.error || 'Failed to sign in';
+      }
+    } catch(e){
+      $('tgP2pSignInHint').textContent = e.message;
+    } finally {
+      $('tgP2pSignInBtn').textContent = 'Confirm & Connect';
+    }
+  });
+
+  $('tgP2pDisconnectBtn')?.addEventListener('click', async () => {
+    if (!confirm('Disconnect real calling?')) return;
+    await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/telegram/p2p/disconnect', { method: 'POST' });
+    await fetchP2pStatus();
   });
 
   // -------------------------------------------------------------
@@ -2526,7 +2618,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         selfVid.style.left = ''; selfVid.style.top = ''; selfVid.style.right = '16px';
       }
 
-      $('socialCallTargetName').textContent = selectedSocialContact.name || selectedSocialContact.target;
+      // Strip emoji from the displayed name here specifically (contact
+      // names often have decorative emoji saved on the phone itself -
+      // e.g. a heart - which read oddly stacked right above the
+      // "Ringing... · 00:00" status line on this screen).
+      const rawName = selectedSocialContact.name || selectedSocialContact.target;
+      const cleanName = rawName.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').trim();
+      $('socialCallTargetName').textContent = cleanName || rawName;
       $('socialCallPlatformPill').innerHTML = `<span>${currentSocialPlatform === 'whatsapp' ? 'WhatsApp' : 'Telegram'}</span>`;
       $('socialCallPlatformPill').className = `pill ${currentSocialPlatform}`;
       $('socialCallStatusLabel').textContent = 'Ringing…';
