@@ -833,7 +833,7 @@
     position:absolute; left:0; right:0; bottom:0;
     padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 28px);
     padding-top:20px;
-    display:flex; justify-content:center; align-items:center; gap:32px;
+    display:flex; justify-content:center; align-items:center; gap:24px;
     background:linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0) 100%);
     z-index:2;
   }
