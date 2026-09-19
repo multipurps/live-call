@@ -1959,16 +1959,92 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     if (msg.type === 'wa_status' || msg.type === 'wa_qr' || msg.type === 'wa_pairing_code') {
       fetchConnectedStatus();
     }
-    if (msg.type === 'call_state') {
-      if (msg.state === 'connected') {
-        const lbl = $('socialCallStatusLabel');
+    if (msg.type === 'wa_call_event' && currentSocialPlatform === 'whatsapp') {
+      // Real WhatsApp call signaling status (Baileys' sock.ev.on('call', ...)
+      // - genuinely reflects whether the other phone is ringing/answered/
+      // declined). Was already being broadcast server-side but never
+      // listened for here at all - the call screen had no way to reflect
+      // any of it, same class of bug as Telegram's missing state polling.
+      const lbl = $('socialCallStatusLabel');
+      const status = msg.call?.status;
+      if (status === 'offer' || status === 'ringing') {
+        if (lbl) lbl.textContent = 'Ringing…';
+        startRingback();
+      } else if (status === 'accept') {
         if (lbl) lbl.textContent = 'Connected';
         const idle = $('socialCallIdle');
         if (idle) idle.style.display = 'none';
-      } else if (msg.state === 'ended') {
+        stopRingback();
+      } else if (status === 'reject' || status === 'timeout' || status === 'terminate') {
+        stopRingback();
+        if (status === 'reject') $('prepErrorHint') && ($('prepErrorHint').textContent = 'Call declined');
+        if (status === 'timeout') $('prepErrorHint') && ($('prepErrorHint').textContent = 'No answer');
         endSocialCall();
       }
     }
+    if (msg.type === 'call_state') {
+      const lbl = $('socialCallStatusLabel');
+      if (msg.state === 'ringing') {
+        if (lbl) lbl.textContent = 'Ringing…';
+        startRingback();
+      } else if (msg.state === 'connecting') {
+        if (lbl) lbl.textContent = 'Connecting…';
+        startRingback(); // keep playing through connecting - stops only once truly connected
+      } else if (msg.state === 'connected') {
+        if (lbl) lbl.textContent = 'Connected';
+        const idle = $('socialCallIdle');
+        if (idle) idle.style.display = 'none';
+        stopRingback();
+      } else if (msg.state === 'failed') {
+        stopRingback();
+        $('prepErrorHint') && ($('prepErrorHint').textContent = msg.error || 'Call failed');
+        endSocialCall();
+      } else if (msg.state === 'ended') {
+        stopRingback();
+        endSocialCall();
+      }
+    }
+  }
+
+  // -------------------------------------------------------------
+  // Ringback tone (plays while the other side's phone is actually ringing,
+  // i.e. real Telegram P2P calls - WhatsApp/PyTgCalls-Telegram calls don't
+  // get real ringing state today so this simply never starts for them).
+  // Generated with WebAudio rather than an audio file: a standard North-
+  // American-style ringback cadence, 440Hz+480Hz combined tone, 2s on/4s
+  // off, looped until the call connects or ends.
+  // -------------------------------------------------------------
+  let ringbackCtx = null, ringbackTimer = null, ringbackOscillators = [];
+  function startRingback(){
+    if (ringbackCtx) return; // already playing
+    try {
+      ringbackCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const playTone = () => {
+        const gain = ringbackCtx.createGain();
+        gain.gain.value = 0.05;
+        gain.connect(ringbackCtx.destination);
+        [440, 480].forEach((freq) => {
+          const osc = ringbackCtx.createOscillator();
+          osc.frequency.value = freq;
+          osc.connect(gain);
+          osc.start();
+          ringbackOscillators.push(osc);
+        });
+        setTimeout(() => {
+          ringbackOscillators.forEach((o) => { try { o.stop(); } catch(e){} });
+          ringbackOscillators = [];
+        }, 2000);
+      };
+      playTone();
+      ringbackTimer = setInterval(playTone, 6000);
+    } catch(e) { console.warn('[Ringback] could not start:', e.message); }
+  }
+  function stopRingback(){
+    clearInterval(ringbackTimer);
+    ringbackTimer = null;
+    ringbackOscillators.forEach((o) => { try { o.stop(); } catch(e){} });
+    ringbackOscillators = [];
+    if (ringbackCtx) { ringbackCtx.close().catch(()=>{}); ringbackCtx = null; }
   }
 
   // -------------------------------------------------------------
@@ -2506,6 +2582,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     $('socialLayoutToggleBtn')?.addEventListener('click', (e) => {
       e.stopPropagation();
       screen.dataset.layout = screen.dataset.layout === 'split' ? 'pip' : 'split';
+      // Clear any inline position from a previous PIP drag - split mode's
+      // CSS (top:0/bottom:0/left:0/right:0) is overridden by leftover
+      // inline styles otherwise, since inline style always beats a
+      // stylesheet rule regardless of selector. This was the split-screen
+      // layout bug: switching modes after ever dragging the thumb left it
+      // stuck at its dragged position instead of snapping to a full half.
+      [videoA, videoB].forEach((el) => {
+        el.style.left = ''; el.style.top = ''; el.style.right = '';
+      });
     });
 
     // Tap-to-swap which video is "main" (big) vs "thumb" (small PIP), and
@@ -2563,6 +2648,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   async function endSocialCall(){
     clearInterval(socialCallDurationTimer);
+    stopRingback();
     $('socialCallScreen').classList.remove('active');
 
     // Tear down media pipelines
