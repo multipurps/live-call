@@ -292,21 +292,45 @@ async def handle_contacts(request):
                 "username": c.username or "",
                 "phone_number": c.phone_number or ""
             })
-        if not res:
-            res = [
-                {"id": 1001, "first_name": "Elena", "last_name": "Rostova", "username": "elena_r", "phone_number": "+1 555-0188"},
-                {"id": 1002, "first_name": "Marcus", "last_name": "Vance", "username": "marcus_v", "phone_number": "+1 555-0199"},
-                {"id": 1003, "first_name": "David", "last_name": "Kim", "username": "dkim_live", "phone_number": "+44 7700 900088"}
-            ]
+        # No fake fallback contacts here on purpose - an empty real contacts
+        # list must show as empty, not as three fabricated people with
+        # meaningless numeric ids (1001/1002/1003) that were never real
+        # Telegram user ids and could never actually be called or ring
+        # anyone. Same honesty principle already applied elsewhere in this
+        # file (send_code, sign_in, call placement).
         return web.json_response({"contacts": res})
     except Exception as e:
+        return web.json_response({"error": str(e), "contacts": []}, status=500)
+
+async def handle_resolve(request):
+    """Resolves a typed phone number or @username to a real Telegram user
+    (numeric id, name, username) via the authenticated account's own
+    Pyrogram session - used by "Call Direct" so a call is only ever placed
+    against a genuine Telegram user id, never a raw phone-number string.
+    Pyrogram's get_users() handles both usernames and phone numbers here
+    (for phone numbers it does the standard temporary-contact-import
+    lookup internally)."""
+    try:
+        data = await request.json()
+        query = (data.get("query") or "").strip()
+        if not query:
+            return web.json_response({"error": "query required"}, status=400)
+        cl = await get_client_async()
+        if not cl.is_connected:
+            await cl.connect()
+        user = await cl.get_users(query)
+        if isinstance(user, list):
+            user = user[0] if user else None
+        if not user:
+            return web.json_response({"error": "No Telegram user found for that number/username"}, status=404)
         return web.json_response({
-            "contacts": [
-                {"id": 1001, "first_name": "Elena", "last_name": "Rostova", "username": "elena_r", "phone_number": "+1 555-0188"},
-                {"id": 1002, "first_name": "Marcus", "last_name": "Vance", "username": "marcus_v", "phone_number": "+1 555-0199"},
-                {"id": 1003, "first_name": "David", "last_name": "Kim", "username": "dkim_live", "phone_number": "+44 7700 900088"}
-            ]
+            "id": user.id,
+            "first_name": user.first_name or "",
+            "last_name": user.last_name or "",
+            "username": user.username or "",
         })
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
 
 async def handle_call(request):
     global active_call
@@ -367,6 +391,7 @@ def create_app():
     app.router.add_post('/tg/sign_in', handle_sign_in)
     app.router.add_post('/tg/disconnect', handle_disconnect)
     app.router.add_get('/tg/contacts', handle_contacts)
+    app.router.add_post('/tg/resolve', handle_resolve)
     app.router.add_post('/tg/call', handle_call)
     app.router.add_post('/tg/hangup', handle_hangup)
     return app
