@@ -397,6 +397,13 @@ const server = http.createServer(async (req, res) => {
       return res.end(JSON.stringify(tgRes.data));
     }
 
+    if (subpath === 'telegram/resolve' && req.method === 'POST') {
+      const body = await parseBody(req);
+      const tgRes = await proxyToTg('/tg/resolve', 'POST', body);
+      res.writeHead(tgRes.status, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify(tgRes.data));
+    }
+
     if (subpath === 'telegram/disconnect' && req.method === 'POST') {
       const tgRes = await proxyToTg('/tg/disconnect', 'POST');
       res.writeHead(tgRes.status, { 'Content-Type': 'application/json' });
