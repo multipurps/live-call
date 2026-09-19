@@ -175,7 +175,16 @@ async fn handle_status(state: Arc<Mutex<AppState>>) -> serde_json::Value {
             json!({ "connected": true })
         }
         Ok(false) => json!({ "connected": false }),
-        Err(e) => json!({ "connected": false, "error": e.to_string() }),
+        Err(e) => {
+            // The cached client's underlying connection may be dead (e.g.
+            // "deserialize error: sender task shut down" - its background
+            // transport task exited). Without this, every future request
+            // would keep reusing the same broken client forever, since
+            // get_or_init_client only creates a new one when state.client
+            // is None. Drop it so the next request reconnects from scratch.
+            st.client = None;
+            json!({ "connected": false, "error": e.to_string() })
+        }
     }
 }
 
@@ -201,7 +210,12 @@ async fn handle_send_code(state: Arc<Mutex<AppState>>, body: serde_json::Value) 
             }
             json!({ "status": "connected", "user": name })
         }
-        Err(e) => json!({ "error": e.to_string() }),
+        Err(e) => {
+            // Same reasoning as handle_status above - a dead cached
+            // connection must not be reused indefinitely.
+            st.client = None;
+            json!({ "error": e.to_string() })
+        }
     }
 }
 
