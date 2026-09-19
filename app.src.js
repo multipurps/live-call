@@ -2438,6 +2438,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     try {
       const res = await fetch(endpoint);
       const data = await res.json();
+
+      if (!res.ok) {
+        container.innerHTML = `<div style="text-align:center; padding:20px; color:#ff6b6b; font-size:13px;">Error: ${data.error || 'Could not load contacts'}</div>`;
+        allLoadedContacts = [];
+        return;
+      }
+
       allLoadedContacts = data.contacts || [];
 
       if (!allLoadedContacts.length) {
@@ -2508,9 +2515,41 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
   });
 
-  $('callDirectBtn')?.addEventListener('click', () => {
+  $('callDirectBtn')?.addEventListener('click', async () => {
     const typed = $('contactSearchInput').value.trim();
     if (!typed) return;
+
+    if (currentSocialPlatform === 'telegram') {
+      // Never pass a raw phone number/username as target - tgcalls_bridge
+      // needs a real numeric Telegram user id (and derives the access_hash
+      // from that at call time). Resolve through the authenticated
+      // account's own Telegram session first.
+      const btn = $('callDirectBtn');
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Looking up…';
+      try {
+        const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/telegram/resolve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: typed }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.id) {
+          alert(data.error || 'Could not find a Telegram user for that number/username');
+          return;
+        }
+        const name = [data.first_name, data.last_name].filter(Boolean).join(' ') || data.username || typed;
+        selectContactForCall({ name, target: data.id });
+      } catch(e) {
+        alert('Lookup failed: ' + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+      return;
+    }
+
     selectContactForCall({ name: typed, target: typed });
   });
 
