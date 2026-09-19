@@ -49,6 +49,42 @@ function saveCallHistory(record) {
 
 // Active social call state
 let currentActiveCall = null;
+let tgCallsStatePoll = null;
+
+// Polls tgcalls_bridge's real call state (idle/ringing/connecting/connected/
+// ended/failed - see server/tgcalls_bridge/src/main.rs's CallState enum)
+// and forwards changes to the frontend as call_state broadcasts. Without
+// this, the only call_state event ever sent was the initial "calling" one
+// right after placing the call - the UI had no way to ever learn the call
+// actually connected (or failed), so it stayed on "Ringing..." forever
+// regardless of what really happened.
+function startTgCallsStatePoll() {
+  stopTgCallsStatePoll();
+  let lastState = null;
+  tgCallsStatePoll = setInterval(async () => {
+    const r = await proxyToTgCalls('/call/state', 'GET');
+    const state = r.data?.state;
+    if (!state || state === lastState) return;
+    lastState = state;
+
+    if (state === 'connected') {
+      if (currentActiveCall) currentActiveCall.status = 'connected';
+      broadcastMediaEvent({ type: 'call_state', state: 'connected', call: currentActiveCall });
+    } else if (state === 'ringing' || state === 'connecting') {
+      broadcastMediaEvent({ type: 'call_state', state, call: currentActiveCall });
+    } else if (state === 'failed') {
+      broadcastMediaEvent({ type: 'call_state', state: 'failed', error: r.data?.error, call: currentActiveCall });
+      stopTgCallsStatePoll();
+    } else if (state === 'ended') {
+      broadcastMediaEvent({ type: 'call_state', state: 'ended', call: currentActiveCall });
+      stopTgCallsStatePoll();
+    }
+  }, 1000);
+}
+
+function stopTgCallsStatePoll() {
+  if (tgCallsStatePoll) { clearInterval(tgCallsStatePoll); tgCallsStatePoll = null; }
+}
 
 // Keep-alive ping (test-mode only, toggled from the app).
 //
@@ -404,6 +440,7 @@ const server = http.createServer(async (req, res) => {
           // opening is non-blocking on this side (see openTgCallsPipes).
           openTgCallsPipes();
           await proxyToTgCalls('/call', 'POST', { target: numericTarget });
+          startTgCallsStatePoll();
         }
 
         broadcastMediaEvent({ type: 'call_state', state: 'calling', call: currentActiveCall });
@@ -413,6 +450,7 @@ const server = http.createServer(async (req, res) => {
       } catch (err) {
         currentActiveCall = null;
         closeTgCallsPipes();
+        stopTgCallsStatePoll();
         res.writeHead(500, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ error: err.message }));
       }
@@ -433,6 +471,7 @@ const server = http.createServer(async (req, res) => {
         } else if (currentActiveCall.platform === 'telegram') {
           await proxyToTgCalls('/hangup', 'POST').catch(() => {});
           closeTgCallsPipes();
+          stopTgCallsStatePoll();
         }
 
         broadcastMediaEvent({ type: 'call_state', state: 'ended' });
