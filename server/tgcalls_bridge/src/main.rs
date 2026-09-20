@@ -80,7 +80,7 @@ fn supabase_key() -> Option<String> {
 async fn load_saved_session_string() -> Option<String> {
     let key = supabase_key()?;
     let http = reqwest::Client::new();
-    let resp = http
+    let resp = match http
         .get(format!(
             "{SUPABASE_URL}/rest/v1/app_settings?select=tgcalls_session_string&id=eq.true"
         ))
@@ -88,8 +88,26 @@ async fn load_saved_session_string() -> Option<String> {
         .header("Authorization", format!("Bearer {key}"))
         .send()
         .await
-        .ok()?;
-    let rows: serde_json::Value = resp.json().await.ok()?;
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::warn!("[Session] Supabase load request failed: {}", e);
+            return None;
+        }
+    };
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        tracing::warn!("[Session] Supabase load returned {}: {}", status, body);
+        return None;
+    }
+    let rows: serde_json::Value = match resp.json().await {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!("[Session] Supabase load response wasn't valid JSON: {}", e);
+            return None;
+        }
+    };
     rows.get(0)?
         .get("tgcalls_session_string")?
         .as_str()
@@ -97,9 +115,12 @@ async fn load_saved_session_string() -> Option<String> {
 }
 
 async fn save_session_string(session_string: &str) {
-    let Some(key) = supabase_key() else { return };
+    let Some(key) = supabase_key() else {
+        tracing::warn!("[Session] SUPABASE_SERVICE_ROLE_KEY not set - session will not survive a restart");
+        return;
+    };
     let http = reqwest::Client::new();
-    let _ = http
+    match http
         .post(format!("{SUPABASE_URL}/rest/v1/app_settings"))
         .header("apikey", &key)
         .header("Authorization", format!("Bearer {key}"))
@@ -107,20 +128,44 @@ async fn save_session_string(session_string: &str) {
         .header("Prefer", "resolution=merge-duplicates")
         .json(&json!({ "id": true, "tgcalls_session_string": session_string }))
         .send()
-        .await;
+        .await
+    {
+        Ok(resp) if resp.status().is_success() => {
+            tracing::info!("[Session] Saved tgcalls session to Supabase");
+        }
+        Ok(resp) => {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            tracing::warn!("[Session] Supabase save returned {}: {}", status, body);
+        }
+        Err(e) => {
+            tracing::warn!("[Session] Supabase save request failed: {}", e);
+        }
+    }
 }
 
 async fn clear_saved_session_string() {
     let Some(key) = supabase_key() else { return };
     let http = reqwest::Client::new();
-    let _ = http
+    match http
         .patch(format!("{SUPABASE_URL}/rest/v1/app_settings?id=eq.true"))
         .header("apikey", &key)
         .header("Authorization", format!("Bearer {key}"))
         .header("Content-Type", "application/json")
         .json(&json!({ "tgcalls_session_string": null }))
         .send()
-        .await;
+        .await
+    {
+        Ok(resp) if !resp.status().is_success() => {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            tracing::warn!("[Session] Supabase clear returned {}: {}", status, body);
+        }
+        Err(e) => {
+            tracing::warn!("[Session] Supabase clear request failed: {}", e);
+        }
+        _ => {}
+    }
 }
 
 /// Gets (or restores, or creates) the ferogram Client. Mirrors
@@ -424,6 +469,12 @@ fn json_response(value: serde_json::Value) -> tiny_http::Response<std::io::Curso
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
+
+    if supabase_key().is_some() {
+        tracing::info!("[Session] SUPABASE_SERVICE_ROLE_KEY is set - will try to persist/restore sessions via Supabase");
+    } else {
+        tracing::warn!("[Session] SUPABASE_SERVICE_ROLE_KEY not set - sessions will NOT survive a restart");
+    }
 
     let port: u16 = std::env::var("TGCALLS_PORT")
         .ok()
