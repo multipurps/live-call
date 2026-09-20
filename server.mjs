@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawn, execFileSync } from 'child_process';
 import { WebSocketServer, WebSocket } from 'ws';
-import { waBridge } from './server/whatsapp_bridge.mjs';
+import { waBridge } from './server/greenapi_bridge.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -284,7 +284,7 @@ const server = http.createServer(async (req, res) => {
 
     // Overall status of connected accounts
     if (subpath === 'status' && req.method === 'GET') {
-      const waStatus = waBridge.getStatus();
+      const waStatus = await waBridge.getStatus();
       const tgStatus = await proxyToTg('/tg/status', 'GET');
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({
@@ -300,12 +300,29 @@ const server = http.createServer(async (req, res) => {
     }
 
     // WhatsApp endpoints
-    if (subpath === 'whatsapp/qr') {
-      if (req.method === 'POST') {
-        await waBridge.connect();
+    if (subpath === 'whatsapp/qr' && (req.method === 'POST' || req.method === 'GET')) {
+      try {
+        const qrData = await waBridge.getQrCode();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(qrData));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: e.message }));
       }
+    }
+
+    // Hands the frontend what it needs to init the Green API calls SDK
+    // directly (client-side WebRTC) - see app.src.js. The api token is
+    // necessarily exposed to the browser here; that's inherent to how
+    // Green API's calling SDK is designed to be used, not something
+    // avoidable while using their library as documented.
+    if (subpath === 'whatsapp/call-config' && req.method === 'GET') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify(waBridge.getStatus()));
+      return res.end(JSON.stringify({
+        apiUrl: process.env.GREENAPI_API_URL || '',
+        idInstance: process.env.GREENAPI_ID_INSTANCE || '',
+        apiTokenInstance: process.env.GREENAPI_API_TOKEN || '',
+      }));
     }
 
     if ((subpath === 'whatsapp/pair' || subpath === 'whatsapp/pair-code') && req.method === 'POST') {
@@ -321,9 +338,14 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (subpath === 'whatsapp/contacts' && req.method === 'GET') {
-      const contacts = waBridge.getContacts();
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({ contacts }));
+      try {
+        const contacts = await waBridge.getContacts();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ contacts }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: e.message, contacts: [] }));
+      }
     }
 
     if (subpath === 'whatsapp/disconnect' && req.method === 'POST') {
@@ -431,7 +453,10 @@ const server = http.createServer(async (req, res) => {
 
       try {
         if (platform === 'whatsapp') {
-          await waBridge.startCall({ target, video: true });
+          // No server-side call placement with Green API - the frontend
+          // dials directly via the Green API calls SDK (client-side
+          // WebRTC). This endpoint just records call state/history for
+          // WhatsApp now; it does not itself cause any ringing.
         } else if (platform === 'telegram') {
           // Real P2P ringing via tgcalls_bridge, not PyTgCalls (which can't
           // ring a private contact - see server/telegram_bridge.py's
