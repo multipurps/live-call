@@ -2602,6 +2602,67 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   // Step 4 & 5: Start Lucy 2.5 Live Swap automatically & place call
   $('prepStartCallActionBtn')?.addEventListener('click', placeSocialCall);
 
+  // -------------------------------------------------------------
+  // WhatsApp calling via Green API's calls SDK - unlike Telegram, there is
+  // no server-side "place a call" REST endpoint for Green API; calling is
+  // browser-side WebRTC that connects directly to their infrastructure.
+  // Replaces the old Baileys-based waBridge.startCall()/hangup(), which
+  // never worked because Baileys itself never successfully paired on this
+  // deployment (WhatsApp very likely blocking datacenter IPs from linking
+  // a device - see the Green API migration notes).
+  // NOTE: confirmed by reading the SDK's own source directly - it is
+  // audio-only. No video call support exists in this library at all.
+  // -------------------------------------------------------------
+  let gaClient = null, gaCalls = null;
+
+  async function startGreenApiCall(target){
+    const cfgRes = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/call-config');
+    const cfg = await cfgRes.json();
+    if (!cfg.apiUrl || !cfg.idInstance || !cfg.apiTokenInstance) {
+      throw new Error('Green API not configured on the backend');
+    }
+
+    const { GreenApiVoipClient } = await import('https://esm.sh/@green-api/whatsapp-api-calls-client-js@2.0.0');
+    gaClient = new GreenApiVoipClient({
+      apiUrl: cfg.apiUrl,
+      idInstance: cfg.idInstance,
+      apiTokenInstance: cfg.apiTokenInstance,
+    });
+    gaCalls = gaClient.connectCalls();
+
+    const lbl = $('socialCallStatusLabel');
+    gaCalls.addEventListener('state', (event) => {
+      const kind = event.detail?.kind;
+      if (kind === 'out-call') { if (lbl) lbl.textContent = 'Ringing…'; startRingback(); }
+      else if (kind === 'on-call') {
+        if (lbl) lbl.textContent = 'Connected';
+        $('socialCallIdle') && ($('socialCallIdle').style.display = 'none');
+        stopRingback();
+      }
+    });
+    gaCalls.addEventListener('end-call', () => { stopRingback(); endSocialCall(); });
+    gaCalls.addEventListener('error', (event) => {
+      stopRingback();
+      $('prepErrorHint') && ($('prepErrorHint').textContent = event.detail?.message || 'WhatsApp call error');
+    });
+    gaCalls.addEventListener('remote-stream-ready', (event) => {
+      // Audio-only per the SDK - attach the remote stream's audio to the
+      // big view's video element so it's at least audible during the
+      // call (there is no remote video track to show for WhatsApp).
+      const remoteVid = $('socialRemoteVideo');
+      if (remoteVid && event.detail?.stream) remoteVid.srcObject = event.detail.stream;
+    });
+
+    await gaCalls.startAudioBridge();
+    await gaClient.dial(target);
+  }
+
+  function endGreenApiCall(){
+    if (gaClient) { gaClient.hangUp().catch(()=>{}); }
+    gaClient = null;
+    gaCalls = null;
+  }
+
   async function placeSocialCall(){
     const prepBtn = $('prepStartCallActionBtn');
     prepBtn.disabled = true;
@@ -2639,6 +2700,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to place call');
+
+      if (currentSocialPlatform === 'whatsapp') {
+        // Actual ringing happens here, client-side - the backend POST
+        // above only recorded call state/history, it never rings anyone
+        // for WhatsApp (see server.mjs's call route comments).
+        await startGreenApiCall(selectedSocialContact.target);
+      }
 
       // Transition to Active Call UI
       $('callPrepModal').classList.remove('active');
@@ -2786,6 +2854,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   async function endSocialCall(){
     clearInterval(socialCallDurationTimer);
     stopRingback();
+    if (currentSocialPlatform === 'whatsapp') endGreenApiCall();
     $('socialCallScreen').classList.remove('active');
 
     // Tear down media pipelines
