@@ -166,15 +166,20 @@ function startTelegramBridge() {
 // same as the Rust bridge needed.
 let tgCallsProcess = null;
 function startTgCallsBridge() {
-  const scriptPath = path.join(__dirname, 'server', 'madeline_bridge', 'bridge.php');
-  const vendorPath = path.join(__dirname, 'server', 'madeline_bridge', 'vendor', 'autoload.php');
-  if (!fs.existsSync(scriptPath) || !fs.existsSync(vendorPath)) {
-    console.warn('[Server] madeline_bridge not found or composer install did not complete - real Telegram calling unavailable, PyTgCalls-only.');
+  const bridgeDir = path.join(__dirname, 'server', 'madeline_bridge');
+  const scriptPath = path.join(bridgeDir, 'bridge.php');
+  const vendorPath = path.join(bridgeDir, 'vendor', 'autoload.php');
+  // Static, self-contained PHP binary downloaded by build.sh (no apt/root
+  // needed - Render's build container is non-root with a read-only apt,
+  // confirmed from a real build log) - not a global `php` on PATH.
+  const phpBinPath = path.join(bridgeDir, 'php-bin', 'bin', 'php');
+  if (!fs.existsSync(phpBinPath) || !fs.existsSync(scriptPath) || !fs.existsSync(vendorPath)) {
+    console.warn('[Server] madeline_bridge not found or its build did not complete - real Telegram calling unavailable, PyTgCalls-only.');
     return;
   }
 
   console.log('[Server] Launching madeline_bridge (real Telegram P2P calling via MadelineProto) daemon...');
-  tgCallsProcess = spawn('php', [scriptPath], {
+  tgCallsProcess = spawn(phpBinPath, [scriptPath], {
     env: { ...process.env, TGCALLS_PORT: String(TGCALLS_PORT) },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
