@@ -5,10 +5,5 @@
         "php": ">=8.2",
         "danog/madelineproto": "^8",
         "amphp/http-server": "^3"
-    },
-    "config": {
-        "platform": {
-            "php": "8.2"
-        }
     }
 }
