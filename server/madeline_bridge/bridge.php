@@ -1,0 +1,270 @@
+<?php
+// bridge.php - real Telegram P2P calling via MadelineProto.
+//
+// Replaces server/tgcalls_bridge (Rust/ferogram+tgcalls), which compiled
+// and ran but never confirmed an actual ring in real testing. MadelineProto
+// has a documented, mature, high-level calling API:
+//   requestCall(mixed $user, bool $video = false): \danog\MadelineProto\VoIP
+// with a real VoIP object exposing accept()/discard()/play()/setOutput()/
+// setMuted()/getCallState() - verified directly from MadelineProto's own
+// src/InternalDoc.php and src/VoIP*.php, not assumed.
+//
+// STATUS: first draft, UNVERIFIED - could not test PHP/composer/amphp at
+// all locally (no PHP available in the dev sandbox this was written in).
+// Expect this to need iteration against Render's real build/runtime logs,
+// the same way the Rust bridge needed two real compile-error fixes before
+// it ran. This is written carefully against MadelineProto's documented
+// API, not guessed blindly, but amphp's async/event-loop patterns are
+// less certain here than the Rust crate's source was.
+//
+// Needs its own separate Telegram sign-in - MadelineProto is yet another
+// independent MTProto client implementation, same situation as ferogram
+// vs. Pyrogram before it. This is inherent to swapping libraries.
+
+require __DIR__ . '/vendor/autoload.php';
+
+use Amp\Http\Server\HttpServer;
+use Amp\Http\Server\SocketHttpServer;
+use Amp\Http\Server\Request;
+use Amp\Http\Server\Response;
+use Amp\Http\Server\RequestHandler\ClosureRequestHandler;
+use Amp\Http\HttpStatus;
+use danog\MadelineProto\API;
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\AppInfo;
+use danog\MadelineProto\SecurityException;
+use danog\MadelineProto\VoIP;
+use Psr\Log\NullLogger;
+
+$PORT = (int)(getenv('TGCALLS_PORT') ?: 5051);
+$SESSION_FILE = __DIR__ . '/session.madeline';
+$SUPABASE_URL = 'https://ewgtpxomgkpbmfyddypw.supabase.co';
+$SUPABASE_KEY = getenv('SUPABASE_SERVICE_ROLE_KEY') ?: null;
+$API_ID = (int)(getenv('TELEGRAM_API_ID') ?: 2040);
+$API_HASH = getenv('TELEGRAM_API_HASH') ?: 'b18441a1ff607e10a989891a5462e627';
+
+// --- Session persistence across Render redeploys (same reasoning as the
+// Python and Rust bridges before it: this service has no persistent disk
+// on Render's free plan, so $SESSION_FILE is wiped on every cold start
+// unless restored from Supabase first). MadelineProto's session is a
+// binary serialized file, not a simple export string, so this stores/
+// restores the raw file bytes as base64 rather than a clean session
+// string like the other two bridges use. -------------------------------
+function supabaseRequest(string $method, string $path, ?array $body = null): ?array {
+    global $SUPABASE_URL, $SUPABASE_KEY;
+    if (!$SUPABASE_KEY) return null;
+    $ch = curl_init("$SUPABASE_URL$path");
+    $headers = [
+        "apikey: $SUPABASE_KEY",
+        "Authorization: Bearer $SUPABASE_KEY",
+        "Content-Type: application/json",
+    ];
+    if ($method === 'POST') {
+        $headers[] = "Prefer: resolution=merge-duplicates";
+    }
+    curl_setopt_array($ch, [
+        CURLOPT_CUSTOMREQUEST => $method,
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 15,
+    ]);
+    if ($body !== null) {
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
+    }
+    $result = curl_exec($ch);
+    $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($status < 200 || $status >= 300) {
+        error_log("[MadelineBridge] Supabase $method $path -> $status: $result");
+        return null;
+    }
+    $decoded = json_decode($result ?: '', true);
+    return is_array($decoded) ? $decoded : null;
+}
+
+function restoreSessionFromSupabase(): void {
+    global $SESSION_FILE;
+    if (file_exists($SESSION_FILE)) return; // local file already present, nothing to restore
+    $rows = supabaseRequest('GET', '/rest/v1/app_settings?select=madeline_session_blob&id=eq.true');
+    if (!$rows || empty($rows[0]['madeline_session_blob'])) {
+        error_log('[MadelineBridge] No saved session in Supabase - fresh login required');
+        return;
+    }
+    $decoded = base64_decode($rows[0]['madeline_session_blob']);
+    if ($decoded === false) {
+        error_log('[MadelineBridge] Saved session blob failed to base64-decode');
+        return;
+    }
+    file_put_contents($SESSION_FILE, $decoded);
+    error_log('[MadelineBridge] Restored session from Supabase');
+}
+
+function saveSessionToSupabase(): void {
+    global $SESSION_FILE;
+    if (!file_exists($SESSION_FILE)) return;
+    $blob = base64_encode(file_get_contents($SESSION_FILE));
+    $result = supabaseRequest('POST', '/rest/v1/app_settings', [
+        'id' => true,
+        'madeline_session_blob' => $blob,
+    ]);
+    if ($result !== null) {
+        error_log('[MadelineBridge] Saved session to Supabase');
+    }
+}
+
+function clearSavedSession(): void {
+    supabaseRequest('PATCH', '/rest/v1/app_settings?id=eq.true', ['madeline_session_blob' => null]);
+}
+// -----------------------------------------------------------------------
+
+restoreSessionFromSupabase();
+
+$settings = new Settings;
+$settings->getAppInfo()->setApiId($API_ID)->setApiHash($API_HASH);
+$settings->getLogger()->setLevel(\danog\MadelineProto\Logger::LEVEL_WARNING);
+
+$madeline = new API($SESSION_FILE, $settings);
+
+// Shared in-memory call state, read/written across requests within this
+// one long-lived process (same role as AppState in the Rust bridge).
+$state = [
+    'call' => null,       // active VoIP object, if any
+    'callState' => 'idle', // idle|ringing|connecting|connected|ended|failed
+    'callError' => null,
+];
+
+function jsonResponse(array $data, int $status = 200): Response {
+    return new Response($status, ['content-type' => 'application/json'], json_encode($data));
+}
+
+async function readJsonBody(Request $request): array {
+    $body = $request->getBody()->buffer();
+    $decoded = json_decode($body, true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+$handler = new ClosureRequestHandler(function (Request $request) use ($madeline, &$state): Response {
+    $path = $request->getUri()->getPath();
+    $method = $request->getMethod();
+
+    try {
+        if ($path === '/status' && $method === 'GET') {
+            try {
+                $self = $madeline->getSelf();
+                if ($self) {
+                    saveSessionToSupabase();
+                    return jsonResponse(['connected' => true]);
+                }
+                return jsonResponse(['connected' => false]);
+            } catch (\Throwable $e) {
+                return jsonResponse(['connected' => false, 'error' => $e->getMessage()]);
+            }
+        }
+
+        if ($path === '/send_code' && $method === 'POST') {
+            $body = json_decode($request->getBody()->buffer(), true) ?: [];
+            $phone = $body['phone'] ?? null;
+            if (!$phone) return jsonResponse(['error' => 'phone required'], 400);
+            try {
+                $result = $madeline->phoneLogin($phone);
+                return jsonResponse(['status' => 'code_sent']);
+            } catch (\Throwable $e) {
+                return jsonResponse(['error' => $e->getMessage()], 500);
+            }
+        }
+
+        if ($path === '/sign_in' && $method === 'POST') {
+            $body = json_decode($request->getBody()->buffer(), true) ?: [];
+            $code = $body['code'] ?? null;
+            $password = $body['password'] ?? null;
+            if (!$code) return jsonResponse(['error' => 'code required'], 400);
+            try {
+                $result = $madeline->completePhoneLogin($code);
+                saveSessionToSupabase();
+                return jsonResponse(['status' => 'connected']);
+            } catch (SecurityException $e) {
+                // 2FA password required
+                if ($password) {
+                    try {
+                        $madeline->complete2faLogin($password);
+                        saveSessionToSupabase();
+                        return jsonResponse(['status' => 'connected']);
+                    } catch (\Throwable $e2) {
+                        return jsonResponse(['error' => $e2->getMessage()], 500);
+                    }
+                }
+                return jsonResponse(['status' => '2fa_required']);
+            } catch (\Throwable $e) {
+                return jsonResponse(['error' => $e->getMessage()], 500);
+            }
+        }
+
+        if ($path === '/disconnect' && $method === 'POST') {
+            global $SESSION_FILE;
+            try { $madeline->logout(); } catch (\Throwable $e) { /* best effort */ }
+            if (file_exists($SESSION_FILE)) @unlink($SESSION_FILE);
+            clearSavedSession();
+            return jsonResponse(['status' => 'disconnected']);
+        }
+
+        if ($path === '/call' && $method === 'POST') {
+            $body = json_decode($request->getBody()->buffer(), true) ?: [];
+            $target = $body['target'] ?? null;
+            if (!$target) return jsonResponse(['error' => 'target (numeric Telegram user id) required'], 400);
+
+            $state['callState'] = 'ringing';
+            $state['callError'] = null;
+            \Amp\async(function () use ($madeline, &$state, $target) {
+                try {
+                    $call = $madeline->requestCall((int)$target, true);
+                    $state['call'] = $call;
+                    $state['callState'] = 'connecting';
+                    // Block here (within this async task, not the request
+                    // handler) until the call actually connects or fails -
+                    // matches the Rust bridge's run_call background-task
+                    // shape, so the HTTP response returns immediately.
+                    $call->onCall(function () use (&$state) {
+                        $state['callState'] = 'connected';
+                    });
+                } catch (\Throwable $e) {
+                    $state['callState'] = 'failed';
+                    $state['callError'] = $e->getMessage();
+                }
+            });
+
+            return jsonResponse(['status' => 'calling']);
+        }
+
+        if ($path === '/call/state' && $method === 'GET') {
+            $resp = ['state' => $state['callState']];
+            if ($state['callError']) $resp['error'] = $state['callError'];
+            return jsonResponse($resp);
+        }
+
+        if ($path === '/hangup' && $method === 'POST') {
+            if ($state['call']) {
+                try { $state['call']->discard(); } catch (\Throwable $e) { /* best effort */ }
+            }
+            $state['call'] = null;
+            $state['callState'] = 'ended';
+            return jsonResponse(['status' => 'ended']);
+        }
+
+        return jsonResponse(['error' => 'not found'], 404);
+    } catch (\Throwable $e) {
+        return jsonResponse(['error' => $e->getMessage()], 500);
+    }
+});
+
+$madeline->start();
+
+$server = SocketHttpServer::createForDirectAccess(new NullLogger());
+$server->expose("127.0.0.1:$PORT");
+$server->start($handler, new \Amp\Http\Server\ErrorHandler\DefaultErrorHandler());
+
+error_log("[MadelineBridge] listening on 127.0.0.1:$PORT");
+
+// Keep the process alive - amphp's event loop runs in the background
+// once start() is called; this blocks the main fiber so the script
+// doesn't exit immediately.
+Amp\trapSignal([SIGINT, SIGTERM]);
