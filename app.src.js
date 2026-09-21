@@ -556,6 +556,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   }
   $('saveAnamKey')?.addEventListener('click', () => saveProviderKey('anam', 'anamApiKey', 'saveAnamKey', () => { loadAnamAvatars(); loadAnamVoices(); }));
   $('saveFalKey')?.addEventListener('click', () => saveProviderKey('fal', 'falApiKey', 'saveFalKey', () => updateLfKeyHint()));
+  $('saveGreenapiKey')?.addEventListener('click', () => saveProviderKey('greenapi', 'greenapiApiKey', 'saveGreenapiKey'));
   document.querySelectorAll('.eyeToggle').forEach(btn => {
     btn.addEventListener('click', () => {
       const input = $(btn.dataset.revealFor);
@@ -2062,7 +2063,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   // -------------------------------------------------------------
   async function fetchConnectedStatus(){
     try {
-      const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/status');
+      const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/status', { headers: { ...(await authHeader()) } });
       if (!res.ok) return;
       const data = await res.json();
 
@@ -2138,12 +2139,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   }
 
   // Profile -> WhatsApp
-  $('openWhatsAppConnect')?.addEventListener('click', () => {
+  $('openWhatsAppConnect')?.addEventListener('click', async () => {
     $('whatsappConnectScreen').classList.add('active');
-    fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/qr', { method: 'POST' })
-      .then(r => r.json())
-      .then(() => fetchConnectedStatus())
-      .catch((e) => showErrorToast ? showErrorToast(e.message) : console.warn('[WhatsApp QR] note:', e.message));
+    try {
+      const r = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/qr', {
+        method: 'POST',
+        headers: { ...(await authHeader()) },
+      });
+      await r.json();
+      await fetchConnectedStatus();
+    } catch(e) {
+      showErrorToast ? showErrorToast(e.message) : console.warn('[WhatsApp QR] note:', e.message);
+    }
     clearInterval(waStatusPollTimer);
     waStatusPollTimer = setInterval(fetchConnectedStatus, 3000);
   });
@@ -2156,13 +2163,19 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     $('waQrLoading').style.display = 'block';
     $('waQrLoading').textContent = 'Refreshing QR code…';
     $('waQrImg').style.display = 'none';
-    await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/qr', { method: 'POST' });
+    await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/qr', {
+      method: 'POST',
+      headers: { ...(await authHeader()) },
+    });
     await fetchConnectedStatus();
   });
 
   $('waDisconnectBtn')?.addEventListener('click', async () => {
     if (!confirm('Disconnect WhatsApp?')) return;
-    await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/disconnect', { method: 'POST' });
+    await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/disconnect', {
+      method: 'POST',
+      headers: { ...(await authHeader()) },
+    });
     await fetchConnectedStatus();
   });
 
@@ -2399,7 +2412,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
     const endpoint = platform === 'whatsapp' ? (SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/contacts') : (SOCIAL_CALL_API_BASE + '/api/social-call/telegram/contacts');
     try {
-      const res = await fetch(endpoint);
+      const res = await fetch(endpoint, { headers: { ...(await authHeader()) } });
       const data = await res.json();
 
       if (!res.ok) {
@@ -2579,10 +2592,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   let gaClient = null, gaCalls = null;
 
   async function startGreenApiCall(target){
-    const cfgRes = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/call-config');
+    const cfgRes = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/call-config', {
+      headers: { ...(await authHeader()) },
+    });
     const cfg = await cfgRes.json();
-    if (!cfg.apiUrl || !cfg.idInstance || !cfg.apiTokenInstance) {
-      throw new Error('Green API not configured on the backend');
+    if (!cfgRes.ok || !cfg.apiUrl || !cfg.idInstance || !cfg.apiTokenInstance) {
+      throw new Error(cfg.error || 'Add your Green API credentials in Profile settings first');
     }
 
     const { GreenApiVoipClient } = await import('https://esm.sh/@green-api/whatsapp-api-calls-client-js@2.0.0');
