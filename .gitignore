@@ -4,5 +4,8 @@ data/
 __pycache__/
 *.pyc
 server/tgcalls_bridge/target/
+server/madeline_bridge/php-bin/
+server/madeline_bridge/vendor/
+server/madeline_bridge/session.madeline*
 
 
