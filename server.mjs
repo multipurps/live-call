@@ -138,20 +138,25 @@ function startTelegramBridge() {
   });
 }
 
-// Start the tgcalls_bridge Rust binary - real Telegram P2P calling (see
-// server/tgcalls_bridge/src/main.rs for why this exists separately from
-// telegram_bridge.py: PyTgCalls can't ring a private contact, this can).
-// UNVERIFIED as of this commit - not yet confirmed to even build on Render.
+// Start the madeline_bridge PHP process - real Telegram P2P calling.
+// REPLACES the previous Rust/ferogram tgcalls_bridge, which compiled and
+// ran but never confirmed an actual ring in real testing. MadelineProto
+// has a documented, mature requestCall()/VoIP API (see
+// server/madeline_bridge/bridge.php for details on what was verified).
+// UNVERIFIED as of this commit - could not test PHP/composer/amphp at all
+// locally; expect iteration against Render's real build/runtime logs,
+// same as the Rust bridge needed.
 let tgCallsProcess = null;
 function startTgCallsBridge() {
-  const binPath = path.join(__dirname, 'server', 'tgcalls_bridge', 'target', 'release', 'tgcalls_bridge');
-  if (!fs.existsSync(binPath)) {
-    console.warn('[Server] tgcalls_bridge binary not found (build may have failed or been skipped) - real Telegram calling unavailable, PyTgCalls-only.');
+  const scriptPath = path.join(__dirname, 'server', 'madeline_bridge', 'bridge.php');
+  const vendorPath = path.join(__dirname, 'server', 'madeline_bridge', 'vendor', 'autoload.php');
+  if (!fs.existsSync(scriptPath) || !fs.existsSync(vendorPath)) {
+    console.warn('[Server] madeline_bridge not found or composer install did not complete - real Telegram calling unavailable, PyTgCalls-only.');
     return;
   }
 
-  console.log('[Server] Launching tgcalls_bridge (real Telegram P2P calling) daemon...');
-  tgCallsProcess = spawn(binPath, [], {
+  console.log('[Server] Launching madeline_bridge (real Telegram P2P calling via MadelineProto) daemon...');
+  tgCallsProcess = spawn('php', [scriptPath], {
     env: { ...process.env, TGCALLS_PORT: String(TGCALLS_PORT) },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -323,18 +328,6 @@ const server = http.createServer(async (req, res) => {
         idInstance: process.env.GREENAPI_ID_INSTANCE || '',
         apiTokenInstance: process.env.GREENAPI_API_TOKEN || '',
       }));
-    }
-
-    if ((subpath === 'whatsapp/pair' || subpath === 'whatsapp/pair-code') && req.method === 'POST') {
-      const body = await parseBody(req);
-      try {
-        const code = await waBridge.requestPairingCode(body.phone);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ status: 'pairing_code_generated', code }));
-      } catch (e) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ error: e.message }));
-      }
     }
 
     if (subpath === 'whatsapp/contacts' && req.method === 'GET') {
