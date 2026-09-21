@@ -1,0 +1,14 @@
+{
+    "name": "live-call/madeline-bridge",
+    "description": "Real Telegram P2P calling via MadelineProto - replaces server/tgcalls_bridge (Rust/ferogram), which never confirmed an actual ring in testing.",
+    "require": {
+        "php": ">=8.2",
+        "danog/madelineproto": "^8",
+        "amphp/http-server": "^3"
+    },
+    "config": {
+        "platform": {
+            "php": "8.2"
+        }
+    }
+}
