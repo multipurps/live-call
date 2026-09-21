@@ -384,6 +384,22 @@
         <div class="profileCard">
           <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
           <div class="cBody">
+            <div class="cLabel">Green API credentials (WhatsApp)</div>
+            <div class="cInputRow">
+              <input class="keyInput" id="greenapiApiKey" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore name="greenapi-key-field" placeholder="idInstance:apiTokenInstance" />
+            </div>
+          </div>
+          <button class="eyeToggle" type="button" data-reveal-for="greenapiApiKey" aria-label="Show key">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6"/></svg>
+          </button>
+        </div>
+        <button class="saveKeyBtn" id="saveGreenapiKey">Save Green API credentials</button>
+        <p class="hint" id="greenapiKeyStatus" style="margin:8px 0 4px; min-height:16px;"></p>
+        <p class="hint" style="margin:0 0 18px;">Your own instance at <a href="https://console.green-api.com" target="_blank" rel="noopener" style="color:inherit; text-decoration:underline;">console.green-api.com</a> — this is what powers WhatsApp calling for your own account, separate from anyone else using this app. Paste your Instance ID and API Token joined with a colon, e.g. <code>710722741123:ac0f53a0d2ec...</code></p>
+
+        <div class="profileCard">
+          <div class="cIcon"><svg viewBox="0 0 24 24" fill="none"><path d="M15 7a4 4 0 1 1 0 8 4 4 0 0 1 0-8z" stroke="currentColor" stroke-width="1.8"/><path d="M11.5 10.5L3 19v2h2l1-1h2v-2h2l1.5-1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="cBody">
             <div class="cLabel">Fal API key</div>
             <div class="cInputRow">
               <input class="keyInput" id="falApiKey" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore name="fal-key-field" placeholder="Paste your Fal API key" />
