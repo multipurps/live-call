@@ -4,7 +4,25 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawn, execFileSync } from 'child_process';
 import { WebSocketServer, WebSocket } from 'ws';
-import { waBridge } from './server/greenapi_bridge.mjs';
+import * as greenApi from './server/greenapi_bridge.mjs';
+import { getServiceClient, getAuthedUserId } from './lib/supabaseAdmin.js';
+import { getProviderKey } from './lib/keys.js';
+
+// Resolves the AUTHENTICATED CALLER's own Green API credentials - every
+// user brings their own Green API account (their own WhatsApp number),
+// stored encrypted via the same Supabase Vault mechanism already used for
+// Anam/fal keys. There is no shared/global WhatsApp connection for the
+// whole app; each user's WhatsApp calling is entirely their own.
+async function requireGreenApiCreds(req) {
+  const supabase = getServiceClient();
+  const userId = await getAuthedUserId(req, supabase);
+  if (!userId) throw new Error('Not signed in');
+  const raw = await getProviderKey(supabase, userId, 'greenapi');
+  if (!raw) throw new Error('Add your Green API credentials in Profile settings first');
+  const creds = greenApi.parseCreds(raw);
+  if (!creds) throw new Error('Saved Green API credentials are malformed - re-save as idInstance:apiTokenInstance');
+  return creds;
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -289,7 +307,13 @@ const server = http.createServer(async (req, res) => {
 
     // Overall status of connected accounts
     if (subpath === 'status' && req.method === 'GET') {
-      const waStatus = await waBridge.getStatus();
+      let waStatus;
+      try {
+        const creds = await requireGreenApiCreds(req);
+        waStatus = await greenApi.getStatus(creds);
+      } catch (e) {
+        waStatus = { connected: false, error: e.message };
+      }
       const tgStatus = await proxyToTg('/tg/status', 'GET');
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({
@@ -304,10 +328,12 @@ const server = http.createServer(async (req, res) => {
       return res.end(JSON.stringify({ history: callHistory }));
     }
 
-    // WhatsApp endpoints
+    // WhatsApp endpoints - every one of these acts on the AUTHENTICATED
+    // CALLER's own Green API credentials, never a shared/global instance.
     if (subpath === 'whatsapp/qr' && (req.method === 'POST' || req.method === 'GET')) {
       try {
-        const qrData = await waBridge.getQrCode();
+        const creds = await requireGreenApiCreds(req);
+        const qrData = await greenApi.getQrCode(creds);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify(qrData));
       } catch (e) {
@@ -317,22 +343,27 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Hands the frontend what it needs to init the Green API calls SDK
-    // directly (client-side WebRTC) - see app.src.js. The api token is
-    // necessarily exposed to the browser here; that's inherent to how
-    // Green API's calling SDK is designed to be used, not something
-    // avoidable while using their library as documented.
+    // directly (client-side WebRTC) - see app.src.js. Returns THIS
+    // caller's own credentials, resolved the same way as every other
+    // whatsapp/* route. The api token is necessarily exposed to the
+    // browser here; that's inherent to how Green API's calling SDK is
+    // designed to be used, not something avoidable while using their
+    // library as documented.
     if (subpath === 'whatsapp/call-config' && req.method === 'GET') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify({
-        apiUrl: process.env.GREENAPI_API_URL || '',
-        idInstance: process.env.GREENAPI_ID_INSTANCE || '',
-        apiTokenInstance: process.env.GREENAPI_API_TOKEN || '',
-      }));
+      try {
+        const creds = await requireGreenApiCreds(req);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(creds));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: e.message }));
+      }
     }
 
     if (subpath === 'whatsapp/contacts' && req.method === 'GET') {
       try {
-        const contacts = await waBridge.getContacts();
+        const creds = await requireGreenApiCreds(req);
+        const contacts = await greenApi.getContacts(creds);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ contacts }));
       } catch (e) {
@@ -342,10 +373,15 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (subpath === 'whatsapp/disconnect' && req.method === 'POST') {
-      const result = await waBridge.disconnect();
-
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify(result));
+      try {
+        const creds = await requireGreenApiCreds(req);
+        const result = await greenApi.disconnect(creds);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(result));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: e.message }));
+      }
     }
 
     // ---------------------------------------------------------------
@@ -492,7 +528,9 @@ const server = http.createServer(async (req, res) => {
         });
 
         if (currentActiveCall.platform === 'whatsapp') {
-          await waBridge.hangup().catch(() => {});
+          // No server-side hangup call for Green API - the frontend calls
+          // gaClient.hangUp() directly (client-side), same as placing the
+          // call itself.
         } else if (currentActiveCall.platform === 'telegram') {
           await proxyToTgCalls('/hangup', 'POST').catch(() => {});
           closeTgCallsPipes();
@@ -629,10 +667,11 @@ function broadcastMediaEvent(msg) {
 }
 
 // Forward WhatsApp call events to connected WebSocket clients
-waBridge.on('status', (st) => broadcastMediaEvent({ type: 'wa_status', ...st }));
-waBridge.on('qr', (data) => broadcastMediaEvent({ type: 'wa_qr', ...data }));
-waBridge.on('pairing_code', (data) => broadcastMediaEvent({ type: 'wa_pairing_code', ...data }));
-waBridge.on('call_event', (call) => broadcastMediaEvent({ type: 'wa_call_event', call }));
+// No persistent WhatsApp connection/event emitter to listen to anymore -
+// greenapi_bridge.mjs is stateless, per-user, and per-request (see above).
+// The frontend's existing wa_status/wa_qr polling already re-fetches
+// status on its own timer, which is how the WhatsApp connect screen
+// learns about changes now.
 
 wss.on('connection', (ws) => {
   mediaClients.add(ws);
@@ -691,5 +730,6 @@ server.listen(PORT, HOST, () => {
   console.log(`Live Call server running at http://${HOST}:${PORT}`);
   startTelegramBridge();
   startTgCallsBridge();
-  waBridge.init().catch((e) => console.log('[Server] WA init note:', e.message));
+  // No global WhatsApp init needed anymore - greenapi_bridge.mjs is
+  // stateless and per-user (see requireGreenApiCreds above).
 });
