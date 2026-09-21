@@ -2152,49 +2152,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     clearInterval(waStatusPollTimer);
   });
 
-  $('waTabQrBtn')?.addEventListener('click', () => {
-    $('waTabQrBtn').classList.add('active');
-    $('waTabPairBtn').classList.remove('active');
-    $('waQrBox').style.display = 'block';
-    $('waPairBox').style.display = 'none';
-  });
-  $('waTabPairBtn')?.addEventListener('click', () => {
-    $('waTabPairBtn').classList.add('active');
-    $('waTabQrBtn').classList.remove('active');
-    $('waPairBox').style.display = 'block';
-    $('waQrBox').style.display = 'none';
-  });
-
   $('waRefreshQrBtn')?.addEventListener('click', async () => {
     $('waQrLoading').style.display = 'block';
     $('waQrLoading').textContent = 'Refreshing QR code…';
     $('waQrImg').style.display = 'none';
     await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/qr', { method: 'POST' });
     await fetchConnectedStatus();
-  });
-
-  $('waGetPairBtn')?.addEventListener('click', async () => {
-    const phone = $('waPairPhoneInput').value.trim();
-    if (!phone) return alert('Enter phone number with country code');
-    $('waGetPairBtn').textContent = 'Generating…';
-    try {
-      const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/pair', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
-      });
-      const data = await res.json();
-      if (data.code) {
-        $('waPairCodeDisplay').textContent = data.code;
-        $('waPairResult').style.display = 'block';
-      } else if (data.error) {
-        alert(data.error);
-      }
-    } catch(e) {
-      alert(e.message);
-    } finally {
-      $('waGetPairBtn').textContent = 'Get Pairing Code';
-    }
   });
 
   $('waDisconnectBtn')?.addEventListener('click', async () => {
