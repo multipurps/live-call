@@ -137,12 +137,6 @@ function jsonResponse(array $data, int $status = 200): Response {
     return new Response($status, ['content-type' => 'application/json'], json_encode($data));
 }
 
-async function readJsonBody(Request $request): array {
-    $body = $request->getBody()->buffer();
-    $decoded = json_decode($body, true);
-    return is_array($decoded) ? $decoded : [];
-}
-
 $handler = new ClosureRequestHandler(function (Request $request) use ($madeline, &$state): Response {
     $path = $request->getUri()->getPath();
     $method = $request->getMethod();
