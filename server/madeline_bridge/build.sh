@@ -14,8 +14,8 @@ echo "[madeline_bridge] Checking for PHP..."
 if ! command -v php >/dev/null 2>&1; then
   echo "[madeline_bridge] PHP not found - installing via apt..."
   if command -v sudo >/dev/null 2>&1; then SUDO="sudo"; else SUDO=""; fi
-  $SUDO apt-get update -y >/dev/null 2>&1
-  $SUDO apt-get install -y php-cli php-curl php-mbstring php-xml >/dev/null 2>&1
+  $SUDO apt-get update -y
+  $SUDO apt-get install -y php-cli php-curl php-mbstring php-xml
   if ! command -v php >/dev/null 2>&1; then
     echo "[madeline_bridge] WARNING: could not install PHP - skipping real Telegram P2P calling."
     exit 0
