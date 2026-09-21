@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { spawn, execFileSync } from 'child_process';
 import { WebSocketServer, WebSocket } from 'ws';
 import { waBridge } from './server/greenapi_bridge.mjs';
+import { voiceChanger, startVoiceChangerProcess, VC_CONFIG } from './server/voice_changer.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -481,6 +482,99 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    // -------------------------------------------------------------
+    // Realtime RVC voice conversion (w-okada/voice-changer).
+    // Lucy 2.5 supplies the avatar video only - this converts the live
+    // audio that goes out with it. See server/voice_changer.mjs and
+    // server/voicechanger/README.md.
+    // -------------------------------------------------------------
+    if (subpath === 'voice/status' && req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify(voiceChanger.status()));
+    }
+
+    if (subpath === 'voice/models' && req.method === 'GET') {
+      try {
+        const models = await voiceChanger.listModels();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ models, selectedSlot: VC_CONFIG.modelSlot }));
+      } catch (e) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ models: [], selectedSlot: VC_CONFIG.modelSlot, error: e.message }));
+      }
+    }
+
+    if (subpath === 'voice/select' && req.method === 'POST') {
+      const body = await parseBody(req);
+      try {
+        await voiceChanger.selectModel(Number(body.slot));
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(voiceChanger.status()));
+      } catch (e) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ ...voiceChanger.status(), error: e.message }));
+      }
+    }
+
+    if (subpath === 'voice/settings' && req.method === 'POST') {
+      const body = await parseBody(req);
+      // Only the handful of knobs that make sense per-deployment; anything
+      // else is set through voice-changer's own UI or env vars.
+      const allowed = ['tran', 'indexRatio', 'protect', 'f0Detector', 'silentThreshold'];
+      const applied = [];
+      const errors = [];
+      for (const key of allowed) {
+        if (body[key] === undefined || body[key] === null || body[key] === '') continue;
+        try {
+          await voiceChanger.updateSetting(key, body[key]);
+          if (key === 'tran') VC_CONFIG.tran = Number(body[key]);
+          if (key === 'indexRatio') VC_CONFIG.indexRatio = Number(body[key]);
+          if (key === 'protect') VC_CONFIG.protect = Number(body[key]);
+          if (key === 'f0Detector') VC_CONFIG.f0Detector = String(body[key]);
+          applied.push(key);
+        } catch (e) {
+          errors.push(`${key}: ${e.message}`);
+        }
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify({
+        ...voiceChanger.status(),
+        applied,
+        error: errors.length ? errors.join('; ') : null,
+      }));
+    }
+
+    if (subpath === 'voice/start' && req.method === 'POST') {
+      const body = await parseBody(req);
+      const status = await startVoiceConversion({ platform: body.platform, modelSlot: body.modelSlot });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify(status));
+    }
+
+    if (subpath === 'voice/stop' && req.method === 'POST') {
+      const status = stopVoiceConversion();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify(status));
+    }
+
+    if (subpath === 'voice/load-model' && req.method === 'POST') {
+      // Loads an RVC checkpoint that already exists on this host into a
+      // voice-changer model slot (upload -> concat -> load_model).
+      const body = await parseBody(req);
+      try {
+        const result = await voiceChanger.loadModel({
+          slot: Number(body.slot ?? 0),
+          pthPath: body.pthPath,
+          indexPath: body.indexPath,
+        });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ ...result, status: voiceChanger.status() }));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: e.message }));
+      }
+    }
+
     // Hangup endpoint
     if (subpath === 'hangup' && req.method === 'POST') {
       if (currentActiveCall) {
@@ -614,6 +708,107 @@ const server = http.createServer(async (req, res) => {
 });
 
 // -------------------------------------------------------------
+// Realtime RVC voice conversion for Lucy 2.5 calls
+// -------------------------------------------------------------
+// Lucy 2.5 (decart/lucy-2-5/realtime) is a video-to-video model: it supplies
+// the live avatar and no voice. The audio that goes out with that avatar is
+// the live audio already paired with the avatar pipeline - the mic track the
+// frontend streams up here as channel 0x02 (see SocialCallMediaAdapter in
+// app.src.js). When a conversion session is running, that stream is piped
+// through w-okada/voice-changer + an RVC model instead of going straight to
+// the call, chunk after chunk, for the whole call - no files, no sentences,
+// no TTS.
+//
+// Where the converted audio goes depends only on how each platform carries
+// its outgoing media:
+//   * Telegram - the call's outgoing audio is server-side: it is written to
+//     the same /tmp/tgcalls_audio.pcm FIFO tgcalls_bridge reads from, so the
+//     converted voice is the audio track that travels with the Lucy video.
+//   * WhatsApp - the call is browser-side WebRTC (Green API calls SDK), so
+//     the converted PCM is sent back to the browser as channel 0x04 and the
+//     frontend makes it the outgoing audio track there.
+// Incoming (caller) audio is untouched by all of this.
+//
+// If the converter is down or misconfigured the original audio is forwarded
+// unchanged and the status says so - a call must never go silent, and the UI
+// must never claim a voice is being converted when it isn't.
+function vcSamplesFrom(payload) {
+  // Channel 0x02 carries raw little-endian int16. The payload is a
+  // subarray (offset by the 1-byte channel tag) so it is frequently
+  // unaligned for a typed-array view - read it sample by sample instead.
+  const n = Math.floor(payload.length / 2);
+  const out = new Int16Array(n);
+  for (let i = 0; i < n; i++) out[i] = payload.readInt16LE(i * 2);
+  return out;
+}
+
+function vcSamplesToBuffer(samples) {
+  return Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength);
+}
+
+// Where outgoing call audio went BEFORE voice conversion existed (kept
+// verbatim - this is the fallback path and the non-converted path).
+function writeRawCallAudio(payload) {
+  if (currentActiveCall?.platform === 'telegram' && tgCallsAudioStream && !tgCallsAudioStream.destroyed) {
+    tgCallsAudioStream.write(payload);
+  }
+}
+
+function broadcastConvertedAudio(samples) {
+  if (!samples || !samples.length) return;
+  const tagged = Buffer.alloc(samples.byteLength + 1);
+  tagged[0] = 0x04; // 0x04 = converted (RVC) outgoing call audio
+  vcSamplesToBuffer(samples).copy(tagged, 1);
+  for (const ws of mediaClients) {
+    if (ws.readyState === WebSocket.OPEN) {
+      try { ws.send(tagged); } catch (e) {}
+    }
+  }
+}
+
+function handleConvertedAudio(samples) {
+  const platform = voiceChanger.session?.platform || currentActiveCall?.platform;
+  if (platform === 'telegram') {
+    writeRawCallAudio(vcSamplesToBuffer(samples));
+    return;
+  }
+  // WhatsApp: the call's WebRTC audio lives in the browser, so hand the
+  // converted audio back for the outgoing track (see app.src.js).
+  broadcastConvertedAudio(samples);
+}
+
+function broadcastVoiceStatus() {
+  broadcastMediaEvent({ type: 'vc_status', ...voiceChanger.status() });
+}
+
+async function startVoiceConversion({ platform, modelSlot } = {}) {
+  try {
+    if (modelSlot !== undefined && modelSlot !== null && Number(modelSlot) !== VC_CONFIG.modelSlot) {
+      VC_CONFIG.modelSlot = Number(modelSlot);
+      await voiceChanger.selectModel(VC_CONFIG.modelSlot);
+    }
+    await voiceChanger.startSession({
+      platform: platform || currentActiveCall?.platform || null,
+      onConverted: handleConvertedAudio,
+    });
+  } catch (e) {
+    // Never let a converter problem break the call: keep the session (it
+    // falls back to pass-through) and report the reason.
+    voiceChanger.lastError = e.message;
+    voiceChanger.mode = 'bypass';
+    console.warn('[VoiceChanger] start failed, falling back to pass-through:', e.message);
+  }
+  broadcastVoiceStatus();
+  return voiceChanger.status();
+}
+
+function stopVoiceConversion() {
+  voiceChanger.stopSession();
+  broadcastVoiceStatus();
+  return voiceChanger.status();
+}
+
+// -------------------------------------------------------------
 // WebSocket Server for Lucy 2.5 Outgoing Video / Mic Media Bridge
 // -------------------------------------------------------------
 const wss = new WebSocketServer({ server, path: '/api/social-call/media' });
@@ -662,10 +857,16 @@ wss.on('connection', (ws) => {
           tgCallsVideoStream.write(payload);
         }
       } else if (channel === 0x02) {
-        // Microphone PCM audio chunk (expected raw s16le, 48kHz stereo -
-        // matching tgcalls_bridge's audio_raw-style MediaDescription).
-        if (currentActiveCall?.platform === 'telegram' && tgCallsAudioStream && !tgCallsAudioStream.destroyed) {
-          tgCallsAudioStream.write(payload);
+        // Microphone PCM audio chunk - the live audio paired with the Lucy
+        // 2.5 avatar pipeline (raw s16le, 16kHz mono - see
+        // tgcalls_bridge's AudioDescription: sample_rate 16000, 1 channel).
+        if (voiceChanger.session) {
+          // Real-time RVC conversion is running: it takes it from here and
+          // calls back through handleConvertedAudio() for each converted
+          // chunk (bypassing untouched if the converter is unhealthy).
+          voiceChanger.push(vcSamplesFrom(payload));
+        } else {
+          writeRawCallAudio(payload);
         }
       }
     } else {
@@ -676,6 +877,15 @@ wss.on('connection', (ws) => {
             currentActiveCall.status = 'connected';
             broadcastMediaEvent({ type: 'call_state', state: 'connected', call: currentActiveCall });
           }
+        } else if (msg.type === 'vc_start') {
+          // Starts real-time conversion of the outgoing Lucy audio for this
+          // call. Only ever sent for the Lucy 2.5 source - the app never
+          // asks for it on the Anam avatar path.
+          startVoiceConversion({ platform: msg.platform, modelSlot: msg.modelSlot });
+        } else if (msg.type === 'vc_stop') {
+          stopVoiceConversion();
+        } else if (msg.type === 'vc_status') {
+          ws.send(JSON.stringify({ type: 'vc_status', ...voiceChanger.status() }));
         }
       } catch (e) {}
     }
@@ -683,6 +893,15 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     mediaClients.delete(ws);
+    // Nothing left to convert if the last browser is gone and no call is up.
+    // Deliberately delayed: a socket that is merely reconnecting mid-call
+    // must not lose the conversion it is using.
+    setTimeout(() => {
+      if (mediaClients.size === 0 && !currentActiveCall && voiceChanger.session) {
+        console.log('[MediaWS] last client gone with no active call - stopping voice conversion');
+        voiceChanger.stopSession();
+      }
+    }, 2000);
   });
 });
 
@@ -691,5 +910,7 @@ server.listen(PORT, HOST, () => {
   console.log(`Live Call server running at http://${HOST}:${PORT}`);
   startTelegramBridge();
   startTgCallsBridge();
+  // Opt-in (VOICE_CHANGER_AUTOSTART=1) - see server/voicechanger/setup.sh.
+  startVoiceChangerProcess();
   waBridge.init().catch((e) => console.log('[Server] WA init note:', e.message));
 });
