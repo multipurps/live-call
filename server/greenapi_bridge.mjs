@@ -126,13 +126,6 @@ class GreenApiBridge extends EventEmitter {
     return { qr: data.message, dataUrl: `data:image/png;base64,${data.message}` };
   }
 
-  async requestPairingCode() {
-    // Green API's REST API is QR-based, not phone-number pairing-code
-    // based, unlike Baileys - no honest way to support this without
-    // faking it, so it's a clear error instead.
-    throw new Error('Phone pairing codes are not supported via Green API - use the QR code instead.');
-  }
-
   async getContacts() {
     if (!configured()) return [];
     const raw = await greenApiGet('getContacts');
