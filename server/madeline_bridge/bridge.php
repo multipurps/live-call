@@ -250,7 +250,18 @@ $handler = new ClosureRequestHandler(function (Request $request) use ($madeline,
     }
 });
 
-$madeline->start();
+// Deliberately NOT calling $madeline->start() here. start() is designed
+// to trigger MadelineProto's own interactive login flow (CLI prompt or
+// web UI) whenever there's no valid session yet - confirmed live: this
+// caused the bridge to spam an actual Telegram login attempt (its own
+// built-in QR-code flow) on every single boot, which under this
+// process's restart-on-crash loop meant hammering Telegram's real login
+// endpoint every few seconds and triggering an escalating FLOOD_WAIT
+// rate-limit. Programmatic/headless login (what this whole bridge is
+// for) means calling phoneLogin()/completePhoneLogin() directly instead
+// of start() - MadelineProto connects lazily as needed when those (or
+// any other API method) are called, without ever prompting for anything
+// on its own.
 
 $server = SocketHttpServer::createForDirectAccess(new NullLogger());
 $server->expose("127.0.0.1:$PORT");
@@ -258,7 +269,6 @@ $server->start($handler, new \Amp\Http\Server\ErrorHandler\DefaultErrorHandler()
 
 error_log("[MadelineBridge] listening on 127.0.0.1:$PORT");
 
-// Keep the process alive - amphp's event loop runs in the background
-// once start() is called; this blocks the main fiber so the script
-// doesn't exit immediately.
+// Keep the process alive - amphp's event loop runs in the background;
+// this blocks the main fiber so the script doesn't exit immediately.
 Amp\trapSignal([SIGINT, SIGTERM]);
