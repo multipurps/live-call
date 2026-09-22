@@ -188,10 +188,27 @@ function startTgCallsBridge() {
   tgCallsProcess.stderr.on('data', (d) => console.error(`[TgCallsBridge] ${d.toString().trim()}`));
 
   tgCallsProcess.on('exit', (code) => {
-    console.warn(`[TgCallsBridge] Exited with code ${code}, restarting in 5s...`);
-    setTimeout(startTgCallsBridge, 5000);
+    // URGENT SAFETY FIX: this used to restart on a flat 5s timer. When
+    // MadelineProto's start() auto-triggers its own interactive CLI QR
+    // login on every boot (see bridge.php's TODO on this), a crash-loop
+    // here means repeatedly hitting Telegram's real login endpoint every
+    // ~5 seconds - confirmed live: this actually happened and produced a
+    // real, escalating FLOOD_WAIT rate-limit response from Telegram's
+    // servers. A tight restart loop against a real external API is
+    // active harm, not just wasted resources - exponential backoff with a
+    // hard cap, and a full stop after repeated failures, is mandatory
+    // here, not optional hardening.
+    tgCallsRestartCount = (tgCallsRestartCount || 0) + 1;
+    if (tgCallsRestartCount > 5) {
+      console.error(`[TgCallsBridge] Exited with code ${code} for the ${tgCallsRestartCount}th time - giving up auto-restart to avoid hammering Telegram's API. Fix the underlying issue and redeploy.`);
+      return;
+    }
+    const backoffMs = Math.min(30000 * tgCallsRestartCount, 300000); // 30s, 60s, ... capped at 5min
+    console.warn(`[TgCallsBridge] Exited with code ${code}, restarting in ${backoffMs / 1000}s (attempt ${tgCallsRestartCount}/5)...`);
+    setTimeout(startTgCallsBridge, backoffMs);
   });
 }
+let tgCallsRestartCount = 0;
 
 // Helper to proxy HTTP requests to Telegram bridge
 async function proxyToTg(endpoint, method = 'GET', body = null) {
