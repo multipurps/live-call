@@ -265,7 +265,7 @@ $handler = new ClosureRequestHandler(function (Request $request) use ($madeline,
 
 $server = SocketHttpServer::createForDirectAccess(new NullLogger());
 $server->expose("127.0.0.1:$PORT");
-$server->start($handler, new \Amp\Http\Server\ErrorHandler\DefaultErrorHandler());
+$server->start($handler, new \Amp\Http\Server\DefaultErrorHandler());
 
 error_log("[MadelineBridge] listening on 127.0.0.1:$PORT");
 
