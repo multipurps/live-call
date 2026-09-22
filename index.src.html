@@ -745,6 +745,30 @@
           <span class="dot live" id="prepLucyDot"></span>
         </div>
 
+        <!-- Realtime RVC voice conversion. Lucy 2.5 only: it supplies the
+             avatar video and no voice, so the audio that goes out with it is
+             converted here. Hidden entirely for the Anam avatar source. -->
+        <div class="profileCard" id="prepVoiceCard" style="margin-bottom:10px;">
+          <div class="cIcon">
+            <svg viewBox="0 0 24 24" fill="none" width="20" height="20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 9v6M8 5v14M12 8v8M16 6v12M20 10v4"/></svg>
+          </div>
+          <div class="cBody">
+            <div class="cLabel">Converted Voice (RVC)</div>
+            <div class="cValue" id="prepVoiceStatus">Off — your own voice is sent</div>
+          </div>
+          <button class="vcSwitch" id="prepVoiceToggle" role="switch" aria-checked="false" aria-label="Convert the outgoing voice in real time"><span></span></button>
+        </div>
+        <div class="profileCard" id="prepVoiceModelCard" style="margin-bottom:10px; display:none;">
+          <div class="cIcon">
+            <svg viewBox="0 0 24 24" fill="none" width="20" height="20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M12 3l-4 4M12 3l4 4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          </div>
+          <div class="cBody">
+            <div class="cLabel">RVC Model</div>
+            <select class="cSelect" id="prepVoiceModelSelect" aria-label="RVC model"><option value="">No RVC models on the server</option></select>
+          </div>
+        </div>
+        <p class="hint" id="prepVoiceHint" style="margin:0 0 18px;"></p>
+
         <button class="saveKeyBtn" id="prepStartCallActionBtn" style="width:100%; height:52px; font-size:16px; font-weight:700; border-radius:14px; background:var(--accent);">
           Place Call
         </button>
@@ -884,6 +908,10 @@
         <span id="socialCallStatusLabel" style="font-size:11.5px; color:var(--dim);">Calling…</span>
         <span style="font-size:11.5px; color:var(--dim);">•</span>
         <span id="socialCallTimer" style="font-size:11.5px; font-weight:600; color:#fff;">00:00</span>
+        <!-- Live state of the outgoing voice conversion (Lucy 2.5 calls).
+             Shown only while a call is up, and says RVC OFF if the real voice
+             is going out instead. -->
+        <span id="socialCallVoiceBadge" style="display:none; font-size:11px; font-weight:700; padding:2px 7px; border-radius:6px; background:rgba(255,255,255,0.14); color:var(--dim);">RVC</span>
       </div>
     </div>
   </div>

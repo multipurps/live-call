@@ -1877,7 +1877,383 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     $('prepSourceLabel').textContent = 'AI Avatar (Anam)';
     $('prepPreviewPlaceholderLabel').textContent = 'AI Avatar Preview';
     $('prepLucyStatus').textContent = state.anamAvatarId ? 'Ready to stream' : 'Pick an avatar in Profile first';
+    // Voice conversion is Lucy 2.5 only - an Anam avatar already brings its
+    // own synthesised voice, so the control is meaningless (and hidden) here.
+    LucyVoice.renderVoiceUi();
   });
+
+  // ==============================================================================
+  // REALTIME RVC VOICE CONVERSION (Lucy 2.5 Live Swap only)
+  // ==============================================================================
+  //
+  // Lucy 2.5 (decart/lucy-2-5/realtime) is a video-to-video model: it gives
+  // us the live avatar and NO voice. The audio that goes out with the avatar
+  // is the live audio paired with that pipeline (the microphone track the
+  // app already streams up as outgoing call audio). This converts that live
+  // stream, in real time, with RVC through w-okada/voice-changer.
+  //
+  // Where the conversion happens is decided by how each platform carries its
+  // outgoing media, not by preference:
+  //
+  //   Telegram - the call's outgoing audio is server-side (tgcalls_bridge
+  //             reads /tmp/tgcalls_audio.pcm), so the server converts there
+  //             and writes the converted voice into that pipe: it becomes
+  //             the audio track that travels with the Lucy video.
+  //
+  //   WhatsApp - the call is browser-side WebRTC (Green API calls SDK), so
+  //             the server streams the converted PCM back here (WS channel
+  //             0x04) and we hand it to the call as its outgoing audio track.
+  //
+  // Nothing here is prerecorded, nothing waits for a sentence to finish, and
+  // there is no TTS/LLM anywhere in this path: it is a continuous stream of
+  // audio in / audio out for the whole call. Incoming caller audio is never
+  // touched.
+  const LucyVoice = {
+    enabled: false,      // user's choice for the next call
+    running: false,      // a conversion session is live for this call
+    models: [],
+    selectedSlot: null,
+    status: null,
+    mode: 'off',         // 'off' | 'convert' | 'bypass'
+    error: null,
+    pollTimer: null,
+
+    serverReachable(){
+      return !!this.status && this.status.connected === true;
+    },
+    canEnable(){
+      return this.serverReachable() && this.models.length > 0;
+    },
+
+    async refresh(){
+      try {
+        const [statusRes, modelsRes] = await Promise.all([
+          fetch(SOCIAL_CALL_API_BASE + '/api/social-call/voice/status'),
+          fetch(SOCIAL_CALL_API_BASE + '/api/social-call/voice/models'),
+        ]);
+        const status = await statusRes.json().catch(() => null);
+        const models = await modelsRes.json().catch(() => null);
+        this.status = status || null;
+        this.models = (models && Array.isArray(models.models)) ? models.models : [];
+        this.mode = status?.mode || 'off';
+        this.error = status?.error || null;
+        if (this.selectedSlot === null && models && Number.isInteger(models.selectedSlot) && models.selectedSlot >= 0) {
+          this.selectedSlot = models.selectedSlot;
+        }
+      } catch (e) {
+        this.status = null;
+        this.models = [];
+        this.error = e.message;
+      }
+      // Never leave the toggle on something that cannot actually convert -
+      // that would look like it is converting when it isn't.
+      if (this.enabled && !this.canEnable()) this.enabled = false;
+      this.renderVoiceUi();
+      return this.status;
+    },
+
+    applyStatus(status){
+      if (!status || typeof status !== 'object') return;
+      this.status = status;
+      this.mode = status.mode || 'off';
+      this.error = status.error || null;
+      this.renderVoiceUi();
+      this.renderCallBadge();
+    },
+
+    async select(slot){
+      this.selectedSlot = Number(slot);
+      try {
+        await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/voice/select', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slot: this.selectedSlot }),
+        });
+      } catch (e) {
+        this.error = e.message;
+      }
+      await this.refresh();
+    },
+
+    // Called once the call is actually being placed, so conversion is only
+    // ever running for a live call.
+    async startForCall(platform){
+      this.running = true;
+      SocialCallMediaAdapter.sendControl({
+        type: 'vc_start',
+        platform,
+        modelSlot: this.selectedSlot,
+      });
+      this.renderCallBadge();
+      this.refresh();
+      this.startPolling();
+    },
+
+    stopForCall(){
+      this.running = false;
+      this.stopPolling();
+      SocialCallMediaAdapter.sendControl({ type: 'vc_stop' });
+      this.renderCallBadge();
+    },
+
+    startPolling(){
+      this.stopPolling();
+      // Keeps the on-call badge honest: it shows whether we are really
+      // converting right now (and how long a conversion is taking), not
+      // whether we merely asked to.
+      this.pollTimer = setInterval(() => {
+        if (!this.running) return this.stopPolling();
+        SocialCallMediaAdapter.sendControl({ type: 'vc_status' });
+      }, 2000);
+    },
+    stopPolling(){
+      if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
+    },
+
+    modelName(){
+      const m = this.models.find((x) => x.slot === this.selectedSlot);
+      return m ? m.name : null;
+    },
+
+    renderVoiceUi(){
+      const card = $('prepVoiceCard');
+      if (!card) return;
+      const modelCard = $('prepVoiceModelCard');
+      const statusEl = $('prepVoiceStatus');
+      const hintEl = $('prepVoiceHint');
+      const toggle = $('prepVoiceToggle');
+      // Lucy 2.5 only - the whole block (card, model picker and hint) is
+      // hidden for the Anam avatar source, which already has a voice.
+      const lucy = selectedCallSource === 'lucy';
+      card.style.display = lucy ? '' : 'none';
+      if (modelCard) modelCard.style.display = 'none';
+      if (hintEl) hintEl.style.display = 'none';
+      if (!lucy) return;
+
+      if (toggle) {
+        toggle.classList.toggle('on', this.enabled);
+        toggle.setAttribute('aria-checked', this.enabled ? 'true' : 'false');
+        toggle.disabled = !this.canEnable();
+      }
+
+      if (!statusEl) return;
+      if (!this.serverReachable()) {
+        statusEl.textContent = 'Converter offline — your own voice is sent';
+        if (hintEl) hintEl.textContent = 'The realtime voice-changer service is not running on the call backend, so nothing would be converted.';
+      } else if (!this.models.length) {
+        statusEl.textContent = 'No RVC model loaded';
+        if (hintEl) hintEl.textContent = 'Load an RVC model on the backend (or pick one in voice-changer\'s own UI) to convert your voice.';
+      } else if (this.enabled) {
+        statusEl.textContent = 'On — converting with ' + (this.modelName() || `slot ${this.selectedSlot}`);
+        if (hintEl) hintEl.textContent = 'Your live voice is converted in real time and sent with the Lucy 2.5 video.';
+      } else {
+        statusEl.textContent = 'Off — your own voice is sent';
+        if (hintEl) hintEl.textContent = 'Turn on to convert the voice that goes out with the Lucy 2.5 avatar, in real time.';
+      }
+      if (hintEl) hintEl.style.display = '';
+      if (modelCard) modelCard.style.display = (this.enabled && this.models.length) ? '' : 'none';
+
+      // Keep the model picker in sync with what the server has.
+      const select = $('prepVoiceModelSelect');
+      if (select) {
+        const wanted = this.selectedSlot === null ? '' : String(this.selectedSlot);
+        select.innerHTML = this.models.length
+          ? this.models.map((m) => `<option value="${m.slot}">${m.name}${m.samplingRate ? ` · ${Math.round(m.samplingRate / 1000)}kHz` : ''}</option>`).join('')
+          : '<option value="">No RVC models on the server</option>';
+        select.value = wanted;
+        if (select.value !== wanted && this.models.length) select.value = String(this.models[0].slot);
+        if (this.models.length) this.selectedSlot = Number(select.value);
+      }
+    },
+
+    renderCallBadge(){
+      const badge = $('socialCallVoiceBadge');
+      if (!badge) return;
+      if (!this.running) { badge.style.display = 'none'; return; }
+      badge.style.display = 'inline-block';
+      if (this.mode === 'convert') {
+        const ms = this.status?.stats?.inferenceMs;
+        const queued = this.status?.stats?.queuedMs || 0;
+        badge.textContent = ms ? `RVC · ${ms}ms${queued > 120 ? ' · busy' : ''}` : 'RVC';
+        badge.style.background = 'rgba(37,211,102,0.22)';
+        badge.style.color = '#25D366';
+      } else {
+        // Being explicit: the call is running with the real voice because
+        // conversion could not be used, not because it is warming up.
+        badge.textContent = 'RVC OFF';
+        badge.style.background = 'rgba(255,255,255,0.14)';
+        badge.style.color = 'var(--dim)';
+      }
+    },
+  };
+
+  $('prepVoiceToggle')?.addEventListener('click', () => {
+    // Refusing to switch on when there is nothing to convert with is
+    // deliberate - an "on" switch that quietly sends your own voice would be
+    // a lie. A click in that state just re-checks the server.
+    if (!LucyVoice.canEnable()) { LucyVoice.refresh(); return; }
+    LucyVoice.enabled = !LucyVoice.enabled;
+    LucyVoice.renderVoiceUi();
+  });
+  $('prepVoiceModelSelect')?.addEventListener('change', (e) => {
+    LucyVoice.select(e.target.value);
+  });
+
+  // Plays the converted audio the server streams back (WhatsApp calls carry
+  // their audio from this browser, so the converted voice has to reach the
+  // WebRTC track here). It is a jitter-buffered playout, not monitoring: the
+  // converted voice is never played out loud, only handed to the call.
+  const VoiceConversionPlayout = {
+    ctx: null, node: null, dest: null, muteGain: null, stream: null, track: null,
+    queue: [], queued: 0, started: false, firstChunkAt: 0, chunks: 0,
+    maxQueue: 16000 * 0.4, // 400ms - enough to ride out network jitter, small
+                           // enough that added latency stays imperceptible
+
+    async start(){
+      if (this.started) return;
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AudioCtx({ sampleRate: 16000 });
+      this.dest = this.ctx.createMediaStreamDestination();
+      this.stream = this.dest.stream;
+      this.track = this.stream.getAudioTracks()[0] || null;
+      // Safari only pulls a ScriptProcessorNode that reaches ctx.destination,
+      // so the playout is connected there through a zero gain: the graph runs,
+      // but the converted voice is never audible (that would echo straight
+      // back into the call).
+      this.muteGain = this.ctx.createGain();
+      this.muteGain.gain.value = 0;
+      this.node = this.ctx.createScriptProcessor(512, 1, 1);
+      this.node.onaudioprocess = (evt) => this._fill(evt.outputBuffer.getChannelData(0));
+      this.node.connect(this.dest);
+      this.node.connect(this.muteGain);
+      this.muteGain.connect(this.ctx.destination);
+      this.started = true;
+      if (this.ctx.state === 'suspended') {
+        try { await this.ctx.resume(); } catch (e) {}
+      }
+    },
+
+    _fill(out){
+      let written = 0;
+      while (written < out.length && this.queued > 0) {
+        const head = this.queue[0];
+        const need = out.length - written;
+        if (head.length <= need) {
+          for (let i = 0; i < head.length; i++) out[written + i] = head[i] / 32768;
+          written += head.length;
+          this.queued -= head.length;
+          this.queue.shift();
+        } else {
+          for (let i = 0; i < need; i++) out[written + i] = head[i] / 32768;
+          written += need;
+          this.queue[0] = head.subarray(need);
+          this.queued -= need;
+        }
+      }
+      // Underrun: play silence rather than repeat or stretch anything.
+      if (written < out.length) out.fill(0, written);
+    },
+
+    onConverted(int16){
+      if (!this.started || !int16 || !int16.length) return;
+      if (!this.firstChunkAt) this.firstChunkAt = Date.now();
+      this.chunks++;
+      this.queue.push(int16);
+      this.queued += int16.length;
+      while (this.queued > this.maxQueue && this.queue.length > 1) {
+        this.queued -= this.queue.shift().length;
+      }
+    },
+
+    // True once converted audio has actually arrived, which is what decides
+    // whether the call can be handed a converted track at all.
+    async waitForAudio(timeoutMs){
+      const deadline = Date.now() + timeoutMs;
+      while (!this.firstChunkAt && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      return !!this.firstChunkAt;
+    },
+
+    getTrack(){
+      return (this.started && this.track && this.track.readyState === 'live') ? this.track : null;
+    },
+
+    /**
+     * Makes the Green API calls SDK send the converted voice instead of the
+     * microphone. Its CallsConnection keeps the RTCPeerConnection in a
+     * private field, and startAudioBridge() calls
+     * navigator.mediaDevices.getUserMedia({ audio: true }) to get the track
+     * it adds to that connection - so answering that request is the only
+     * supported way to choose what the call transmits. The hijack is scoped
+     * to the single startAudioBridge() call and undone immediately after.
+     */
+    interceptMicrophone(){
+      const md = navigator.mediaDevices;
+      if (!md || typeof md.getUserMedia !== 'function') return null;
+      const original = md.getUserMedia.bind(md);
+      const self = this;
+      let active = true;
+      try {
+        md.getUserMedia = function (constraints) {
+          const audioOnly = constraints && constraints.audio && !constraints.video;
+          if (active && audioOnly && self.getTrack()) {
+            try {
+              // A clone: the SDK stops the tracks it was given when it tears
+              // the bridge down, which must not kill our playout track.
+              return Promise.resolve(new MediaStream([self.getTrack().clone()]));
+            } catch (e) { /* fall through to the real microphone */ }
+          }
+          return original(constraints);
+        };
+      } catch (e) {
+        return null;
+      }
+      return function restore(){
+        active = false;
+        try { md.getUserMedia = original; } catch (e) {}
+      };
+    },
+
+    stop(){
+      this.started = false;
+      this.queue = [];
+      this.queued = 0;
+      this.firstChunkAt = 0;
+      this.chunks = 0;
+      if (this.node) { try { this.node.disconnect(); this.node.onaudioprocess = null; } catch (e) {} this.node = null; }
+      if (this.muteGain) { try { this.muteGain.disconnect(); } catch (e) {} this.muteGain = null; }
+      if (this.track) { try { this.track.stop(); } catch (e) {} this.track = null; }
+      if (this.dest) { try { this.dest.disconnect(); } catch (e) {} this.dest = null; }
+      this.stream = null;
+      if (this.ctx) { try { this.ctx.close(); } catch (e) {} this.ctx = null; }
+    },
+  };
+
+  // The live audio that goes out with the Lucy 2.5 avatar. Lucy 2.5 is a
+  // video-to-video model and emits no audio of its own, so this is the local
+  // microphone - unless the avatar pipeline itself exposes an audio track, in
+  // which case that is what belongs here (and is what gets converted).
+  function outgoingCallAudioStream(){
+    const src = LiveSwapMediaSource.getStream();
+    if (src && src.getAudioTracks && src.getAudioTracks().length) {
+      return new MediaStream(src.getAudioTracks());
+    }
+    return socialMicStream;
+  }
+
+  // Binary frames from the call backend: 0x04 = converted (RVC) outgoing
+  // audio, streamed back so a browser-side call can send it.
+  function handleMediaWsBinary(arrayBuffer){
+    const view = new Uint8Array(arrayBuffer);
+    if (view.length < 2 || view[0] !== 0x04) return;
+    const n = Math.floor((view.length - 1) / 2);
+    if (n < 1) return;
+    const dv = new DataView(view.buffer, view.byteOffset, view.byteLength);
+    const pcm = new Int16Array(n);
+    for (let i = 0; i < n; i++) pcm[i] = dv.getInt16(1 + i * 2, true);
+    VoiceConversionPlayout.onConverted(pcm);
+  }
 
   let socialCallStartedAt = null;
   let socialMuted = false;
@@ -1891,11 +2267,19 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     audioProcessor: null,
     micAudioCtx: null,
     active: false,
+    voiceConversion: false,
     initWs(){
       if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;
       this.ws = new WebSocket(SOCIAL_CALL_API_BASE.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:') + '/api/social-call/media');
       this.ws.binaryType = 'arraybuffer';
       this.ws.onmessage = (e) => {
+        // Converted (RVC) audio for browser-side calls arrives as binary,
+        // tagged 0x04 - see handleMediaWsBinary.
+        if (e.data instanceof ArrayBuffer) { handleMediaWsBinary(e.data); return; }
+        if (typeof Blob !== 'undefined' && e.data instanceof Blob) {
+          e.data.arrayBuffer().then(handleMediaWsBinary).catch(() => {});
+          return;
+        }
         try {
           const msg = JSON.parse(e.data);
           handleMediaWsMessage(msg);
@@ -1905,7 +2289,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         if (this.active) setTimeout(() => this.initWs(), 2000);
       };
     },
-    startStreaming(stream, micStream){
+    // JSON control channel on the same socket (start/stop conversion, status).
+    sendControl(msg){
+      this.initWs();
+      const ws = this.ws;
+      if (!ws) return;
+      const send = () => { try { ws.send(JSON.stringify(msg)); } catch (e) {} };
+      if (ws.readyState === WebSocket.OPEN) send();
+      else ws.addEventListener('open', send, { once: true });
+    },
+    startStreaming(stream, micStream, options = {}){
+      const voiceConversion = !!options.voiceConversion;
+      this.voiceConversion = voiceConversion;
       this.active = true;
       this.initWs();
 
@@ -1933,12 +2328,21 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         }
       }, 1000 / 15);
 
-      // Mic PCM 16kHz audio stream
-      if (micStream && micStream.getAudioTracks().length) {
+      // Live outgoing call audio, PCM 16kHz mono.
+      //
+      // This is the audio that travels out with the Lucy 2.5 video, so it is
+      // the stream the realtime RVC conversion is fed from. The chunk size is
+      // smaller while converting: the converter is fed one chunk per round
+      // trip, so the original 2048-sample buffer (128ms at 16kHz) would add
+      // that much latency before conversion even starts. With conversion off
+      // the original buffer size is kept exactly as it was.
+      const audioStream = voiceConversion ? outgoingCallAudioStream() : micStream;
+      if (audioStream && audioStream.getAudioTracks().length) {
         try {
+          const bufferSize = voiceConversion ? 512 : 2048;
           this.micAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-          const source = this.micAudioCtx.createMediaStreamSource(micStream);
-          this.audioProcessor = this.micAudioCtx.createScriptProcessor(2048, 1, 1);
+          const source = this.micAudioCtx.createMediaStreamSource(audioStream);
+          this.audioProcessor = this.micAudioCtx.createScriptProcessor(bufferSize, 1, 1);
           this.audioProcessor.onaudioprocess = (evt) => {
             if (!this.active || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
             const input = evt.inputBuffer.getChannelData(0);
@@ -1948,7 +2352,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
               pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
             }
             const tagged = new Uint8Array(pcm16.buffer.byteLength + 1);
-            tagged[0] = 0x02; // 0x02 = Mic PCM Audio
+            // 0x02 = live outgoing call audio (the audio that goes out with
+            // the Lucy 2.5 video). When conversion is running, the server
+            // routes this through RVC instead of sending it to the call.
+            tagged[0] = 0x02;
             tagged.set(new Uint8Array(pcm16.buffer), 1);
             this.ws.send(tagged);
           };
@@ -1967,6 +2374,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   };
 
   function handleMediaWsMessage(msg){
+    if (msg.type === 'vc_status') {
+      // Live conversion state for the call that is up right now.
+      LucyVoice.applyStatus(msg);
+      return;
+    }
     if (msg.type === 'wa_status' || msg.type === 'wa_qr' || msg.type === 'wa_pairing_code') {
       fetchConnectedStatus();
     }
@@ -2559,6 +2971,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
 
     $('prepLucyStatus').textContent = state.falKeySet ? 'Lucy 2.5: Ready to stream' : 'Lucy 2.5: Ready (using camera)';
+
+    // Check whether the backend can convert the outgoing voice (voice-changer
+    // reachable + an RVC model loaded) so the prep screen can say so up front
+    // instead of only finding out at call time. Lucy 2.5 only - see the
+    // renderVoiceUi() call in each source button's handler.
+    LucyVoice.refresh();
   }
 
   $('prepEnableMicBtn')?.addEventListener('click', async () => {
@@ -2591,7 +3009,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   // -------------------------------------------------------------
   let gaClient = null, gaCalls = null;
 
-  async function startGreenApiCall(target){
+  async function startGreenApiCall(target, options = {}){
+    const voiceConversion = !!options.voiceConversion;
     const cfgRes = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/call-config', {
       headers: { ...(await authHeader()) },
     });
@@ -2631,7 +3050,35 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       if (remoteVid && event.detail?.stream) remoteVid.srcObject = event.detail.stream;
     });
 
-    await gaCalls.startAudioBridge();
+    // With RVC conversion on, the SDK's getUserMedia({audio:true}) call inside
+    // startAudioBridge() is answered with the converted-voice track, so the
+    // audio this call transmits is the converted voice (see
+    // VoiceConversionPlayout.interceptMicrophone for why that is the only
+    // hook the SDK offers - its RTCPeerConnection is private).
+    let restoreMic = null;
+    if (voiceConversion) {
+      await VoiceConversionPlayout.start();
+      // Only hijack if converted audio is genuinely arriving. Handing the SDK
+      // a silent track would leave the call mute, and a mute is much worse
+      // than falling back to the real microphone.
+      const gotConvertedAudio = await VoiceConversionPlayout.waitForAudio(5000);
+      if (gotConvertedAudio) {
+        restoreMic = VoiceConversionPlayout.interceptMicrophone();
+      } else {
+        console.warn('[VoiceConversion] no converted audio arrived in time - sending the real microphone instead');
+        LucyVoice.error = 'No converted audio arrived - using your own voice';
+        LucyVoice.renderVoiceUi();
+        LucyVoice.renderCallBadge();
+      }
+    }
+
+    try {
+      await gaCalls.startAudioBridge();
+    } finally {
+      // Undone immediately: nothing else on this page should ever be handed
+      // the converted track when it asks for the microphone.
+      if (restoreMic) restoreMic();
+    }
     await gaClient.dial(target);
   }
 
@@ -2679,11 +3126,25 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to place call');
 
+      // Realtime RVC conversion of the outgoing Lucy 2.5 audio - Lucy source
+      // only, and only if the backend can actually convert (a model is loaded
+      // and voice-changer is reachable). Started before the call's audio path
+      // is established so the very first spoken frame is converted.
+      const useVoiceConversion = selectedCallSource === 'lucy' && LucyVoice.enabled && LucyVoice.canEnable();
+      if (useVoiceConversion) {
+        await LucyVoice.startForCall(currentSocialPlatform);
+        // Only WhatsApp needs the converted audio back in this browser: its
+        // call audio is a browser-side WebRTC track. Telegram's outgoing
+        // audio is written into the call server-side, so building a playout
+        // here would just be a silent graph doing nothing.
+        if (currentSocialPlatform === 'whatsapp') await VoiceConversionPlayout.start();
+      }
+
       if (currentSocialPlatform === 'whatsapp') {
         // Actual ringing happens here, client-side - the backend POST
         // above only recorded call state/history, it never rings anyone
         // for WhatsApp (see server.mjs's call route comments).
-        await startGreenApiCall(selectedSocialContact.target);
+        await startGreenApiCall(selectedSocialContact.target, { voiceConversion: useVoiceConversion });
       }
 
       // Transition to Active Call UI
@@ -2724,8 +3185,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         $('socialCallTimer').textContent = `${m}:${s}`;
       }, 1000);
 
-      // Start streaming outgoing video frames & mic audio through adapter
-      SocialCallMediaAdapter.startStreaming(activeSocialSource().getStream(), socialMicStream);
+      // Start streaming outgoing video frames & live audio through adapter.
+      // With conversion on, that audio is fed through RVC on the server: for
+      // Telegram it becomes the audio track written alongside the Lucy video,
+      // for WhatsApp it comes back here (channel 0x04) as the call's outgoing
+      // audio track.
+      SocialCallMediaAdapter.startStreaming(activeSocialSource().getStream(), socialMicStream, {
+        voiceConversion: useVoiceConversion,
+      });
 
     } catch(err) {
       console.error('[placeSocialCall] error:', err);
@@ -2835,6 +3302,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     if (currentSocialPlatform === 'whatsapp') endGreenApiCall();
     $('socialCallScreen').classList.remove('active');
 
+    // Stop converting audio for this call BEFORE closing the media socket,
+    // so the stop goes out on the live connection instead of re-opening one
+    // just to say goodbye. The converter keeps an RVC model resident, so it
+    // must not outlive the call it was started for.
+    LucyVoice.stopForCall();
+    VoiceConversionPlayout.stop();
     // Tear down media pipelines
     SocialCallMediaAdapter.stop();
     LiveSwapMediaSource.stop();

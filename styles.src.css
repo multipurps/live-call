@@ -718,6 +718,24 @@
     transition:background 0.15s;
   }
   .miniActionBtn:active{ background:rgba(255,255,255,0.18); }
+
+  /* Realtime RVC voice conversion toggle (call prep screen, Lucy 2.5 only).
+     Deliberately dimmed rather than hidden when it can't be used, so it is
+     obvious the feature exists but is unavailable right now. */
+  .vcSwitch{
+    flex:none; width:46px; height:28px; border-radius:100px; padding:0;
+    background:rgba(255,255,255,0.10); position:relative; cursor:pointer;
+    transition:background 0.18s;
+  }
+  .vcSwitch span{
+    position:absolute; top:3px; left:3px; width:22px; height:22px;
+    border-radius:50%; background:rgba(255,255,255,0.75);
+    transition:transform 0.18s, background 0.18s;
+  }
+  .vcSwitch.on{ background:rgba(37,211,102,0.55); }
+  .vcSwitch.on span{ transform:translateX(18px); background:#fff; }
+  .vcSwitch:disabled{ opacity:0.35; cursor:not-allowed; }
+
   .connectTabBtn{
     flex:1; padding:8px 12px; font-size:12.5px; font-weight:600; border-radius:10px;
     background:rgba(255,255,255,0.05); color:var(--dim); transition:all 0.15s;

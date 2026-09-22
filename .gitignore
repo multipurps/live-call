@@ -8,4 +8,12 @@ server/madeline_bridge/php-bin/
 server/madeline_bridge/vendor/
 server/madeline_bridge/session.madeline*
 
+# w-okada/voice-changer checkout + RVC models, if installed inside the repo
+# (the default location is outside it - see server/voicechanger/setup.sh)
+server/voicechanger/voice-changer/
+server/voicechanger/model_dir/
+server/voicechanger/*.pth
+server/voicechanger/*.onnx
+server/voicechanger/*.index
+
 
