@@ -82,9 +82,46 @@ function supabaseRequest(string $method, string $path, ?array $body = null): ?ar
     return is_array($decoded) ? $decoded : null;
 }
 
+// MadelineProto (v8+) stores its session as a DIRECTORY - safe.php shards,
+// not one flat file - despite $SESSION_FILE looking like a plain filename.
+// file_get_contents()/file_put_contents() on it fail with EISDIR. It must
+// be archived before it can travel through Supabase as a base64 text blob.
+function zipDirectoryToFile(string $dir, string $zipPath): bool {
+    if (!class_exists('ZipArchive')) {
+        error_log('[MadelineBridge] ZipArchive extension not available - cannot archive session directory');
+        return false;
+    }
+    $zip = new ZipArchive();
+    if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) return false;
+    $base = realpath($dir);
+    $files = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::LEAVES_ONLY
+    );
+    foreach ($files as $file) {
+        if ($file->isDir()) continue;
+        $relativePath = substr($file->getRealPath(), strlen($base) + 1);
+        $zip->addFile($file->getRealPath(), $relativePath);
+    }
+    return $zip->close();
+}
+
+function unzipFileToDirectory(string $zipPath, string $destDir): bool {
+    if (!class_exists('ZipArchive')) {
+        error_log('[MadelineBridge] ZipArchive extension not available - cannot restore session directory');
+        return false;
+    }
+    $zip = new ZipArchive();
+    if ($zip->open($zipPath) !== true) return false;
+    if (!is_dir($destDir)) mkdir($destDir, 0777, true);
+    $ok = $zip->extractTo($destDir);
+    $zip->close();
+    return $ok;
+}
+
 function restoreSessionFromSupabase(): void {
     global $SESSION_FILE;
-    if (file_exists($SESSION_FILE)) return; // local file already present, nothing to restore
+    if (file_exists($SESSION_FILE)) return; // local session already present, nothing to restore
     $rows = supabaseRequest('GET', '/rest/v1/app_settings?select=madeline_session_blob&id=eq.true');
     if (!$rows || empty($rows[0]['madeline_session_blob'])) {
         error_log('[MadelineBridge] No saved session in Supabase - fresh login required');
@@ -95,14 +132,28 @@ function restoreSessionFromSupabase(): void {
         error_log('[MadelineBridge] Saved session blob failed to base64-decode');
         return;
     }
-    file_put_contents($SESSION_FILE, $decoded);
-    error_log('[MadelineBridge] Restored session from Supabase');
+    // The blob is a zip of the session DIRECTORY (see saveSessionToSupabase) -
+    // extract it back into place rather than writing it as one flat file.
+    $tmpZip = sys_get_temp_dir() . '/madeline_session_' . uniqid() . '.zip';
+    file_put_contents($tmpZip, $decoded);
+    $ok = unzipFileToDirectory($tmpZip, $SESSION_FILE);
+    @unlink($tmpZip);
+    error_log($ok ? '[MadelineBridge] Restored session from Supabase' : '[MadelineBridge] Failed to extract restored session zip');
 }
 
 function saveSessionToSupabase(): void {
     global $SESSION_FILE;
     if (!file_exists($SESSION_FILE)) return;
-    $blob = base64_encode(file_get_contents($SESSION_FILE));
+    $tmpZip = sys_get_temp_dir() . '/madeline_session_' . uniqid() . '.zip';
+    // is_dir(), not file_get_contents() - see the comment above zipDirectoryToFile.
+    $zipped = is_dir($SESSION_FILE) ? zipDirectoryToFile($SESSION_FILE, $tmpZip) : copy($SESSION_FILE, $tmpZip);
+    if (!$zipped) {
+        error_log('[MadelineBridge] Failed to archive session - skipping save');
+        @unlink($tmpZip);
+        return;
+    }
+    $blob = base64_encode(file_get_contents($tmpZip));
+    @unlink($tmpZip);
     $result = supabaseRequest('POST', '/rest/v1/app_settings', [
         'id' => true,
         'madeline_session_blob' => $blob,
