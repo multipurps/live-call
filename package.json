@@ -7,7 +7,7 @@
     "start": "node server.mjs",
     "voice-changer:setup": "bash server/voicechanger/setup.sh",
     "voice-changer:start": "bash server/voicechanger/start.sh",
-    "postinstall": "pip3 install -r requirements.txt || pip install -r requirements.txt || echo 'WARNING: could not install Python deps for the Telegram bridge - see requirements.txt'; bash server/madeline_bridge/build.sh"
+    "postinstall": "pip3 install -r requirements.txt || pip install -r requirements.txt || echo 'WARNING: could not install Python deps for the Telegram bridge - see requirements.txt'; bash server/madeline_bridge/build.sh; bash server/whatsapp_rust_bridge/build.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

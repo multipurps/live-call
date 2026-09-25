@@ -1780,6 +1780,53 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   let selectedCallSource = 'lucy'; // 'lucy' | 'avatar' - which outgoing source to use for a social call
   let socialMicStream = null;
   let socialCallDurationTimer = null;
+  // The WhatsApp engine that carried the CURRENT call, fixed at placement
+  // time so a mid-call engine switch cannot send the teardown to the wrong
+  // backend. null for Telegram.
+  let currentCallEngine = null;
+
+  // -----------------------------------------------------------------
+  // WHATSAPP ENGINE SELECTION (provider layer)
+  //
+  // Two backends, chosen explicitly, never switched behind the user's back:
+  //
+  //   'greenapi'     - the original integration. Green API REST for
+  //                    status/contacts/QR plus their browser calls SDK, which
+  //                    is AUDIO ONLY (confirmed from that library's source).
+  //   'whatsapp-rust'- server/whatsapp_rust_bridge: a real WhatsApp client
+  //                    built on github.com/oxidezap/whatsapp-rust. It places
+  //                    the actual 1:1 call and takes the live avatar output
+  //                    as its VideoSource/AudioSource, so this is the only
+  //                    engine that can carry real WhatsApp VIDEO.
+  //
+  // The default stays 'greenapi' so nobody who was already calling through
+  // Green API gets silently moved onto a different backend and a different
+  // WhatsApp session.
+  // -----------------------------------------------------------------
+  const WA_ENGINES = {
+    greenapi: {
+      label: 'Green API',
+      hint: 'Your existing Green API account. Calls are audio-only — their calls SDK has no video support.',
+    },
+    'whatsapp-rust': {
+      label: 'whatsapp-rust',
+      hint: 'Real WhatsApp calling, including 1:1 VIDEO with your live avatar as the outgoing video. Separate session from Green API.',
+    },
+  };
+  const WA_ENGINE_KEY = 'livecall.whatsappEngine';
+
+  function waEngine(){
+    const saved = (() => { try { return localStorage.getItem(WA_ENGINE_KEY); } catch(e){ return null; } })();
+    return (saved && WA_ENGINES[saved]) ? saved : 'greenapi';
+  }
+  function setWaEngine(engine){
+    if (!WA_ENGINES[engine]) return;
+    try { localStorage.setItem(WA_ENGINE_KEY, engine); } catch(e){}
+    renderWaEngineUi();
+  }
+  function waEngineLabel(engine){
+    return (WA_ENGINES[engine || waEngine()] || WA_ENGINES.greenapi).label;
+  }
 
   // Headless Anam avatar source for social calls - mirrors LiveSwapMediaSource's
   // shape (getStream/getVideoElement/start/stop) so the rest of the social-call
@@ -2242,22 +2289,180 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     return socialMicStream;
   }
 
-  // Binary frames from the call backend: 0x04 = converted (RVC) outgoing
-  // audio, streamed back so a browser-side call can send it.
-  function handleMediaWsBinary(arrayBuffer){
-    const view = new Uint8Array(arrayBuffer);
-    if (view.length < 2 || view[0] !== 0x04) return;
-    const n = Math.floor((view.length - 1) / 2);
-    if (n < 1) return;
-    const dv = new DataView(view.buffer, view.byteOffset, view.byteLength);
-    const pcm = new Int16Array(n);
-    for (let i = 0; i < n; i++) pcm[i] = dv.getInt16(1 + i * 2, true);
-    VoiceConversionPlayout.onConverted(pcm);
-  }
+  // Binary frame dispatch lives in the single unified handleMediaWsBinary
+  // below (length-prefixed, channel-tagged) - see its definition for the
+  // full channel list, including 0x06 for RVC-converted outgoing audio.
 
   let socialCallStartedAt = null;
   let socialMuted = false;
   let waStatusPollTimer = null;
+
+  // =============================================================================
+  // AvatarMediaSource - the one interface both avatars satisfy.
+  //
+  //   AvatarMediaSource
+  //     +-- LiveSwapMediaSource   (Lucy 2.5 / Fal-Decart realtime face swap)
+  //     +-- SocialAnamSource      (Anam AI avatar)
+  //            |
+  //            v  activeSocialSource()
+  //     SocialCallMediaAdapter  (JPEG @15fps + 16k mono PCM, channel-tagged)
+  //            |
+  //            v  /api/social-call/media  ->  server.mjs
+  //            +-- WhatsApp: whatsapp-rust bridge -> H.264 VideoSource /
+  //                960-sample AudioSource -> REAL WhatsApp 1:1 call
+  //            +-- Telegram: tgcalls/madeline pipes (unchanged)
+  //
+  // Contract (both implementations already had exactly this shape - nothing
+  // was rewritten, it is just named so a third avatar can be added without
+  // touching any call code):
+  //   getStream()       -> MediaStream of the live avatar output (or null)
+  //   getVideoElement() -> the <video> currently rendering that output
+  //   isActive()        -> boolean
+  //   start(options)    -> async, begins producing live output
+  //   stop()            -> tears the avatar down
+  //
+  // The adapter below reads getVideoElement() and never asks which avatar it
+  // is, which is why Lucy and Anam both feed the WhatsApp Rust backend with
+  // no provider-specific branch anywhere.
+  // =============================================================================
+
+  // -------------------------------------------------------------
+  // Peer media coming BACK from a whatsapp-rust call: decoded and played
+  // here. Audio is decoded trivially (raw 16 kHz mono PCM); video uses
+  // WebCodecs when the browser has it, and is simply counted when it does
+  // not - never faked either way.
+  // -------------------------------------------------------------
+  const WaRustPeerMedia = {
+    audioCtx: null,
+    nextPlayTime: 0,
+    decoder: null,
+    canvas: null,
+    c2d: null,
+    audioFrames: 0,
+    videoAus: 0,
+    ensureAudioCtx(){
+      if (!this.audioCtx) {
+        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        this.nextPlayTime = 0;
+      }
+      if (this.audioCtx.state === 'suspended') this.audioCtx.resume().catch(() => {});
+      return this.audioCtx;
+    },
+    playPcm(int16){
+      try {
+        const ctx = this.ensureAudioCtx();
+        const f32 = new Float32Array(int16.length);
+        for (let i = 0; i < int16.length; i++) f32[i] = int16[i] / 0x8000;
+        const buf = ctx.createBuffer(1, f32.length, 16000);
+        buf.copyToChannel(f32, 0);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(ctx.destination);
+        // Schedule back-to-back with a small lead so gaps between WS frames
+        // don't turn into clicks; re-sync if we fall behind the clock.
+        const now = ctx.currentTime;
+        if (this.nextPlayTime < now) this.nextPlayTime = now + 0.06;
+        src.start(this.nextPlayTime);
+        this.nextPlayTime += buf.duration;
+        this.audioFrames++;
+      } catch(e) { /* no audio device / autoplay blocked - not worth killing a call */ }
+    },
+    ensureDecoder(){
+      if (this.decoder) return this.decoder;
+      if (typeof window.VideoDecoder === 'undefined') return null;
+      this.canvas = $('socialPeerCanvas');
+      if (!this.canvas) return null;
+      this.c2d = this.canvas.getContext('2d');
+      try {
+        this.decoder = new window.VideoDecoder({
+          output: (frame) => {
+            try {
+              if (this.canvas.width !== frame.displayWidth || this.canvas.height !== frame.displayHeight) {
+                this.canvas.width = frame.displayWidth;
+                this.canvas.height = frame.displayHeight;
+              }
+              this.c2d.drawImage(frame, 0, 0);
+              this.canvas.style.display = 'block';
+            } catch(e) {}
+            try { frame.close(); } catch(e) {}
+          },
+          error: () => { this.decoder = null; },
+        });
+        // H.264 Constrained Baseline - the profile WhatsApp calls use, and
+        // the one the Rust bridge's encoder is configured for.
+        this.decoder.configure({ codec: 'avc1.42E01F', optimizeForLatency: true });
+      } catch(e) {
+        this.decoder = null;
+      }
+      return this.decoder;
+    },
+    pushH264(bytes){
+      this.videoAus++;
+      const dec = this.ensureDecoder();
+      if (!dec || dec.state !== 'configured') return;
+      try {
+        dec.decode(new window.EncodedVideoChunk({
+          type: annexBHasKeyframe(bytes) ? 'key' : 'delta',
+          timestamp: Math.round(performance.now() * 1000),
+          data: bytes,
+        }));
+      } catch(e) {}
+    },
+    stop(){
+      if (this.decoder) { try { this.decoder.close(); } catch(e){} this.decoder = null; }
+      if (this.audioCtx) { try { this.audioCtx.close(); } catch(e){} this.audioCtx = null; }
+      this.nextPlayTime = 0;
+      this.audioFrames = 0;
+      this.videoAus = 0;
+      const canvas = $('socialPeerCanvas');
+      if (canvas) canvas.style.display = 'none';
+    },
+  };
+
+  // Annex-B start-code scan for an IDR/SPS NAL, so the decoder is told which
+  // access units are safe to start from.
+  function annexBHasKeyframe(bytes){
+    const v = new Uint8Array(bytes);
+    for (let i = 0; i + 4 < v.length; i++) {
+      const is4 = v[i] === 0 && v[i+1] === 0 && v[i+2] === 0 && v[i+3] === 1;
+      const is3 = !is4 && v[i] === 0 && v[i+1] === 0 && v[i+2] === 1;
+      if (!is4 && !is3) continue;
+      const nalType = v[i + (is4 ? 4 : 3)] & 0x1f;
+      if (nalType === 5 || nalType === 7) return true; // IDR slice, or SPS
+    }
+    return false;
+  }
+
+  // Peer media frames arriving from the whatsapp-rust bridge (0x03 PCM,
+  // 0x04 H.264), and this call's own outgoing audio after RVC conversion
+  // (0x06 - see broadcastConvertedAudio in server.mjs). One channel-tagged,
+  // length-prefixed frame format for both directions/purposes so there is
+  // exactly one binary parser on this socket.
+  function handleMediaWsBinary(data){
+    const bytes = new Uint8Array(data instanceof ArrayBuffer ? data : data.buffer || data);
+    if (bytes.length < 5) return;
+    const channel = bytes[0];
+    const len = (bytes[1] << 24) | (bytes[2] << 16) | (bytes[3] << 8) | bytes[4];
+    if (bytes.length < 5 + len) return;
+    const payload = bytes.subarray(5, 5 + len);
+
+    if (channel === 0x03) {
+      // Peer PCM: s16le mono @ 16 kHz. `payload` is a view at an ODD byte
+      // offset (the 5-byte frame header), and Int16Array requires an even
+      // one, so copy into a fresh buffer rather than aliasing.
+      const copy = payload.slice();
+      const samples = new Int16Array(copy.buffer, 0, Math.floor(copy.length / 2));
+      WaRustPeerMedia.playPcm(samples);
+    } else if (channel === 0x04) {
+      // Peer H.264 access unit (Annex-B).
+      WaRustPeerMedia.pushH264(payload.slice().buffer);
+    } else if (channel === 0x06) {
+      // This call's own outgoing audio, after RVC conversion - s16le mono.
+      const copy = payload.slice();
+      const samples = new Int16Array(copy.buffer, 0, Math.floor(copy.length / 2));
+      VoiceConversionPlayout.onConverted(samples);
+    }
+  }
 
   // Social Call Media Adapter
   // Pipes real-time Lucy 2.5 Live Swap video frames and mic audio to social call bridge
@@ -2273,11 +2478,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       this.ws = new WebSocket(SOCIAL_CALL_API_BASE.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:') + '/api/social-call/media');
       this.ws.binaryType = 'arraybuffer';
       this.ws.onmessage = (e) => {
-        // Converted (RVC) audio for browser-side calls arrives as binary,
-        // tagged 0x04 - see handleMediaWsBinary.
-        if (e.data instanceof ArrayBuffer) { handleMediaWsBinary(e.data); return; }
-        if (typeof Blob !== 'undefined' && e.data instanceof Blob) {
-          e.data.arrayBuffer().then(handleMediaWsBinary).catch(() => {});
+        // Binary frames are tagged, length-prefixed frames (see
+        // handleMediaWsBinary): 0x03 = peer PCM audio, 0x04 = peer H.264
+        // access unit (both from the whatsapp-rust bridge's return media),
+        // 0x06 = this call's own outgoing audio after RVC conversion. Text
+        // frames are the JSON control/call_state messages as before.
+        if (typeof e.data !== 'string') {
+          handleMediaWsBinary(e.data);
           return;
         }
         try {
@@ -2474,44 +2681,55 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   // Connected Accounts in Profile
   // -------------------------------------------------------------
   async function fetchConnectedStatus(){
+    renderWaEngineUi();
+    // Only the SELECTED engine is polled. The Green API route resolves the
+    // caller's own Green API credentials, which a whatsapp-rust user has no
+    // reason to be asked for; the whatsapp-rust bridge is a different session
+    // entirely. Switching engines re-polls, nothing switches on its own.
+    if (waEngine() === 'whatsapp-rust') {
+      await fetchWaRustStatus();
+    }
+
     try {
       const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/status', { headers: { ...(await authHeader()) } });
       if (!res.ok) return;
       const data = await res.json();
 
-      // WhatsApp status
-      const wa = data.whatsapp || {};
-      const waStatusEl = $('whatsappAccountStatus');
-      const waBadgeEl = $('whatsappAccountBadge');
-      if (wa.connected && wa.user) {
-        if (waStatusEl) waStatusEl.textContent = `Connected as ${wa.user.phone ? '+' + wa.user.phone : wa.user.name}`;
-        if (waBadgeEl) {
-          waBadgeEl.textContent = 'Connected';
-          waBadgeEl.classList.add('connected');
-        }
-        $('waDetailStatus').textContent = 'Connected';
-        $('waDetailSub').textContent = `Linked phone: +${wa.user.phone || ''}`;
-        $('waConnectedNumber').textContent = `+${wa.user.phone || ''} (${wa.user.name || 'WhatsApp User'})`;
-        $('waNotConnectedView').style.display = 'none';
-        $('waConnectedView').style.display = 'block';
-        $('choiceWhatsAppSubtitle').textContent = `Connected (+${wa.user.phone || ''})`;
-      } else {
-        if (waStatusEl) waStatusEl.textContent = 'Not connected';
-        if (waBadgeEl) {
-          waBadgeEl.textContent = 'Connect';
-          waBadgeEl.classList.remove('connected');
-        }
-        $('waDetailStatus').textContent = wa.status === 'scan_qr' ? 'Waiting for scan…' : 'Disconnected';
-        $('waDetailSub').textContent = 'Scan QR code or use pairing code';
-        $('waNotConnectedView').style.display = 'block';
-        $('waConnectedView').style.display = 'none';
-        $('choiceWhatsAppSubtitle').textContent = 'Live Video Call with Lucy 2.5';
+      if (waEngine() !== 'whatsapp-rust') {
+        // WhatsApp status
+        const wa = data.whatsapp || {};
+        const waStatusEl = $('whatsappAccountStatus');
+        const waBadgeEl = $('whatsappAccountBadge');
+        if (wa.connected && wa.user) {
+          if (waStatusEl) waStatusEl.textContent = `Connected as ${wa.user.phone ? '+' + wa.user.phone : wa.user.name}`;
+          if (waBadgeEl) {
+            waBadgeEl.textContent = 'Connected';
+            waBadgeEl.classList.add('connected');
+          }
+          $('waDetailStatus').textContent = 'Connected';
+          $('waDetailSub').textContent = `Linked phone: +${wa.user.phone || ''}`;
+          $('waConnectedNumber').textContent = `+${wa.user.phone || ''} (${wa.user.name || 'WhatsApp User'})`;
+          $('waNotConnectedView').style.display = 'none';
+          $('waConnectedView').style.display = 'block';
+          $('choiceWhatsAppSubtitle').textContent = `Connected (+${wa.user.phone || ''})`;
+        } else {
+          if (waStatusEl) waStatusEl.textContent = 'Not connected';
+          if (waBadgeEl) {
+            waBadgeEl.textContent = 'Connect';
+            waBadgeEl.classList.remove('connected');
+          }
+          $('waDetailStatus').textContent = wa.status === 'scan_qr' ? 'Waiting for scan…' : 'Disconnected';
+          $('waDetailSub').textContent = 'Scan QR code or use pairing code';
+          $('waNotConnectedView').style.display = 'block';
+          $('waConnectedView').style.display = 'none';
+          $('choiceWhatsAppSubtitle').textContent = 'Live Video Call with Lucy 2.5';
 
-        if (wa.qr) {
-          const img = $('waQrImg');
-          if (img) { img.src = wa.qr; img.style.display = 'block'; }
-          const load = $('waQrLoading');
-          if (load) load.style.display = 'none';
+          if (wa.qr) {
+            const img = $('waQrImg');
+            if (img) { img.src = wa.qr; img.style.display = 'block'; }
+            const load = $('waQrLoading');
+            if (load) load.style.display = 'none';
+          }
         }
       }
 
@@ -2551,14 +2769,40 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   }
 
   // Profile -> WhatsApp
-  $('openWhatsAppConnect')?.addEventListener('click', async () => {
-    $('whatsappConnectScreen').classList.add('active');
+  // Fetches the pairing QR for whichever engine is selected, and paints it.
+  // Green API's route returns a ready-made data URL; the whatsapp-rust route
+  // renders the bridge's raw QR payload into one server-side (see server.mjs).
+  async function refreshWaQr(){
+    const engine = waEngine();
+    const endpoint = engine === 'whatsapp-rust'
+      ? '/api/social-call/whatsapp-rust/qr'
+      : '/api/social-call/whatsapp/qr';
+    const load = $('waQrLoading'), img = $('waQrImg');
+    if (load) { load.style.display = 'block'; load.textContent = 'Generating QR code…'; }
+    if (img) img.style.display = 'none';
     try {
-      const r = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/qr', {
+      const r = await fetch(SOCIAL_CALL_API_BASE + endpoint, {
         method: 'POST',
         headers: { ...(await authHeader()) },
       });
-      await r.json();
+      const data = await r.json().catch(() => ({}));
+      if (data.dataUrl && img) {
+        img.src = data.dataUrl;
+        img.style.display = 'block';
+        if (load) load.style.display = 'none';
+      } else if (load) {
+        load.textContent = data.error || (data.alreadyAuthorized ? 'Already linked on this engine.' : 'No QR available yet — still connecting.');
+      }
+    } catch(e) {
+      if (load) load.textContent = e.message;
+    }
+  }
+
+  $('openWhatsAppConnect')?.addEventListener('click', async () => {
+    $('whatsappConnectScreen').classList.add('active');
+    renderWaEngineUi();
+    try {
+      await refreshWaQr();
       await fetchConnectedStatus();
     } catch(e) {
       showErrorToast ? showErrorToast(e.message) : console.warn('[WhatsApp QR] note:', e.message);
@@ -2572,22 +2816,29 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   });
 
   $('waRefreshQrBtn')?.addEventListener('click', async () => {
-    $('waQrLoading').style.display = 'block';
-    $('waQrLoading').textContent = 'Refreshing QR code…';
-    $('waQrImg').style.display = 'none';
-    await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/qr', {
-      method: 'POST',
-      headers: { ...(await authHeader()) },
-    });
+    await refreshWaQr();
     await fetchConnectedStatus();
   });
 
   $('waDisconnectBtn')?.addEventListener('click', async () => {
-    if (!confirm('Disconnect WhatsApp?')) return;
-    await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/disconnect', {
-      method: 'POST',
-      headers: { ...(await authHeader()) },
-    });
+    // Only the SELECTED engine is disconnected - the two keep independent
+    // WhatsApp sessions, so unlinking one must not touch the other.
+    const engine = waEngine();
+    if (!confirm(`Disconnect WhatsApp from ${waEngineLabel(engine)}?`)) return;
+    const endpoint = engine === 'whatsapp-rust'
+      ? '/api/social-call/whatsapp-rust/logout'
+      : '/api/social-call/whatsapp/disconnect';
+    try {
+      const r = await fetch(SOCIAL_CALL_API_BASE + endpoint, {
+        method: 'POST',
+        headers: { ...(await authHeader()) },
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok && data.error) throw new Error(data.error);
+    } catch(e) {
+      const sub = $('waDetailSub');
+      if (sub) sub.textContent = e.message;
+    }
     await fetchConnectedStatus();
   });
 
@@ -2822,7 +3073,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     const container = $('contactsListContainer');
     container.innerHTML = '<div style="text-align:center; padding:30px; color:var(--dim); font-size:13px;">Loading contacts…</div>';
 
-    const endpoint = platform === 'whatsapp' ? (SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/contacts') : (SOCIAL_CALL_API_BASE + '/api/social-call/telegram/contacts');
+    // WhatsApp contacts come from whichever engine is selected: Green API's
+    // own getContacts, or the whatsapp-rust bridge's directory (numbers the
+    // user has added/called, each validated against WhatsApp for real when
+    // it is saved - see handle_contacts_post in whatsapp_rust_bridge).
+    const endpoint = platform === 'telegram'
+      ? (SOCIAL_CALL_API_BASE + '/api/social-call/telegram/contacts')
+      : (SOCIAL_CALL_API_BASE + (waEngine() === 'whatsapp-rust'
+          ? '/api/social-call/whatsapp-rust/contacts'
+          : '/api/social-call/whatsapp/contacts'));
     try {
       const res = await fetch(endpoint, { headers: { ...(await authHeader()) } });
       const data = await res.json();
@@ -2938,6 +3197,38 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       return;
     }
 
+    if (currentSocialPlatform === 'whatsapp' && waEngine() === 'whatsapp-rust') {
+      // Don't ring a number that isn't on WhatsApp: the bridge asks WhatsApp
+      // (Client::contacts().is_on_whatsapp) and returns the real answer.
+      const btn = $('callDirectBtn');
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Checking…';
+      try {
+        const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp-rust/lookup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: typed }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || 'WhatsApp lookup failed');
+        if (!data.exists) throw new Error(`${typed} is not registered on WhatsApp`);
+        const addRes = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp-rust/contacts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: data.phone, name: data.name }),
+        }).catch(() => null);
+        if (addRes) { allLoadedContacts = (await addRes.json().catch(() => null)) ? allLoadedContacts : allLoadedContacts; }
+        selectContactForCall({ name: data.name || typed, target: data.phone || typed });
+      } catch(e) {
+        alert(e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+      return;
+    }
+
     selectContactForCall({ name: typed, target: typed });
   });
 
@@ -2977,6 +3268,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     // instead of only finding out at call time. Lucy 2.5 only - see the
     // renderVoiceUi() call in each source button's handler.
     LucyVoice.refresh();
+    // Shows/hides the WhatsApp engine row and labels whichever engine this
+    // call will actually go out on.
+    renderWaEngineUi();
   }
 
   $('prepEnableMicBtn')?.addEventListener('click', async () => {
@@ -3088,6 +3382,145 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     gaCalls = null;
   }
 
+  // -------------------------------------------------------------
+  // whatsapp-rust engine UI - engine tabs, phone-number pair-code linking,
+  // and status. Everything goes through server.mjs's /whatsapp-rust/*
+  // routes; the Rust bridge keeps the WhatsApp session/identity keys on the
+  // server and only ever returns connection state, the linked number, a QR
+  // payload and a pairing code. No session material reaches this file.
+  // -------------------------------------------------------------
+  function renderWaEngineUi(){
+    const engine = waEngine();
+    const green = $('waEngineGreenBtn'), rust = $('waEngineRustBtn');
+    if (green) green.classList.toggle('active', engine === 'greenapi');
+    if (rust) rust.classList.toggle('active', engine === 'whatsapp-rust');
+    const hint = $('waEngineHint');
+    if (hint) hint.textContent = WA_ENGINES[engine].hint;
+
+    // The pair-code box belongs to whatsapp-rust only - Green API links by QR.
+    const pairBox = $('waPairCodeBox');
+    if (pairBox) pairBox.style.display = engine === 'whatsapp-rust' ? 'block' : 'none';
+    const qrBox = $('waQrBox');
+    if (qrBox) qrBox.style.display = 'block';
+
+    // Prep-screen summary (WhatsApp calls only).
+    const card = $('prepEngineCard');
+    if (card) card.style.display = currentSocialPlatform === 'whatsapp' ? 'flex' : 'none';
+    const val = $('prepEngineValue');
+    if (val) val.textContent = waEngineLabel(engine);
+    const prepHint = $('prepEngineHint');
+    if (prepHint) {
+      prepHint.textContent = engine === 'whatsapp-rust'
+        ? 'Real WhatsApp call — outgoing video is your live avatar'
+        : 'Audio-only call via the Green API calls SDK';
+    }
+  }
+
+  $('waEngineGreenBtn')?.addEventListener('click', () => {
+    setWaEngine('greenapi');
+    fetchConnectedStatus();
+  });
+  $('waEngineRustBtn')?.addEventListener('click', () => {
+    setWaEngine('whatsapp-rust');
+    fetchWaRustStatus();
+  });
+  $('prepEngineSwitchBtn')?.addEventListener('click', () => {
+    setWaEngine(waEngine() === 'greenapi' ? 'whatsapp-rust' : 'greenapi');
+  });
+
+  // whatsapp-rust connection status. Separate from fetchConnectedStatus()
+  // so a user on Green API never triggers a request to a bridge they are not
+  // using (and so a missing bridge binary shows as its own honest error).
+  async function fetchWaRustStatus(){
+    const detail = $('waDetailStatus'), sub = $('waDetailSub');
+    try {
+      const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp-rust/status');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `whatsapp-rust bridge unreachable (HTTP ${res.status})`);
+
+      const statusEl = $('whatsappAccountStatus');
+      const badgeEl = $('whatsappAccountBadge');
+
+      if (data.connected) {
+        const phone = data.user?.phone ? '+' + data.user.phone : (data.user?.name || 'WhatsApp');
+        if (statusEl) statusEl.textContent = `Connected as ${phone} (whatsapp-rust)`;
+        if (badgeEl) { badgeEl.textContent = 'Connected'; badgeEl.classList.add('connected'); }
+        if (detail) detail.textContent = 'Connected';
+        if (sub) sub.textContent = `${phone} · whatsapp-rust · video calling available`;
+        $('waConnectedNumber').textContent = `${phone}${data.user?.name ? ' (' + data.user.name + ')' : ''}`;
+        $('waConnectedPushName').textContent = 'Ready for outgoing audio + video calls';
+        $('waNotConnectedView').style.display = 'none';
+        $('waConnectedView').style.display = 'block';
+        const choiceSub = $('choiceWhatsAppSubtitle');
+        if (choiceSub) choiceSub.textContent = `Connected (${phone}) — video ready`;
+        return data;
+      }
+
+      if (statusEl) statusEl.textContent = 'Not connected (whatsapp-rust)';
+      if (badgeEl) { badgeEl.textContent = 'Connect'; badgeEl.classList.remove('connected'); }
+      if (detail) detail.textContent = data.status === 'scan_qr' ? 'Waiting for a scan…'
+        : data.status === 'awaiting_pair' ? 'Waiting for the code…'
+        : data.status === 'reconnecting' ? 'Reconnecting…'
+        : data.status === 'logged_out' ? 'Unlinked from WhatsApp'
+        : 'Disconnected';
+      if (sub) sub.textContent = data.error || 'Scan the QR, or link with a phone-number code below';
+      $('waNotConnectedView').style.display = 'block';
+      $('waConnectedView').style.display = 'none';
+
+      if (data.pairingCode) showWaPairCode(data.pairingCode);
+      if (data.error) {
+        const hint = $('waPairCodeHint');
+        if (hint) hint.textContent = data.error;
+      }
+      return data;
+    } catch(e){
+      if (detail) detail.textContent = 'whatsapp-rust unavailable';
+      if (sub) sub.textContent = e.message;
+      return null;
+    }
+  }
+
+  function showWaPairCode(code){
+    const display = $('waPairCodeDisplay');
+    if (!display) return;
+    // WhatsApp's own 8-character code, formatted the way the phone shows it.
+    display.textContent = code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code;
+    display.style.display = 'block';
+    const hint = $('waPairCodeHint');
+    if (hint) hint.textContent = 'Enter this on your phone: WhatsApp > Linked Devices > Link a Device > Link with phone number instead';
+  }
+
+  $('waPairCodeBtn')?.addEventListener('click', async () => {
+    const btn = $('waPairCodeBtn');
+    const phone = ($('waPairPhoneInput')?.value || '').replace(/[^\d]/g, '');
+    const hint = $('waPairCodeHint');
+    if (phone.length < 7) {
+      if (hint) hint.textContent = 'Enter your full WhatsApp number with country code, digits only.';
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Requesting…';
+    if (hint) hint.textContent = '';
+    try {
+      // Real pair-code linking: whatsapp-rust's Client::pair_with_code, via
+      // server.mjs. The code returned is WhatsApp's own - nothing is invented
+      // client-side, and a rejection is shown verbatim.
+      const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp-rust/pair-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.code) throw new Error(data.error || 'Pair code request failed');
+      showWaPairCode(data.code);
+    } catch(e){
+      if (hint) hint.textContent = e.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Get my 8-digit code';
+    }
+  });
+
   async function placeSocialCall(){
     const prepBtn = $('prepStartCallActionBtn');
     prepBtn.disabled = true;
@@ -3112,6 +3545,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       // Step 4 & 5 (NO tab switch needed).
       await activeSocialSource().start({ forSocialCall: true });
 
+      // Which WhatsApp engine carries this call. Captured NOW rather than
+      // read again at hangup, so switching engines mid-call can't send the
+      // teardown to the wrong backend.
+      currentCallEngine = currentSocialPlatform === 'whatsapp' ? waEngine() : null;
+
       // Place call on backend bridge
       const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/call', {
         method: 'POST',
@@ -3120,6 +3558,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
           platform: currentSocialPlatform,
           target: selectedSocialContact.target,
           name: selectedSocialContact.name,
+          // Explicit provider selection. Omitted for Telegram; for WhatsApp
+          // 'greenapi' reproduces exactly the previous behaviour.
+          provider: currentCallEngine || undefined,
+          video: true,
+          // Which avatar is feeding the outgoing video - recorded by the
+          // bridge for the call record. The bytes themselves are the same
+          // either way (see AvatarMediaSource below).
+          source: selectedCallSource === 'avatar' ? 'anam' : 'lucy',
         }),
       });
 
@@ -3140,12 +3586,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         if (currentSocialPlatform === 'whatsapp') await VoiceConversionPlayout.start();
       }
 
-      if (currentSocialPlatform === 'whatsapp') {
+      if (currentSocialPlatform === 'whatsapp' && currentCallEngine === 'greenapi') {
         // Actual ringing happens here, client-side - the backend POST
         // above only recorded call state/history, it never rings anyone
         // for WhatsApp (see server.mjs's call route comments).
         await startGreenApiCall(selectedSocialContact.target, { voiceConversion: useVoiceConversion });
       }
+      // On whatsapp-rust the REAL call was already placed server-side by the
+      // Rust bridge (offer + relay + E2E media). Nothing to dial here: the
+      // media WebSocket that starts below is what feeds the avatar into it.
 
       // Transition to Active Call UI
       $('callPrepModal').classList.remove('active');
@@ -3171,7 +3620,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       const rawName = selectedSocialContact.name || selectedSocialContact.target;
       const cleanName = rawName.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').trim();
       $('socialCallTargetName').textContent = cleanName || rawName;
-      $('socialCallPlatformPill').innerHTML = `<span>${currentSocialPlatform === 'whatsapp' ? 'WhatsApp' : 'Telegram'}</span>`;
+      const platformLabel = currentSocialPlatform === 'whatsapp'
+        ? `WhatsApp${currentCallEngine === 'whatsapp-rust' ? ' · rust' : ''}`
+        : 'Telegram';
+      $('socialCallPlatformPill').innerHTML = `<span>${platformLabel}</span>`;
       $('socialCallPlatformPill').className = `pill ${currentSocialPlatform}`;
       $('socialCallStatusLabel').textContent = 'Ringing…';
       $('socialCallTimer').textContent = '00:00';
@@ -3208,6 +3660,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     socialMuted = !socialMuted;
     if (socialMicStream) {
       socialMicStream.getAudioTracks().forEach(t => t.enabled = !socialMuted);
+    }
+    // On whatsapp-rust, muting is also announced to the peer: the bridge calls
+    // CallHandle::set_muted, which switches the encoder to DTX comfort noise
+    // and sends WhatsApp's <mute_v2>, so the other phone shows the mute too.
+    // Fire-and-forget: the local track is already muted either way, and a
+    // failed announcement must not leave the button looking wrong.
+    if (currentCallEngine === 'whatsapp-rust') {
+      fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp-rust/mute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ muted: socialMuted }),
+      }).catch(() => {});
     }
     $('socialMuteBtn').classList.toggle('muted', socialMuted);
     $('socialMuteBtn').innerHTML = socialMuted
@@ -3299,7 +3763,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   async function endSocialCall(){
     clearInterval(socialCallDurationTimer);
     stopRingback();
-    if (currentSocialPlatform === 'whatsapp') endGreenApiCall();
+    // Only the engine that carried THIS call is torn down: Green API's
+    // browser client hangs up client-side, whatsapp-rust hangs up server-side
+    // through /api/social-call/hangup further down.
+    if (currentSocialPlatform === 'whatsapp' && currentCallEngine === 'greenapi') endGreenApiCall();
     $('socialCallScreen').classList.remove('active');
 
     // Stop converting audio for this call BEFORE closing the media socket,
@@ -3312,6 +3779,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     SocialCallMediaAdapter.stop();
     LiveSwapMediaSource.stop();
     SocialAnamSource.stop();
+    WaRustPeerMedia.stop();
+    currentCallEngine = null;
 
     if (socialMicStream) {
       socialMicStream.getTracks().forEach(t => t.stop());
