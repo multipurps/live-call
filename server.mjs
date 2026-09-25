@@ -1,12 +1,38 @@
 import http from 'http';
 import fs from 'fs';
+import net from 'net';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawn, execFileSync } from 'child_process';
 import { WebSocketServer, WebSocket } from 'ws';
+import QRCode from 'qrcode';
 import * as greenApi from './server/greenapi_bridge.mjs';
 import { getServiceClient, getAuthedUserId } from './lib/supabaseAdmin.js';
 import { getProviderKey } from './lib/keys.js';
+
+// ---------------------------------------------------------------------
+// WhatsApp backends. There are exactly TWO and they never touch each other:
+//
+//   1. GREEN-API  - server/greenapi_bridge.mjs (REST) + the Green API calls
+//      SDK in the browser. Per-user credentials from Supabase Vault. This is
+//      the original integration and it is UNCHANGED: every /whatsapp/* route
+//      below still resolves the caller's own Green API credentials, and
+//      /api/social-call/call still defaults to it for platform=whatsapp.
+//
+//   2. whatsapp-rust - server/whatsapp_rust_bridge, a Rust process built on
+//      github.com/oxidezap/whatsapp-rust that places REAL 1:1 WhatsApp calls
+//      (signaling + DTLS/SCTP relay + E2E media) and exposes the crate's
+//      AudioSource/VideoSource ports, which is how the live Lucy 2.5 / Anam
+//      avatar output reaches an actual WhatsApp video call. Green API has no
+//      video calling at all (its SDK is audio-only), so this is the only path
+//      that can carry video.
+//
+// Selection is explicit: the frontend sends `provider` on the call request
+// and hits the /whatsapp-rust/* routes only when the user chose that engine.
+// Nothing here silently switches a Green API user onto whatsapp-rust, and
+// whatsapp-rust neither reads nor needs Green API credentials.
+// ---------------------------------------------------------------------
+export const WHATSAPP_PROVIDERS = ['greenapi', 'whatsapp-rust'];
 
 // Resolves the AUTHENTICATED CALLER's own Green API credentials - every
 // user brings their own Green API account (their own WhatsApp number),
@@ -31,6 +57,10 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 const HOST = '0.0.0.0';
 const TG_PORT = parseInt(process.env.TG_PORT || '5050', 10);
 const TGCALLS_PORT = parseInt(process.env.TGCALLS_PORT || '5051', 10);
+// whatsapp-rust bridge: HTTP control plane + a raw TCP socket carrying the
+// live avatar media in and the peer's media out.
+const WA_RUST_PORT = parseInt(process.env.WA_RUST_PORT || '5060', 10);
+const WA_RUST_MEDIA_PORT = parseInt(process.env.WA_RUST_MEDIA_PORT || '5061', 10);
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -290,6 +320,202 @@ function closeTgCallsPipes() {
   try { fs.unlinkSync(TGCALLS_VIDEO_PIPE); } catch (e) {}
 }
 
+// ---------------------------------------------------------------
+// whatsapp-rust bridge (server/whatsapp_rust_bridge) - a SEPARATE WhatsApp
+// backend that places real 1:1 WhatsApp calls via the whatsapp-rust crate.
+//
+// Process management mirrors startTgCallsBridge(), including its restart
+// policy: this process talks to WhatsApp's real servers, so a crash loop is
+// a rate-limit risk, not just noise - exponential backoff with a hard cap.
+// ---------------------------------------------------------------
+const WA_RUST_BIN = path.join(
+  __dirname, 'server', 'whatsapp_rust_bridge', 'target', 'release', 'whatsapp_rust_bridge',
+);
+const WA_RUST_DATA_DIR = path.join(__dirname, 'data', 'wa_rust_session');
+
+let waRustProcess = null;
+let waRustRestartCount = 0;
+
+function startWhatsAppRustBridge() {
+  if (!fs.existsSync(WA_RUST_BIN)) {
+    // Honest degradation, not a fake: without the compiled binary the
+    // /whatsapp-rust/* routes answer with a real "bridge unavailable" error
+    // and the app keeps using Green API exactly as before.
+    console.warn('[Server] whatsapp_rust_bridge binary not found - real whatsapp-rust calling unavailable (Green API WhatsApp calling unaffected). Run server/whatsapp_rust_bridge/build.sh.');
+    return;
+  }
+
+  console.log('[Server] Launching whatsapp_rust_bridge (real 1:1 WhatsApp calling via whatsapp-rust) daemon...');
+  try {
+    fs.mkdirSync(WA_RUST_DATA_DIR, { recursive: true });
+  } catch (e) {}
+
+  waRustProcess = spawn(WA_RUST_BIN, [], {
+    env: {
+      ...process.env,
+      WA_RUST_PORT: String(WA_RUST_PORT),
+      WA_RUST_MEDIA_PORT: String(WA_RUST_MEDIA_PORT),
+      WA_RUST_DATA_DIR,
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  waRustProcess.stdout.on('data', (d) => console.log(`[WaRust] ${d.toString().trim()}`));
+  waRustProcess.stderr.on('data', (d) => console.error(`[WaRust] ${d.toString().trim()}`));
+
+  waRustProcess.on('exit', (code) => {
+    waRustProcess = null;
+    waRustRestartCount += 1;
+    if (waRustRestartCount > 5) {
+      console.error(`[WaRust] Exited with code ${code} for the ${waRustRestartCount}th time - giving up auto-restart to avoid hammering WhatsApp's servers. Fix the underlying issue and redeploy.`);
+      return;
+    }
+    const backoffMs = Math.min(30000 * waRustRestartCount, 300000);
+    console.warn(`[WaRust] Exited with code ${code}, restarting in ${backoffMs / 1000}s (attempt ${waRustRestartCount}/5)...`);
+    setTimeout(startWhatsAppRustBridge, backoffMs);
+  });
+}
+
+// Helper to proxy HTTP requests to the whatsapp-rust bridge.
+async function proxyToWaRust(endpoint, method = 'GET', body = null) {
+  const url = `http://127.0.0.1:${WA_RUST_PORT}${endpoint}`;
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const res = await fetch(url, opts);
+    return { status: res.status, data: await res.json().catch(() => ({})) };
+  } catch (err) {
+    return {
+      status: 502,
+      data: { error: `whatsapp-rust bridge unavailable: ${err.message}. Is server/whatsapp_rust_bridge built?` },
+    };
+  }
+}
+
+// ---------------------------------------------------------------
+// whatsapp-rust media socket.
+//
+// The browser already sends the live avatar output to /api/social-call/media
+// as tagged frames (0x01 = 480x640 JPEG @ ~15fps, 0x02 = 16kHz mono s16le
+// PCM) - see SocialCallMediaAdapter in app.src.js. For a whatsapp-rust call
+// those same bytes are relayed here, framed as [u8 channel][u32 BE length]
+// [payload], and the bridge turns them into whatsapp-rust's VideoSource
+// (H.264 Annex-B via ffmpeg) and AudioSource (960-sample i16 frames).
+//
+// The return direction uses the same socket with channels 0x03 (peer PCM),
+// 0x04 (peer H.264 access unit) and 0x05 (UTF-8 JSON telemetry), which are
+// forwarded straight back out to the browser over the existing media
+// WebSocket - no new transport, no new UI surface.
+// ---------------------------------------------------------------
+const WA_RUST_CH = {
+  VIDEO_IN: 0x01,
+  AUDIO_IN: 0x02,
+  AUDIO_OUT: 0x03,
+  H264_OUT: 0x04,
+  TELEMETRY_OUT: 0x05,
+};
+
+let waRustMediaSocket = null;
+let waRustMediaBuffer = Buffer.alloc(0);
+
+function waRustFrame(channel, payload) {
+  const header = Buffer.alloc(5);
+  header.writeUInt8(channel, 0);
+  header.writeUInt32BE(payload.length, 1);
+  return Buffer.concat([header, payload]);
+}
+
+function openWaRustMediaSocket() {
+  if (waRustMediaSocket && !waRustMediaSocket.destroyed) return;
+  waRustMediaBuffer = Buffer.alloc(0);
+
+  const socket = net.createConnection({ host: '127.0.0.1', port: WA_RUST_MEDIA_PORT });
+  waRustMediaSocket = socket;
+  socket.on('connect', () => console.log('[WaRustMedia] media socket connected to bridge'));
+  socket.on('error', (e) => {
+    // Not fatal to the call: the bridge just won't be receiving avatar media
+    // until a reconnect. Say so rather than pretending media is flowing.
+    console.warn('[WaRustMedia] media socket error:', e.message);
+  });
+  socket.on('close', () => {
+    if (waRustMediaSocket === socket) waRustMediaSocket = null;
+  });
+
+  socket.on('data', (chunk) => {
+    waRustMediaBuffer = Buffer.concat([waRustMediaBuffer, chunk]);
+    // One or more complete [channel][u32 BE len][payload] frames.
+    while (waRustMediaBuffer.length >= 5) {
+      const channel = waRustMediaBuffer[0];
+      const len = waRustMediaBuffer.readUInt32BE(1);
+      if (waRustMediaBuffer.length < 5 + len) break;
+      const payload = waRustMediaBuffer.subarray(5, 5 + len);
+      waRustMediaBuffer = waRustMediaBuffer.subarray(5 + len);
+
+      if (channel === WA_RUST_CH.TELEMETRY_OUT) {
+        try {
+          broadcastMediaEvent(JSON.parse(payload.toString('utf8')));
+        } catch (e) { /* malformed telemetry is not worth killing a call over */ }
+      } else {
+        // Peer audio / peer H.264: forward the tagged frame verbatim so the
+        // browser can play the audio and (with WebCodecs) decode the video.
+        broadcastMediaBinary(waRustFrame(channel, payload));
+      }
+    }
+  });
+}
+
+function closeWaRustMediaSocket() {
+  if (waRustMediaSocket) {
+    try { waRustMediaSocket.destroy(); } catch (e) {}
+    waRustMediaSocket = null;
+  }
+  waRustMediaBuffer = Buffer.alloc(0);
+}
+
+function waRustMediaSend(channel, payload) {
+  if (waRustMediaSocket && !waRustMediaSocket.destroyed && waRustMediaSocket.writable) {
+    waRustMediaSocket.write(waRustFrame(channel, payload));
+  }
+}
+
+// ---------------------------------------------------------------
+// Polls the whatsapp-rust bridge's real call state and forwards changes to
+// the frontend as the same call_state broadcasts the tgcalls path uses, so
+// the existing Active Call UI (status label, ringback, end-on-failure) needs
+// no provider-specific handling.
+// ---------------------------------------------------------------
+let waRustStatePoll = null;
+
+function startWaRustStatePoll() {
+  stopWaRustStatePoll();
+  let lastState = null;
+  waRustStatePoll = setInterval(async () => {
+    const r = await proxyToWaRust('/call/state', 'GET');
+    const state = r.data?.state;
+    if (!state || state === lastState) return;
+    lastState = state;
+
+    if (state === 'connected') {
+      if (currentActiveCall) currentActiveCall.status = 'connected';
+      broadcastMediaEvent({ type: 'call_state', state: 'connected', call: currentActiveCall });
+    } else if (state === 'ringing' || state === 'connecting') {
+      broadcastMediaEvent({ type: 'call_state', state, call: currentActiveCall });
+    } else if (state === 'failed') {
+      // The bridge's own reason (relay rejected the allocate, media setup
+      // failed, ffmpeg missing, WhatsApp rejected the offer, ...).
+      broadcastMediaEvent({ type: 'call_state', state: 'failed', error: r.data?.error, call: currentActiveCall });
+      stopWaRustStatePoll();
+    } else if (state === 'ended') {
+      broadcastMediaEvent({ type: 'call_state', state: 'ended', call: currentActiveCall });
+      stopWaRustStatePoll();
+    }
+  }, 1000);
+}
+
+function stopWaRustStatePoll() {
+  if (waRustStatePoll) { clearInterval(waRustStatePoll); waRustStatePoll = null; }
+}
+
 // Parse request body
 function parseBody(req) {
   return new Promise((resolve) => {
@@ -407,6 +633,74 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ---------------------------------------------------------------
+    // whatsapp-rust backend (SEPARATE from Green API above).
+    //
+    // No Green API credentials are read anywhere in this block, and no
+    // whatsapp-rust session material is returned to the browser: the Rust
+    // bridge keeps the WhatsApp identity keys and session in its own local
+    // SQLite store and only ever reports connection state, the linked
+    // number, a QR payload and a pairing code - the same two artifacts
+    // Green API's own /qr route already hands the browser.
+    // ---------------------------------------------------------------
+    // The Rust bridge reports the raw QR *payload* string (that is what
+    // whatsapp-rust's Event::PairingQrCode carries). The browser needs an
+    // image, so render it here with the `qrcode` dependency this project
+    // already ships - no new dependency, and no third-party QR service.
+    if (subpath === 'whatsapp-rust/qr' && (req.method === 'GET' || req.method === 'POST')) {
+      try {
+        const r = await proxyToWaRust('/status', 'GET');
+        if (r.status !== 200) {
+          res.writeHead(r.status === 502 ? 503 : r.status, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify(r.data));
+        }
+        if (r.data?.connected) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ alreadyAuthorized: true }));
+        }
+        if (!r.data?.qr) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: r.data?.error || 'No pairing QR available yet - the bridge is still connecting.' }));
+        }
+        const dataUrl = await QRCode.toDataURL(r.data.qr, { margin: 2, width: 260 });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ qr: r.data.qr, dataUrl }));
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: e.message }));
+      }
+    }
+
+    if (subpath.startsWith('whatsapp-rust/')) {
+      const waRustPath = subpath.replace('whatsapp-rust/', '');
+      let endpoint = null;
+      let method = req.method;
+      let body = null;
+
+      switch (waRustPath) {
+        case 'status': endpoint = '/status'; method = 'GET'; break;
+        case 'pair-code': endpoint = '/pair/code'; method = 'POST'; break;
+        case 'pair-cancel': endpoint = '/pair/cancel'; method = 'POST'; break;
+        case 'logout': endpoint = '/logout'; method = 'POST'; break;
+        case 'contacts': endpoint = '/contacts'; break; // GET list / POST add
+        case 'lookup': endpoint = '/lookup'; method = 'POST'; break;
+        case 'call-state': endpoint = '/call/state'; method = 'GET'; break;
+        case 'mute': endpoint = '/call/mute'; method = 'POST'; break;
+        case 'hangup': endpoint = '/hangup'; method = 'POST'; break;
+        default: endpoint = null;
+      }
+
+      if (!endpoint) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: `Unknown whatsapp-rust route: ${waRustPath}` }));
+      }
+
+      if (method === 'POST') body = await parseBody(req);
+      const r = await proxyToWaRust(endpoint, method, body);
+      res.writeHead(r.status === 502 ? 503 : r.status, { 'Content-Type': 'application/json' });
+      return res.end(JSON.stringify(r.data));
+    }
+
+    // ---------------------------------------------------------------
     // Real Telegram P2P calling auth (tgcalls_bridge) - a SEPARATE session
     // from the regular Telegram connection above. That connection (via
     // telegram_bridge.py/Pyrogram) is used for status/contacts and can't
@@ -486,15 +780,31 @@ const server = http.createServer(async (req, res) => {
     // Unified call placing endpoint
     if (subpath === 'call' && req.method === 'POST') {
       const body = await parseBody(req);
-      const { platform, target, name, avatarUrl } = body;
+      const { platform, target, name, avatarUrl, provider, video, source } = body;
       if (!platform || !target) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ error: 'Missing platform or target' }));
       }
 
+      // WhatsApp engine selection. `provider` is honoured ONLY for WhatsApp
+      // and defaults to 'greenapi', so an existing caller that sends no
+      // provider keeps the exact behaviour it had before this existed.
+      // Anything unrecognised is rejected rather than silently re-routed:
+      // dialling through a backend the user did not choose is the one thing
+      // this selection layer must never do.
+      let waProvider = null;
+      if (platform === 'whatsapp') {
+        waProvider = provider || 'greenapi';
+        if (!WHATSAPP_PROVIDERS.includes(waProvider)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: `Unknown WhatsApp provider "${waProvider}" - expected one of ${WHATSAPP_PROVIDERS.join(', ')}` }));
+        }
+      }
+
       currentActiveCall = {
         id: 'call_' + Date.now(),
         platform,
+        provider: waProvider,
         target,
         name: name || target,
         avatarUrl,
@@ -503,7 +813,31 @@ const server = http.createServer(async (req, res) => {
       };
 
       try {
-        if (platform === 'whatsapp') {
+        if (platform === 'whatsapp' && waProvider === 'whatsapp-rust') {
+          // REAL WhatsApp call, placed server-side by the whatsapp-rust
+          // bridge (offer + relay + E2E media), with the live avatar feed
+          // injected as the call's VideoSource/AudioSource.
+          //
+          // Open the media socket BEFORE placing the call so avatar frames
+          // are already flowing by the time the call's media plane attaches.
+          openWaRustMediaSocket();
+          const r = await proxyToWaRust('/call', 'POST', {
+            target,
+            name: name || target,
+            // video defaults on: this backend exists to make real WhatsApp
+            // video calls. `video:false` is a deliberate audio-only call.
+            video: video !== false,
+            source: source || 'lucy',
+          });
+          if (r.status !== 200 || r.data?.error) {
+            // Surface the bridge's real reason - an unauthenticated session,
+            // a missing ffmpeg for video, a rejected offer. Never report a
+            // call that did not actually go out as started.
+            throw new Error(r.data?.error || `whatsapp-rust call failed (HTTP ${r.status})`);
+          }
+          currentActiveCall.callId = r.data?.callId || null;
+          startWaRustStatePoll();
+        } else if (platform === 'whatsapp') {
           // No server-side call placement with Green API - the frontend
           // dials directly via the Green API calls SDK (client-side
           // WebRTC). This endpoint just records call state/history for
@@ -534,6 +868,8 @@ const server = http.createServer(async (req, res) => {
         currentActiveCall = null;
         closeTgCallsPipes();
         stopTgCallsStatePoll();
+        closeWaRustMediaSocket();
+        stopWaRustStatePoll();
         res.writeHead(500, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ error: err.message }));
       }
@@ -549,7 +885,14 @@ const server = http.createServer(async (req, res) => {
           endedAt: Date.now(),
         });
 
-        if (currentActiveCall.platform === 'whatsapp') {
+        if (currentActiveCall.platform === 'whatsapp' && currentActiveCall.provider === 'whatsapp-rust') {
+          // Real hangup: the bridge sends WhatsApp's <terminate> to the peer
+          // and aborts its own media task, then we drop the media socket so
+          // no avatar frames keep being encoded for a dead call.
+          await proxyToWaRust('/hangup', 'POST').catch(() => {});
+          closeWaRustMediaSocket();
+          stopWaRustStatePoll();
+        } else if (currentActiveCall.platform === 'whatsapp') {
           // No server-side hangup call for Green API - the frontend calls
           // gaClient.hangUp() directly (client-side), same as placing the
           // call itself.
@@ -688,6 +1031,18 @@ function broadcastMediaEvent(msg) {
   }
 }
 
+// Binary counterpart: the whatsapp-rust bridge's return media (peer PCM audio
+// on channel 0x03, peer H.264 access units on 0x04) is forwarded to the
+// browser as the same tagged binary frames the browser already sends upward,
+// so one framing rule covers both directions of the same socket.
+function broadcastMediaBinary(buffer) {
+  for (const ws of mediaClients) {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(buffer);
+    }
+  }
+}
+
 // Forward WhatsApp call events to connected WebSocket clients
 // No persistent WhatsApp connection/event emitter to listen to anymore -
 // greenapi_bridge.mjs is stateless, per-user, and per-request (see above).
@@ -722,11 +1077,27 @@ wss.on('connection', (ws) => {
         if (currentActiveCall?.platform === 'telegram' && tgCallsVideoStream && !tgCallsVideoStream.destroyed) {
           tgCallsVideoStream.write(payload);
         }
+        // For a whatsapp-rust call the same live avatar frame becomes the
+        // call's VideoSource: the bridge pipes it through ffmpeg into H.264
+        // Annex-B access units, because whatsapp-rust transports only
+        // pre-encoded video and never touches pixels. Identical bytes and
+        // tag, so Lucy 2.5 and Anam both feed it with no provider-specific
+        // branch on the avatar side.
+        if (currentActiveCall?.provider === 'whatsapp-rust') {
+          waRustMediaSend(WA_RUST_CH.VIDEO_IN, payload);
+        }
       } else if (channel === 0x02) {
         // Microphone PCM audio chunk (expected raw s16le, 48kHz stereo -
         // matching tgcalls_bridge's audio_raw-style MediaDescription).
         if (currentActiveCall?.platform === 'telegram' && tgCallsAudioStream && !tgCallsAudioStream.destroyed) {
           tgCallsAudioStream.write(payload);
+        }
+        // whatsapp-rust's AudioSource wants 60ms / 960-sample MONO i16 frames,
+        // which the bridge assembles out of this stream (the frontend's
+        // ScriptProcessor emits 2048-sample chunks, so this cannot be
+        // forwarded frame-for-frame).
+        if (currentActiveCall?.provider === 'whatsapp-rust') {
+          waRustMediaSend(WA_RUST_CH.AUDIO_IN, payload);
         }
       }
     } else {
@@ -752,6 +1123,9 @@ server.listen(PORT, HOST, () => {
   console.log(`Live Call server running at http://${HOST}:${PORT}`);
   startTelegramBridge();
   startTgCallsBridge();
-  // No global WhatsApp init needed anymore - greenapi_bridge.mjs is
-  // stateless and per-user (see requireGreenApiCreds above).
+  // No global WhatsApp init needed for GREEN-API anymore - greenapi_bridge.mjs
+  // is stateless and per-user (see requireGreenApiCreds above). The
+  // whatsapp-rust bridge IS a long-lived process, because a WhatsApp session
+  // is a persistent linked device, not a per-request REST call.
+  startWhatsAppRustBridge();
 });

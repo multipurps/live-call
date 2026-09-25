@@ -1,0 +1,43 @@
+[package]
+name = "whatsapp_rust_bridge"
+version = "0.1.0"
+edition = "2021"
+# whatsapp-rust 0.7 is edition 2024 with `rust-version = "1.94"` in its own
+# workspace manifest, so this crate needs a toolchain that can build a 1.94
+# dependency even though our own code is plain edition 2021. build.sh checks
+# for that and installs one via rustup when the host toolchain is older.
+publish = false
+
+# ---------------------------------------------------------------------------
+# The dependency is the REAL whatsapp-rust library (oxidezap/whatsapp-rust),
+# pinned to the revision this bridge was written and API-checked against.
+# A git pin rather than a bare "0.7" on purpose: the VoIP surface
+# (`client.voip().call(..).audio(..).video(..).start()`, `VideoSource`,
+# `AudioSource`, `PairCodeOptions`) moved between releases, and a silent
+# `cargo update` across a pre-1.0 boundary would break a live call at
+# compile time on the next deploy instead of at review time.
+#
+# Features (verified against the crate's own [features] table):
+#   voip-relay-native  -> voip-runtime -> voip-control + voip-engine-wacore,
+#                         plus the UDP/DTLS/SCTP relay dialler. Without it a
+#                         call builds and then fails at "no relay media
+#                         transport".
+#   voip-mlow          -> the built-in MLOW codec adapter, which is what makes
+#                         the plain-PCM `.audio(mic, speaker)` path work
+#                         (16 kHz mono i16, 960-sample / 60 ms frames).
+# The crate's DEFAULT features already carry sqlite-storage (+ bundled
+# SQLite), tokio-transport, tokio-runtime, tokio-native, ureq-client and
+# signal, so none of those need naming here.
+# ---------------------------------------------------------------------------
+[dependencies]
+whatsapp-rust = { git = "https://github.com/oxidezap/whatsapp-rust", rev = "f7468ae2920a2b0aedbd0848cf121de56a07f93c", features = [
+    "voip-relay-native",
+    "voip-mlow",
+] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tiny_http = "0.12"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"

@@ -511,6 +511,22 @@
         <div class="subScreenTitle">WhatsApp Connection</div>
       </div>
       <div class="subScreenBody">
+        <!-- WhatsApp ENGINE selection. Two independent backends, chosen
+             explicitly and never switched silently:
+               Green API    - the original integration (REST + their browser
+                              calls SDK). Audio only.
+               whatsapp-rust- server/whatsapp_rust_bridge, a real WhatsApp
+                              client that places 1:1 audio AND video calls and
+                              takes the live Lucy 2.5 / Anam avatar output as
+                              its video source.
+             They keep separate sessions; picking one does not log the other
+             out or read its credentials. -->
+        <div class="connectTabs" style="margin-bottom:10px;">
+          <button class="connectTabBtn active" id="waEngineGreenBtn">Green API</button>
+          <button class="connectTabBtn" id="waEngineRustBtn">whatsapp-rust</button>
+        </div>
+        <p class="hint" id="waEngineHint" style="margin:0 0 16px; text-align:left;"></p>
+
         <div class="profileCard" style="margin-bottom:16px;">
           <div class="cIcon" style="color:#25D366;">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2ZM12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.59 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19.01L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 14.99 3.8 13.47 3.8 11.91C3.81 7.37 7.5 3.67 12.05 3.67ZM8.79 7.34C8.61 7.34 8.31 7.41 8.06 7.68C7.81 7.95 7.11 8.61 7.11 9.94C7.11 11.27 8.08 12.55 8.22 12.73C8.36 12.92 10.13 15.65 12.84 16.82C13.49 17.1 13.99 17.26 14.38 17.39C15.04 17.6 15.64 17.57 16.11 17.5C16.64 17.42 17.73 16.84 17.96 16.19C18.19 15.54 18.19 14.99 18.12 14.87C18.05 14.75 17.87 14.68 17.6 14.54C17.33 14.4 16 13.75 15.75 13.66C15.5 13.57 15.32 13.52 15.14 13.79C14.96 14.07 14.44 14.68 14.28 14.87C14.13 15.05 13.97 15.07 13.7 14.94C13.43 14.8 12.56 14.52 11.53 13.6C10.73 12.89 10.19 12.01 10.03 11.74C9.87 11.46 10.01 11.31 10.15 11.18C10.27 11.06 10.42 10.86 10.56 10.7C10.7 10.54 10.75 10.42 10.84 10.24C10.93 10.06 10.89 9.9 10.82 9.76C10.75 9.62 10.2 8.27 9.97 7.73C9.75 7.2 9.53 7.28 9.36 7.27C9.21 7.26 9.01 7.26 8.81 7.26L8.79 7.34Z"/></svg>
@@ -531,6 +547,21 @@
               <div id="waQrLoading" style="color:var(--dim); font-size:13px;">Generating QR code…</div>
             </div>
             <button class="saveKeyBtn" id="waRefreshQrBtn" style="margin-top:14px; width:auto; padding:8px 20px; font-size:13px;">Refresh QR Code</button>
+          </div>
+
+          <!-- Phone-number pair-code linking. Only shown on the whatsapp-rust
+               engine: it calls whatsapp-rust's real Client::pair_with_code
+               through server.mjs, which returns WhatsApp's own 8-character
+               code (or WhatsApp's own rejection, shown verbatim). QR stays
+               available at the same time - whichever the user completes
+               first wins. Nothing is generated client-side. -->
+          <div id="waPairCodeBox" class="connectBox" style="display:none; margin-top:14px; padding:20px 16px; background:var(--coffee-light); border:1px solid var(--line); border-radius:16px; text-align:center;">
+            <div style="font-size:14px; font-weight:600; margin-bottom:6px;">Or link with a phone-number code</div>
+            <p style="font-size:12.5px; color:var(--dim); margin-bottom:12px;">On your phone: WhatsApp &gt; Settings &gt; Linked Devices &gt; Link a Device &gt; <b>Link with phone number instead</b></p>
+            <input class="plainInput" id="waPairPhoneInput" type="tel" autocomplete="tel" placeholder="Your WhatsApp number, e.g. 15551234567" />
+            <button class="saveKeyBtn" id="waPairCodeBtn" style="width:100%; margin:12px 0 0;">Get my 8-digit code</button>
+            <div id="waPairCodeDisplay" style="display:none; margin-top:16px; font-size:28px; font-weight:800; letter-spacing:5px; color:#fff; font-variant-numeric:tabular-nums;">--------</div>
+            <p class="hint" id="waPairCodeHint" style="margin-top:10px;"></p>
           </div>
         </div>
 
@@ -713,6 +744,21 @@
           <button class="connectTabBtn" id="prepSourceAvatarBtn">Avatar</button>
         </div>
 
+        <!-- WhatsApp engine, shown only for WhatsApp calls. Defaults to
+             whatever the user picked in Profile -> WhatsApp Connection, so
+             this is a shortcut, not a second source of truth. -->
+        <div class="profileCard" id="prepEngineCard" style="margin-bottom:10px; display:none;">
+          <div class="cIcon">
+            <svg viewBox="0 0 24 24" fill="none" width="20" height="20" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+          </div>
+          <div class="cBody">
+            <div class="cLabel">WhatsApp engine</div>
+            <div class="cValue" id="prepEngineValue">Green API</div>
+            <div class="hint" id="prepEngineHint" style="margin-top:2px;"></div>
+          </div>
+          <button class="miniActionBtn" id="prepEngineSwitchBtn">Switch</button>
+        </div>
+
         <div class="prepPreviewBox" style="position:relative; width:100%; aspect-ratio:4/3; max-height:280px; background:#000; border-radius:18px; overflow:hidden; border:1px solid var(--line); margin-bottom:18px; display:flex; align-items:center; justify-content:center;">
           <video id="prepAvatarPreview" autoplay playsinline muted style="width:100%; height:100%; object-fit:cover; display:none;"></video>
           <div id="prepAvatarPlaceholder" style="text-align:center; padding:20px;">
@@ -877,6 +923,14 @@
   <video id="socialRemoteVideo" class="socialPipMain" autoplay playsinline></video>
   <video id="socialSelfVideo" class="socialPipThumb" autoplay playsinline muted></video>
 
+  <!-- Inbound video from a whatsapp-rust call: the peer's H.264 access units
+       arrive over the media WebSocket and are decoded with WebCodecs onto
+       this canvas. Stays hidden until real frames decode, so an audio-only
+       call (or a browser without WebCodecs) shows exactly what it did before.
+       pointer-events:none keeps it out of the existing tap-to-swap / drag
+       layout handling on the two video elements above. -->
+  <canvas id="socialPeerCanvas" width="180" height="240" style="display:none; position:absolute; right:16px; bottom:calc(env(safe-area-inset-bottom, 0px) + 118px); width:120px; border-radius:12px; border:1px solid rgba(255,255,255,0.28); box-shadow:0 8px 24px rgba(0,0,0,0.45); z-index:3; pointer-events:none;"></canvas>
+
   <div id="socialCallTop">
     <div id="socialCallHeaderInfo" style="text-align:left;">
       <div id="socialCallTargetName" style="font-size:14px; font-weight:700; color:#fff;">Contact</div>
@@ -886,6 +940,11 @@
         <span id="socialCallTimer" style="font-size:11.5px; font-weight:600; color:#fff;">00:00</span>
       </div>
     </div>
+    <!-- Was referenced by placeSocialCall() in app.src.js but missing from
+         this markup, which threw a TypeError mid-transition and left every
+         social call stuck on the prep screen. Restored here, and it now also
+         names the WhatsApp engine actually carrying the call. -->
+    <div class="pill" id="socialCallPlatformPill"><span>WhatsApp</span></div>
   </div>
 
   <div id="socialCallIdle" style="display:none; position:absolute; inset:0; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:32px;">
