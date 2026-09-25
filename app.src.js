@@ -3416,12 +3416,24 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
   }
 
+  // Switching tabs must drop whatever QR is currently painted - it belongs
+  // to the OTHER engine's session and was otherwise left on screen (and its
+  // <img> src still pointing at the old engine's data URL) until this fired.
+  function resetWaQrImage(){
+    const img = $('waQrImg'), load = $('waQrLoading');
+    if (img) { img.removeAttribute('src'); img.style.display = 'none'; }
+    if (load) { load.style.display = 'block'; load.textContent = 'Generating QR code…'; }
+  }
   $('waEngineGreenBtn')?.addEventListener('click', () => {
     setWaEngine('greenapi');
+    resetWaQrImage();
+    refreshWaQr();
     fetchConnectedStatus();
   });
   $('waEngineRustBtn')?.addEventListener('click', () => {
     setWaEngine('whatsapp-rust');
+    resetWaQrImage();
+    refreshWaQr();
     fetchWaRustStatus();
   });
   $('prepEngineSwitchBtn')?.addEventListener('click', () => {
