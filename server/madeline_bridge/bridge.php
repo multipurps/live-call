@@ -163,6 +163,18 @@ function saveSessionToSupabase(): void {
     }
 }
 
+function rrmdir(string $path): void {
+    if (is_dir($path) && !is_link($path)) {
+        foreach (scandir($path) as $item) {
+            if ($item === '.' || $item === '..') continue;
+            rrmdir($path . DIRECTORY_SEPARATOR . $item);
+        }
+        @rmdir($path);
+    } else {
+        @unlink($path);
+    }
+}
+
 function clearSavedSession(): void {
     supabaseRequest('PATCH', '/rest/v1/app_settings?id=eq.true', ['madeline_session_blob' => null]);
 }
@@ -247,8 +259,26 @@ $handler = new ClosureRequestHandler(function (Request $request) use ($madeline,
         if ($path === '/disconnect' && $method === 'POST') {
             global $SESSION_FILE;
             try { $madeline->logout(); } catch (\Throwable $e) { /* best effort */ }
-            if (file_exists($SESSION_FILE)) @unlink($SESSION_FILE);
+            // unlink() silently fails (returns false, swallowed by @) on a
+            // directory - and $SESSION_FILE IS a directory (see the comment
+            // above zipDirectoryToFile) - so this never actually cleared the
+            // local session before. A disconnect that leaves the old,
+            // possibly-invalidated session directory in place means the
+            // very next boot just restores the same broken session again.
+            if (file_exists($SESSION_FILE)) rrmdir($SESSION_FILE);
             clearSavedSession();
+            // $madeline is a single long-lived object for this process's
+            // entire life - deleting the directory alone doesn't reset it.
+            // Exit (once, deliberately, after this response is sent) so the
+            // next boot's `new API($SESSION_FILE, ...)` builds truly fresh
+            // against the now-empty directory. server.mjs already restarts
+            // this process with backoff on exit (startTgCallsBridge) - this
+            // is a single intentional exit, not the crash-loop that backoff
+            // guards against.
+            \Amp\async(function () {
+                \Amp\delay(0.5);
+                exit(0);
+            });
             return jsonResponse(['status' => 'disconnected']);
         }
 
