@@ -261,7 +261,41 @@ $handler = new ClosureRequestHandler(function (Request $request) use ($madeline,
             $state['callError'] = null;
             \Amp\async(function () use ($madeline, &$state, $target) {
                 try {
-                    $call = $madeline->requestCall((int)$target, true);
+                    // This bridge is a SEPARATE Telegram session from the
+                    // app's regular Telegram connection (see the file header)
+                    // - its own internal peer cache starts empty regardless
+                    // of what the regular session has already resolved. A
+                    // bare numeric id/phone it has never seen throws "This
+                    // peer is not present in the internal peer database" the
+                    // moment requestCall() tries to use it. getInfo() forces
+                    // resolution first (importing as a contact by phone
+                    // number if needed) so requestCall() has a cached peer
+                    // to work with.
+                    try {
+                        $madeline->getInfo($target);
+                    } catch (\Throwable $resolveErr) {
+                        // Numeric ids that aren't phone numbers/usernames
+                        // can't be resolved this way - only a phone number
+                        // (E.164, with a leading +) can be imported as a
+                        // contact. Try that explicitly before giving up.
+                        $phone = ltrim((string)$target, '+');
+                        if (ctype_digit($phone)) {
+                            $madeline->contacts->importContacts([
+                                'contacts' => [[
+                                    '_' => 'inputPhoneContact',
+                                    'client_id' => 0,
+                                    'phone' => '+' . $phone,
+                                    'first_name' => 'Live Call',
+                                    'last_name' => '',
+                                ]],
+                            ]);
+                            $madeline->getInfo('+' . $phone);
+                        } else {
+                            throw $resolveErr;
+                        }
+                    }
+
+                    $call = $madeline->requestCall($target, true);
                     $state['call'] = $call;
                     $state['callState'] = 'connecting';
                     // Block here (within this async task, not the request
