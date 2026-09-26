@@ -2580,6 +2580,26 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
   };
 
+  // Shows why a call failed on whatever screen the person can actually see
+  // right now, then hangs up. Call failures resolve asynchronously (the
+  // backend bridge places the real call in the background), by which point
+  // placeSocialCall() has already hidden the Call Preparation modal and
+  // shown the active call screen - writing the reason into the modal's
+  // (now invisible) prepErrorHint and hanging up immediately, as this used
+  // to do, meant every failure looked like a silent crash back to Home with
+  // no explanation anywhere.
+  function showCallFailureAndEnd(message){
+    stopRingback();
+    if ($('socialCallScreen')?.classList.contains('active')) {
+      const lbl = $('socialCallStatusLabel');
+      if (lbl) lbl.textContent = message || 'Call failed';
+      setTimeout(() => { endSocialCall(); }, 2500);
+    } else {
+      $('prepErrorHint') && ($('prepErrorHint').textContent = message || 'Call failed');
+      endSocialCall();
+    }
+  }
+
   function handleMediaWsMessage(msg){
     if (msg.type === 'vc_status') {
       // Live conversion state for the call that is up right now.
@@ -2607,9 +2627,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         stopRingback();
       } else if (status === 'reject' || status === 'timeout' || status === 'terminate') {
         stopRingback();
-        if (status === 'reject') $('prepErrorHint') && ($('prepErrorHint').textContent = 'Call declined');
-        if (status === 'timeout') $('prepErrorHint') && ($('prepErrorHint').textContent = 'No answer');
-        endSocialCall();
+        if (status === 'reject') showCallFailureAndEnd('Call declined');
+        else if (status === 'timeout') showCallFailureAndEnd('No answer');
+        else endSocialCall();
       }
     }
     if (msg.type === 'call_state') {
@@ -2626,9 +2646,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         if (idle) idle.style.display = 'none';
         stopRingback();
       } else if (msg.state === 'failed') {
-        stopRingback();
-        $('prepErrorHint') && ($('prepErrorHint').textContent = msg.error || 'Call failed');
-        endSocialCall();
+        showCallFailureAndEnd(msg.error || 'Call failed');
       } else if (msg.state === 'ended') {
         stopRingback();
         endSocialCall();
@@ -3333,8 +3351,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     });
     gaCalls.addEventListener('end-call', () => { stopRingback(); endSocialCall(); });
     gaCalls.addEventListener('error', (event) => {
-      stopRingback();
-      $('prepErrorHint') && ($('prepErrorHint').textContent = event.detail?.message || 'WhatsApp call error');
+      showCallFailureAndEnd(event.detail?.message || 'WhatsApp call error');
     });
     gaCalls.addEventListener('remote-stream-ready', (event) => {
       // Audio-only per the SDK - attach the remote stream's audio to the
