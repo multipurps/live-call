@@ -40,4 +40,4 @@ serde_json = "1"
 tiny_http = "0.12"
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
-tracing-subscriber = "0.3"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

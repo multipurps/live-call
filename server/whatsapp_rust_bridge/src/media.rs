@@ -328,7 +328,7 @@ fn encoder_args() -> Vec<String> {
         "scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}:force_original_aspect_ratio=decrease,\
          pad={VIDEO_WIDTH}:{VIDEO_HEIGHT}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p"
     );
-    [
+    vec![
         "-vf".to_string(),
         filter,
         "-r".into(),

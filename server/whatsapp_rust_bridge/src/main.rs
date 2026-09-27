@@ -308,9 +308,9 @@ async fn handle_pair_code(
 async fn handle_pair_cancel(state: Arc<Mutex<AppState>>) -> serde_json::Value {
     let client = state.lock().await.client.clone();
     if let Some(client) = client {
-        if let Err(e) = client.cancel_pair_code().await {
-            return json!({ "error": e.to_string() });
-        }
+        // cancel_pair_code() returns () in this whatsapp-rust rev, not a
+        // Result -- it just stops the in-progress pairing, nothing to fail.
+        client.cancel_pair_code().await;
     }
     let mut guard = state.lock().await;
     guard.pair_code = None;
