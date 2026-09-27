@@ -336,6 +336,18 @@ const WA_RUST_DATA_DIR = path.join(__dirname, 'data', 'wa_rust_session');
 
 let waRustProcess = null;
 let waRustRestartCount = 0;
+// The bridge's own stderr (panics, anyhow context, tracing::error! lines)
+// only ever reached Render's platform logs before this - genuinely useful
+// for diagnosing a crash, but invisible to the app itself and to anyone
+// without dashboard log access. Keep the last few lines and the most
+// recent exit reason so the status/QR endpoints can surface the REAL
+// failure instead of just "connection refused".
+const WA_RUST_LOG_LINES = [];
+let waRustLastExit = null;
+function pushWaRustLog(line) {
+  WA_RUST_LOG_LINES.push(line);
+  if (WA_RUST_LOG_LINES.length > 20) WA_RUST_LOG_LINES.shift();
+}
 
 function startWhatsAppRustBridge() {
   if (!fs.existsSync(WA_RUST_BIN)) {
@@ -361,11 +373,19 @@ function startWhatsAppRustBridge() {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
-  waRustProcess.stdout.on('data', (d) => console.log(`[WaRust] ${d.toString().trim()}`));
-  waRustProcess.stderr.on('data', (d) => console.error(`[WaRust] ${d.toString().trim()}`));
+  waRustProcess.stdout.on('data', (d) => { const s = d.toString().trim(); console.log(`[WaRust] ${s}`); pushWaRustLog(s); });
+  waRustProcess.stderr.on('data', (d) => { const s = d.toString().trim(); console.error(`[WaRust] ${s}`); pushWaRustLog(s); });
 
-  waRustProcess.on('exit', (code) => {
+  waRustProcess.on('exit', (code, signal) => {
     waRustProcess = null;
+    waRustLastExit = {
+      code, signal,
+      at: new Date().toISOString(),
+      // Last few lines of its own output right before it died - usually
+      // the actual Rust panic message or anyhow error context, which is
+      // the part that actually explains WHY, unlike the bare exit code.
+      recentLog: WA_RUST_LOG_LINES.slice(-8),
+    };
     waRustRestartCount += 1;
     if (waRustRestartCount > 5) {
       console.error(`[WaRust] Exited with code ${code} for the ${waRustRestartCount}th time - giving up auto-restart to avoid hammering WhatsApp's servers. Fix the underlying issue and redeploy.`);
@@ -386,9 +406,17 @@ async function proxyToWaRust(endpoint, method = 'GET', body = null) {
     const res = await fetch(url, opts);
     return { status: res.status, data: await res.json().catch(() => ({})) };
   } catch (err) {
+    // A bare "fetch failed" just means nothing is listening on that port -
+    // it says nothing about WHY (never built, crashed on startup, crashed
+    // mid-run). If the process has actually run and died, waRustLastExit
+    // has its real panic/error output - include that instead of leaving
+    // the person to guess or dig through platform logs for it.
+    const detail = waRustLastExit
+      ? ` Last exit: code ${waRustLastExit.code}${waRustLastExit.signal ? ` (signal ${waRustLastExit.signal})` : ''} at ${waRustLastExit.at}. Recent output: ${waRustLastExit.recentLog.join(' | ') || '(none captured)'}`
+      : ' The binary has not been launched at all this run (see server startup logs for why).';
     return {
       status: 502,
-      data: { error: `whatsapp-rust bridge unavailable: ${err.message}. Is server/whatsapp_rust_bridge built?` },
+      data: { error: `whatsapp-rust bridge unavailable: ${err.message}. Is server/whatsapp_rust_bridge built?${detail}` },
     };
   }
 }
