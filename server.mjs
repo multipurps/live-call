@@ -398,6 +398,20 @@ function startWhatsAppRustBridge() {
 }
 
 // Helper to proxy HTTP requests to the whatsapp-rust bridge.
+// build.sh tees its whole output to build.log beside it. When the binary
+// never launched, the reason is almost always in there (rustup failed, a
+// compile error, an out-of-memory kill) - show its tail in the app.
+function waRustBuildLogTail() {
+  try {
+    const logPath = path.join(__dirname, 'server', 'whatsapp_rust_bridge', 'build.log');
+    if (!fs.existsSync(logPath)) return 'No build.log exists - server/whatsapp_rust_bridge/build.sh did not run at all during this deploy (check the Render build command runs `npm run postinstall`).';
+    const lines = fs.readFileSync(logPath, 'utf8').trim().split('\n');
+    return 'build.log tail: ' + lines.slice(-25).join(' | ').slice(-3000);
+  } catch (e) {
+    return `Could not read build.log: ${e.message}`;
+  }
+}
+
 async function proxyToWaRust(endpoint, method = 'GET', body = null) {
   const url = `http://127.0.0.1:${WA_RUST_PORT}${endpoint}`;
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
@@ -413,7 +427,7 @@ async function proxyToWaRust(endpoint, method = 'GET', body = null) {
     // the person to guess or dig through platform logs for it.
     const detail = waRustLastExit
       ? ` Last exit: code ${waRustLastExit.code}${waRustLastExit.signal ? ` (signal ${waRustLastExit.signal})` : ''} at ${waRustLastExit.at}. Recent output: ${waRustLastExit.recentLog.join(' | ') || '(none captured)'}`
-      : ' The binary has not been launched at all this run (see server startup logs for why).';
+      : ` The binary has not been launched at all this run. Binary present: ${fs.existsSync(WA_RUST_BIN)}. ${waRustBuildLogTail()}`;
     return {
       status: 502,
       data: { error: `whatsapp-rust bridge unavailable: ${err.message}. Is server/whatsapp_rust_bridge built?${detail}` },

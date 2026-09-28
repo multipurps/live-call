@@ -11,6 +11,14 @@
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
+# Everything below is also written to build.log next to this script. The
+# runtime (server.mjs) reads it back and shows the tail in the app when the
+# binary is missing, so a silent build failure is visible from the app itself
+# - no platform dashboard/log access needed.
+: > build.log
+exec > >(tee -a build.log) 2>&1
+echo "[whatsapp_rust_bridge] build started $(date -u +%FT%TZ) on $(uname -m), $(nproc) cpu, mem: $(free -m 2>/dev/null | awk '/Mem:/{print $2" MB total, "$7" MB available"}')"
+
 # whatsapp-rust 0.7 declares `rust-version = "1.94"` and edition 2024, so an
 # older toolchain fails on its dependency tree, not on our code.
 REQUIRED_MAJOR=1
@@ -53,6 +61,10 @@ else
 fi
 
 echo "[whatsapp_rust_bridge] Building (release)..."
+# Cap parallel rustc jobs: this dependency tree (bundled SQLite, VoIP codec,
+# crypto) is memory-hungry and an out-of-memory kill on a small build machine
+# looks exactly like a silent compile failure.
+export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}"
 cargo build --release
 if [ $? -ne 0 ]; then
   echo "[whatsapp_rust_bridge] WARNING: build failed - real whatsapp-rust calling unavailable. See the compiler error above. Green API WhatsApp calling is untouched and still works."

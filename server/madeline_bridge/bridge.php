@@ -34,6 +34,8 @@ use danog\MadelineProto\Settings;
 use danog\MadelineProto\Settings\AppInfo;
 use danog\MadelineProto\SecurityException;
 use danog\MadelineProto\VoIP;
+use danog\MadelineProto\VoIP\CallState;
+use danog\MadelineProto\VoIP\DiscardReason;
 use Psr\Log\NullLogger;
 
 $PORT = (int)(getenv('TGCALLS_PORT') ?: 5051);
@@ -325,16 +327,45 @@ $handler = new ClosureRequestHandler(function (Request $request) use ($madeline,
                         }
                     }
 
-                    $call = $madeline->requestCall($target, true);
+                    // requestCall() takes only the user (MadelineProto's VoIP
+                    // is audio-only - there is no video parameter).
+                    $call = $madeline->requestCall($target);
                     $state['call'] = $call;
-                    $state['callState'] = 'connecting';
-                    // Block here (within this async task, not the request
-                    // handler) until the call actually connects or fails -
-                    // matches the Rust bridge's run_call background-task
-                    // shape, so the HTTP response returns immediately.
-                    $call->onCall(function () use (&$state) {
-                        $state['callState'] = 'connected';
-                    });
+                    $state['callState'] = 'ringing';
+
+                    // VoIP has NO onCall()/event API (the old code called a
+                    // method that does not exist, which threw straight after
+                    // the call went out, marked it failed, and made the app
+                    // hang up on a call that was actually ringing). The real
+                    // interface is getCallState(): REQUESTED -> ACCEPTED ->
+                    // CONFIRMED -> RUNNING -> ENDED. Poll it and mirror it
+                    // into $state for the app's /call/state polling.
+                    $startedAt = time();
+                    $everRan = false;
+                    while ($state['call'] === $call) {
+                        \Amp\delay(0.5);
+                        $cs = $call->getCallState();
+                        if ($cs === CallState::RUNNING) {
+                            $everRan = true;
+                            $state['callState'] = 'connected';
+                        } elseif ($cs === CallState::ACCEPTED || $cs === CallState::CONFIRMED) {
+                            $state['callState'] = 'connecting';
+                        } elseif ($cs === CallState::ENDED) {
+                            if ($everRan) {
+                                $state['callState'] = 'ended';
+                            } else {
+                                $state['callState'] = 'failed';
+                                $state['callError'] = 'The call was declined, or could not be connected';
+                            }
+                            break;
+                        } elseif (time() - $startedAt > 60) {
+                            // Still only REQUESTED after a minute: nobody picked up.
+                            try { $call->discard(DiscardReason::MISSED); } catch (\Throwable $e) {}
+                            $state['callState'] = 'failed';
+                            $state['callError'] = 'No answer';
+                            break;
+                        }
+                    }
                 } catch (\Throwable $e) {
                     $state['callState'] = 'failed';
                     $state['callError'] = $e->getMessage();
