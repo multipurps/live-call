@@ -1793,11 +1793,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   //   'greenapi'     - the original integration. Green API REST for
   //                    status/contacts/QR plus their browser calls SDK, which
   //                    is AUDIO ONLY (confirmed from that library's source).
-  //   'whatsapp-rust'- server/whatsapp_rust_bridge: a real WhatsApp client
-  //                    built on github.com/oxidezap/whatsapp-rust. It places
-  //                    the actual 1:1 call and takes the live avatar output
-  //                    as its VideoSource/AudioSource, so this is the only
-  //                    engine that can carry real WhatsApp VIDEO.
+  //   'wacalls'  - an external WaCalls instance, driven through server.mjs's
+  //                /api/social-call/wacalls/* routes (server/wacalls.mjs).
+  //                WaCalls is a real WhatsApp client: it pairs an account,
+  //                places 1:1 calls and carries real VIDEO. The outgoing
+  //                video is whichever avatar is selected (Anam or Lucy 2.5):
+  //                this page encodes it to H.264 and pushes it over WaCalls'
+  //                "vp8" data channel, while the call's audio rides its "pcm"
+  //                channel. Green API's calls SDK has no video at all.
   //
   // The default stays 'greenapi' so nobody who was already calling through
   // Green API gets silently moved onto a different backend and a different
@@ -1808,9 +1811,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       label: 'Green API',
       hint: 'Your existing Green API account. Calls are audio-only — their calls SDK has no video support.',
     },
-    'whatsapp-rust': {
-      label: 'whatsapp-rust',
-      hint: 'Real WhatsApp calling, including 1:1 VIDEO with your live avatar as the outgoing video. Separate session from Green API.',
+    wacalls: {
+      label: 'WaCalls',
+      hint: 'Real WhatsApp calls, including 1:1 VIDEO with your live Anam / Lucy 2.5 avatar as the outgoing video. Runs on your WaCalls instance — a separate session from Green API, configured server-side (WACALLS_URL).',
     },
   };
   const WA_ENGINE_KEY = 'livecall.whatsappEngine';
@@ -1909,19 +1912,16 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     return selectedCallSource === 'avatar' ? SocialAnamSource : LiveSwapMediaSource;
   }
 
+  // Both selectors (this prep screen and the in-call one) go through
+  // setSocialCallAvatarSource(), so whichever the user touches, the other
+  // reflects it and the running media leg switches to the new source.
   $('prepSourceLucyBtn')?.addEventListener('click', () => {
-    selectedCallSource = 'lucy';
-    $('prepSourceLucyBtn').classList.add('active');
-    $('prepSourceAvatarBtn').classList.remove('active');
-    $('prepSourceLabel').textContent = 'Live Swap / Lucy 2.5';
+    setSocialCallAvatarSource('lucy');
     $('prepPreviewPlaceholderLabel').textContent = 'Lucy 2.5 Live Swap Preview';
     $('prepLucyStatus').textContent = 'Ready to stream';
   });
   $('prepSourceAvatarBtn')?.addEventListener('click', () => {
-    selectedCallSource = 'avatar';
-    $('prepSourceAvatarBtn').classList.add('active');
-    $('prepSourceLucyBtn').classList.remove('active');
-    $('prepSourceLabel').textContent = 'AI Avatar (Anam)';
+    setSocialCallAvatarSource('anam');
     $('prepPreviewPlaceholderLabel').textContent = 'AI Avatar Preview';
     $('prepLucyStatus').textContent = state.anamAvatarId ? 'Ready to stream' : 'Pick an avatar in Profile first';
     // Voice conversion is Lucy 2.5 only - an Anam avatar already brings its
@@ -2201,10 +2201,19 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       if (written < out.length) out.fill(0, written);
     },
 
+    // Optional consumer of the converted samples, set by the WaCalls media leg
+    // (which puts them on the call's own outgoing data channel). The Green API
+    // path consumes `stream` as an outgoing WebRTC track instead; both can be
+    // set, each simply ignores what it does not need.
+    sink: null,
+
     onConverted(int16){
       if (!this.started || !int16 || !int16.length) return;
       if (!this.firstChunkAt) this.firstChunkAt = Date.now();
       this.chunks++;
+      if (this.sink) {
+        try { this.sink(int16); } catch (e) {}
+      }
       this.queue.push(int16);
       this.queued += int16.length;
       while (this.queued > this.maxQueue && this.queue.length > 1) {
@@ -2308,8 +2317,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   //     SocialCallMediaAdapter  (JPEG @15fps + 16k mono PCM, channel-tagged)
   //            |
   //            v  /api/social-call/media  ->  server.mjs
-  //            +-- WhatsApp: whatsapp-rust bridge -> H.264 VideoSource /
-  //                960-sample AudioSource -> REAL WhatsApp 1:1 call
+  //            +-- WhatsApp: WaCallsMediaLeg -> H.264 access units on WaCalls'
+  //                "vp8" data channel + 16 kHz PCM on its "pcm" channel ->
+  //                a REAL WhatsApp 1:1 call (audio and video)
   //            +-- Telegram: tgcalls/madeline pipes (unchanged)
   //
   // Contract (both implementations already had exactly this shape - nothing
@@ -2327,12 +2337,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   // =============================================================================
 
   // -------------------------------------------------------------
-  // Peer media coming BACK from a whatsapp-rust call: decoded and played
-  // here. Audio is decoded trivially (raw 16 kHz mono PCM); video uses
-  // WebCodecs when the browser has it, and is simply counted when it does
-  // not - never faked either way.
-  // -------------------------------------------------------------
-  const WaRustPeerMedia = {
+  // Peer media coming BACK from a WhatsApp call: decoded and played here.
+  // Audio is decoded trivially (raw 16 kHz mono PCM); video uses WebCodecs when
+  // the browser has it, and is simply counted when it does not - never faked
+  // either way. Used by WaCallsMediaLeg (the peer's audio and video arrive on
+  // WaCalls' own "pcm" / "vp8" data channels) and by the media-socket peer
+  // channels (0x03/0x04) that engines with server-side media use.
+  const PeerMediaPlayout = {
     audioCtx: null,
     nextPlayTime: 0,
     decoder: null,
@@ -2396,14 +2407,26 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       }
       return this.decoder;
     },
-    pushH264(bytes){
+    // `wire` (optional) carries what the transport already knows about the
+    // access unit: WaCalls' "vp8" frames state whether they are keyframes and
+    // carry their own microsecond timestamp, which is more reliable than
+    // re-scanning the bitstream - and a decoder that only ever sees "delta"
+    // frames never produces a picture. Falls back to the annex-B scan when no
+    // framing information is available (the 0x04 media-socket channel).
+    pushH264(bytes, wire){
       this.videoAus++;
       const dec = this.ensureDecoder();
       if (!dec || dec.state !== 'configured') return;
+      const isKey = wire && typeof wire.keyframe === 'boolean'
+        ? wire.keyframe
+        : annexBHasKeyframe(bytes);
+      const ts = wire && wire.timestampMs
+        ? Math.round(wire.timestampMs * 1000)
+        : Math.round(performance.now() * 1000);
       try {
         dec.decode(new window.EncodedVideoChunk({
-          type: annexBHasKeyframe(bytes) ? 'key' : 'delta',
-          timestamp: Math.round(performance.now() * 1000),
+          type: isKey ? 'key' : 'delta',
+          timestamp: ts,
           data: bytes,
         }));
       } catch(e) {}
@@ -2419,7 +2442,419 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     },
   };
 
-  // Annex-B start-code scan for an IDR/SPS NAL, so the decoder is told which
+
+  // =============================================================================
+  // WaCallsMediaLeg - the browser half of a WaCalls call's media plane.
+  //
+  // WaCalls carries call media over WebRTC data channels between this page and
+  // the WaCalls server (its cmd/server/bridge.go):
+  //
+  //   "pcm"  raw 16 kHz mono s16le, BOTH directions, unframed.
+  //            up   - the outgoing call audio: the microphone, or the
+  //                   RVC-converted voice when conversion is on (same audio the
+  //                   Green API path puts on its outgoing WebRTC track)
+  //            down - the peer's voice -> PeerMediaPlayout.playPcm
+  //   "vp8"  encoded H.264 access units, BOTH directions, 5-byte header:
+  //            1 flags byte (bit0 = keyframe, bits1-2 = rotation) + uint32 BE
+  //            timestamp in ms. A 1-byte message is a control frame from the
+  //            server asking for an immediate keyframe (peer's RTCP PLI/FIR).
+  //            up   - the live avatar, encoded here with WebCodecs (the Go side
+  //                   only packetizes; the codec lives in this page)
+  //            down - the peer's camera -> PeerMediaPlayout's decoder -> canvas
+  //
+  // Handshake: this page builds the SDP offer, posts it to OUR server
+  // (/api/social-call/wacalls/webrtc), and our server relays it to WaCalls with
+  // the API key. The media itself then flows directly between this page and
+  // the WaCalls instance - never through this app's server, and the key never
+  // reaches the page.
+  //
+  // Outgoing video source: `avatarSource()`, i.e. the same activeSocialSource()
+  // the prep screen and every other call path use. Anam and Lucy 2.5 are
+  // therefore interchangeable here, and switching mid-call is only a matter of
+  // reading the other element from the next frame on (setAvatarSource()).
+  // =============================================================================
+  const WaCallsMediaLeg = {
+    pc: null,
+    pcmDC: null,
+    videoDC: null,
+    callId: null,
+    active: false,
+    muted: false,
+    voiceConversion: false,
+    source: 'lucy',
+    video: false,
+    micCtx: null,
+    micSource: null,
+    micNode: null,
+    canvas: null,
+    ctx: null,
+    encoder: null,
+    encoderError: null,
+    encodeTimer: null,
+    forceKeyframe: true,
+    lastKeyframeAt: 0,
+    // Counters, surfaced in the logs so "connected but nothing on screen" is
+    // diagnosable without a debugger (same habit as the rest of this call code).
+    sent: { audioFrames: 0, videoFrames: 0, keyframeRequests: 0 },
+    received: { audioFrames: 0, videoFrames: 0 },
+
+    supported(){
+      return typeof window.VideoEncoder !== 'undefined' && typeof window.VideoFrame !== 'undefined';
+    },
+    supportedDetail(){
+      if (this.supported()) return 'WebCodecs available - avatar video can be sent';
+      return 'this browser has no WebCodecs (VideoEncoder), so the avatar cannot be encoded for the call';
+    },
+
+    avatarSource(){
+      return this.source === 'anam' ? SocialAnamSource : LiveSwapMediaSource;
+    },
+
+    // Called from the call screen (and by the prep screen, so both agree).
+    // Returns true when the switch took effect for the outgoing video.
+    setAvatarSource(source){
+      const next = source === 'anam' ? 'anam' : 'lucy';
+      const changed = next !== this.source;
+      this.source = next;
+      // The new source must already be producing frames; if it is not running
+      // yet (switching before the call, or after it was stopped), start it now.
+      const src = this.avatarSource();
+      if (this.active && src && !src.isActive()) {
+        src.start({ forSocialCall: true }).catch((e) => {
+          console.warn('[WaCalls] could not start the new avatar source:', e.message);
+        });
+      }
+      if (changed) {
+        this.forceKeyframe = true; // the new source's first frame must be a keyframe
+        console.log(`[WaCalls] avatar video source -> ${next === 'anam' ? 'Anam' : 'Lucy 2.5'} (callId=${this.callId || 'none'})`);
+      }
+      return changed;
+    },
+
+    setMuted(muted){
+      this.muted = !!muted;
+      console.log(`[WaCalls] microphone ${this.muted ? 'muted' : 'unmuted'} (callId=${this.callId || 'none'})`);
+    },
+
+    setVoiceConversion(on){
+      this.voiceConversion = !!on;
+      // With conversion on, the outgoing audio is the converted stream that
+      // arrives over the media socket (0x06 -> VoiceConversionPlayout.onConverted
+      // -> the sink installed below). Without it, the microphone goes straight
+      // out, exactly as before.
+      VoiceConversionPlayout.sink = this.voiceConversion
+        ? (int16) => this.sendConvertedAudio(int16)
+        : null;
+    },
+
+    sendConvertedAudio(int16){
+      if (!this.active || !this.pcmDC || this.pcmDC.readyState !== 'open' || !int16 || !int16.length) return;
+      this.pcmSend(new Uint8Array(int16.buffer, int16.byteOffset, int16.byteLength));
+    },
+
+    pcmSend(bytes){
+      try { this.pcmDC.send(bytes); this.sent.audioFrames++; } catch (e) {}
+    },
+
+    async open({ callId, video = true, source = 'lucy', voiceConversion = false } = {}){
+      if (this.active) this.close();
+      this.callId = callId;
+      this.video = !!video;
+      this.source = source === 'anam' ? 'anam' : 'lucy';
+      this.active = true;
+      this.sent = { audioFrames: 0, videoFrames: 0, keyframeRequests: 0 };
+      this.received = { audioFrames: 0, videoFrames: 0 };
+      console.log(`[WaCalls] opening media leg for callId=${callId} (video=${this.video}, avatar=${this.source}, voiceConversion=${voiceConversion})`);
+
+      try {
+        const pc = new RTCPeerConnection({ iceServers: [] });
+        this.pc = pc;
+
+        // --- data channels (must exist before the offer) -------------------
+        const pcmDC = pc.createDataChannel('pcm', { ordered: true });
+        pcmDC.binaryType = 'arraybuffer';
+        pcmDC.onmessage = (e) => this.onPcmMessage(e.data);
+        this.pcmDC = pcmDC;
+
+        if (this.video) {
+          const videoDC = pc.createDataChannel('vp8', { ordered: true });
+          videoDC.binaryType = 'arraybuffer';
+          videoDC.onmessage = (e) => this.onVideoMessage(e.data);
+          this.videoDC = videoDC;
+        }
+
+        pc.oniceconnectionstatechange = () => {
+          if (!this.active) return;
+          const st = pc.iceConnectionState;
+          if (st === 'failed') {
+            console.error(`[WaCalls] media connection FAILED for callId=${this.callId}`);
+            showCallFailureAndEnd('Call media connection lost');
+          }
+        };
+
+        this.startAudio(voiceConversion);
+        if (this.video) this.startVideo();
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await new Promise((resolve) => {
+          if (pc.iceGatheringState === 'complete') return resolve();
+          pc.addEventListener('icegatheringstatechange', () => {
+            if (pc.iceGatheringState === 'complete') resolve();
+          });
+        });
+
+        const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/wacalls/webrtc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ callId, sdp_offer: pc.localDescription.sdp }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.sdp_answer) {
+          throw new Error(data.error || `WaCalls refused the media offer (HTTP ${res.status})`);
+        }
+        await pc.setRemoteDescription({ type: 'answer', sdp: data.sdp_answer });
+        console.log(`[WaCalls] media leg negotiated for callId=${callId} (pcm${this.video ? ' + vp8' : ''} channels)`);
+      } catch (e) {
+        console.error(`[WaCalls] media leg failed for callId=${callId}: ${e.message}`);
+        this.close();
+        throw e;
+      }
+    },
+
+    // --- audio -----------------------------------------------------------
+    startAudio(voiceConversion){
+      this.setVoiceConversion(voiceConversion);
+      const stream = voiceConversion ? outgoingCallAudioStream() : socialMicStream;
+      if (!stream || !stream.getAudioTracks().length) {
+        console.warn('[WaCalls] no microphone stream available for the call audio');
+        return;
+      }
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        this.micCtx = new AudioCtx({ sampleRate: 16000 });
+        this.micSource = this.micCtx.createMediaStreamSource(stream);
+        // 512-sample buffers while converting (the converter is fed one chunk
+        // per round trip, so a bigger buffer would add its whole length in
+        // latency); the original 2048 otherwise. Same trade-off as the Green
+        // API/Telegram adapter above.
+        const bufferSize = voiceConversion ? 512 : 2048;
+        this.micNode = this.micCtx.createScriptProcessor(bufferSize, 1, 1);
+        this.micNode.onaudioprocess = (evt) => {
+          if (!this.active) return;
+          // With conversion on, the converted audio is what goes out (see
+          // setVoiceConversion / sendConvertedAudio); the raw mic is only the
+          // converter's input, which the media socket already carries.
+          if (this.voiceConversion) return;
+          if (!this.pcmDC || this.pcmDC.readyState !== 'open') return;
+          const input = evt.inputBuffer.getChannelData(0);
+          const pcm16 = new Int16Array(input.length);
+          for (let i = 0; i < input.length; i++) {
+            const v = Math.max(-1, Math.min(1, input[i]));
+            // Muted = digital silence rather than no packets at all: the peer's
+            // stream keeps flowing, and nothing of the room goes out.
+            pcm16[i] = this.muted ? 0 : (v < 0 ? v * 0x8000 : v * 0x7FFF);
+          }
+          this.pcmSend(new Uint8Array(pcm16.buffer));
+        };
+        this.micSource.connect(this.micNode);
+        // Reaching the destination keeps Safari's ScriptProcessor alive. The
+        // handler never writes to outputBuffer, so this plays SILENCE - it is
+        // not a local monitor of the microphone.
+        this.micNode.connect(this.micCtx.destination);
+      } catch (e) {
+        console.warn('[WaCalls] could not start call audio capture:', e.message);
+      }
+    },
+
+    onPcmMessage(data){
+      try {
+        const copy = data instanceof ArrayBuffer ? new Uint8Array(data).slice() : null;
+        if (!copy) return;
+        const samples = new Int16Array(copy.buffer, 0, Math.floor(copy.length / 2));
+        this.received.audioFrames++;
+        PeerMediaPlayout.playPcm(samples);
+      } catch (e) {}
+    },
+
+    // --- video (out) -----------------------------------------------------
+    startVideo(){
+      if (!this.supported()) {
+        // Honest failure: say it on the call screen instead of sending a call
+        // that looks like video and never shows anything.
+        this.encoderError = this.supportedDetail();
+        console.error(`[WaCalls] ${this.encoderError}`);
+        const lbl = $('socialCallStatusLabel');
+        if (lbl) lbl.textContent = 'Audio-only (browser has no WebCodecs)';
+        return;
+      }
+      this.canvas = document.createElement('canvas');
+      this.canvas.width = 480;
+      this.canvas.height = 640;
+      this.ctx = this.canvas.getContext('2d');
+
+      let encodeErrors = 0;
+      this.encoder = new window.VideoEncoder({
+        output: (chunk) => this.sendEncoded(chunk),
+        error: (e) => {
+          encodeErrors++;
+          this.encoderError = e.message || String(e);
+          if (encodeErrors <= 3) console.error('[WaCalls] video encoder error:', e.message || e);
+        },
+      });
+      // Constrained Baseline / 3.1, annex-B: the profile WhatsApp video calls
+      // use, and the one WaCalls' bridge hands to its own RTP packetizer.
+      this.encoder.configure({
+        codec: 'avc1.42E01F',
+        avc: { format: 'annexb' },
+        latencyMode: 'realtime',
+        width: this.canvas.width,
+        height: this.canvas.height,
+        bitrate: 600_000,
+        framerate: 15,
+      });
+
+      clearInterval(this.encodeTimer);
+      // 15 fps matches the rest of this app's social-call video (Telegram and
+      // the previous WhatsApp engine both use 15 fps for the avatar stream).
+      this.encodeTimer = setInterval(() => this.encodeFrame(), 1000 / 15);
+    },
+
+    encodeFrame(){
+      if (!this.active || !this.encoder || this.encoder.state !== 'configured') return;
+      if (!this.videoDC || this.videoDC.readyState !== 'open') return;
+      const vid = this.avatarSource().getVideoElement() || $('socialRemoteVideo');
+      if (!vid || !(vid.videoWidth || vid.readyState >= 2)) return;
+      try {
+        this.ctx.drawImage(vid, 0, 0, this.canvas.width, this.canvas.height);
+      } catch (e) {
+        return; // frame not decoded yet / cross-origin - try the next tick
+      }
+      const ts = Math.round(performance.now() * 1000); // microseconds
+      let frame;
+      try {
+        frame = new window.VideoFrame(this.canvas, { timestamp: ts });
+      } catch (e) {
+        return;
+      }
+      // Keyframe on the first frame and every 2s, plus whenever the server
+      // forwards a PLI/FIR from the peer or the avatar source was switched
+      // (a decoder that joins mid-stream cannot start on a delta frame).
+      const wantKey = this.forceKeyframe || (ts - this.lastKeyframeAt) > 2_000_000;
+      try {
+        this.encoder.encode(frame, { keyFrame: wantKey });
+      } catch (e) {}
+      if (wantKey) {
+        this.forceKeyframe = false;
+        this.lastKeyframeAt = ts;
+      }
+      try { frame.close(); } catch (e) {}
+    },
+
+    sendEncoded(chunk){
+      if (!this.videoDC || this.videoDC.readyState !== 'open') return;
+      try {
+        const payload = new Uint8Array(chunk.byteLength);
+        chunk.copyTo(payload);
+        const out = new Uint8Array(5 + payload.byteLength);
+        // bit0 = keyframe, bits1-2 = rotation (0 - the avatar canvas is not
+        // rotated), then a uint32 BE timestamp in ms, then the H.264 Annex-B
+        // access unit. Byte-for-byte the format WaCalls' media.VideoFrame
+        // expects from the browser on the "vp8" channel.
+        out[0] = (chunk.type === 'key' ? 1 : 0);
+        const tsMs = Math.round(chunk.timestamp / 1000) >>> 0;
+        out[1] = (tsMs >>> 24) & 0xff;
+        out[2] = (tsMs >>> 16) & 0xff;
+        out[3] = (tsMs >>> 8) & 0xff;
+        out[4] = tsMs & 0xff;
+        out.set(payload, 5);
+        this.videoDC.send(out);
+        this.sent.videoFrames++;
+        if (this.sent.videoFrames === 1) console.log(`[WaCalls] first avatar frame sent on the vp8 channel (callId=${this.callId})`);
+      } catch (e) {}
+    },
+
+    // --- video (in) ------------------------------------------------------
+    onVideoMessage(data){
+      const bytes = new Uint8Array(data);
+      // 1-byte control frame: the server relays the peer's keyframe request.
+      if (bytes.length === 1 && bytes[0] === 0x01) {
+        this.forceKeyframe = true;
+        this.sent.keyframeRequests++;
+        return;
+      }
+      if (bytes.length < 6) return;
+      const flags = bytes[0];
+      const tsMs = ((bytes[1] << 24) | (bytes[2] << 16) | (bytes[3] << 8) | bytes[4]) >>> 0;
+      this.received.videoFrames++;
+      PeerMediaPlayout.pushH264(bytes.subarray(5), { keyframe: (flags & 1) !== 0, timestampMs: tsMs });
+      if (this.received.videoFrames === 1) console.log(`[WaCalls] first peer video frame decoded (callId=${this.callId})`);
+    },
+
+    close(){
+      const wasActive = this.active;
+      const sent = { ...this.sent };
+      const received = { ...this.received };
+      this.active = false;
+      clearInterval(this.encodeTimer);
+      this.encodeTimer = null;
+      if (this.encoder) { try { this.encoder.close(); } catch (e) {} this.encoder = null; }
+      this.forceKeyframe = true;
+      this.lastKeyframeAt = 0;
+      this.setVoiceConversion(false);
+      if (this.micNode) { try { this.micNode.disconnect(); } catch (e) {} this.micNode = null; }
+      if (this.micSource) { try { this.micSource.disconnect(); } catch (e) {} this.micSource = null; }
+      if (this.micCtx) { try { this.micCtx.close(); } catch (e) {} this.micCtx = null; }
+      if (this.pcmDC) { try { this.pcmDC.close(); } catch (e) {} this.pcmDC = null; }
+      if (this.videoDC) { try { this.videoDC.close(); } catch (e) {} this.videoDC = null; }
+      if (this.pc) { try { this.pc.close(); } catch (e) {} this.pc = null; }
+      PeerMediaPlayout.stop();
+      if (wasActive) {
+        console.log(`[WaCalls] media leg closed for callId=${this.callId} (sent ${sent.audioFrames} audio / ${sent.videoFrames} video frames, keyframe requests ${sent.keyframeRequests}, received ${received.audioFrames} audio / ${received.videoFrames} video)`);
+      }
+      this.callId = null;
+    },
+
+    // Re-negotiates the same peer connection to add the "vp8" channel on a
+    // call that started as audio only, then tells WaCalls to signal the video
+    // upgrade to WhatsApp (POST .../video/start). Unused by the normal flow -
+    // video calls start with video - but it is the documented WaCalls path for
+    // a mid-call upgrade, and this is where the app would call it from.
+    async upgradeToVideo(){
+      if (!this.active || this.video) return;
+      if (!this.supported()) throw new Error(this.supportedDetail());
+      this.video = true;
+      const videoDC = this.pc.createDataChannel('vp8', { ordered: true });
+      videoDC.binaryType = 'arraybuffer';
+      videoDC.onmessage = (e) => this.onVideoMessage(e.data);
+      this.videoDC = videoDC;
+      this.startVideo();
+      const offer = await this.pc.createOffer();
+      await this.pc.setLocalDescription(offer);
+      await new Promise((resolve) => {
+        if (this.pc.iceGatheringState === 'complete') return resolve();
+        this.pc.addEventListener('icegatheringstatechange', () => {
+          if (this.pc.iceGatheringState === 'complete') resolve();
+        });
+      });
+      const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/wacalls/webrtc/renegotiate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callId: this.callId, sdp_offer: this.pc.localDescription.sdp }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.sdp_answer) throw new Error(data.error || `renegotiate failed (HTTP ${res.status})`);
+      await this.pc.setRemoteDescription({ type: 'answer', sdp: data.sdp_answer });
+      await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/wacalls/video/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callId: this.callId }),
+      }).catch(() => {});
+      console.log(`[WaCalls] upgraded callId=${this.callId} to video`);
+    },
+  };
+
+    // Annex-B start-code scan for an IDR/SPS NAL, so the decoder is told which
   // access units are safe to start from.
   function annexBHasKeyframe(bytes){
     const v = new Uint8Array(bytes);
@@ -2433,11 +2868,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     return false;
   }
 
-  // Peer media frames arriving from the whatsapp-rust bridge (0x03 PCM,
-  // 0x04 H.264), and this call's own outgoing audio after RVC conversion
-  // (0x06 - see broadcastConvertedAudio in server.mjs). One channel-tagged,
-  // length-prefixed frame format for both directions/purposes so there is
-  // exactly one binary parser on this socket.
+  // Peer media frames arriving over the media socket (0x03 PCM, 0x04 H.264),
+  // and this call's own outgoing audio after RVC conversion (0x06 - see
+  // broadcastConvertedAudio in server.mjs). WaCalls' peer media does NOT come
+  // through here: it arrives on this page's own data channels (see
+  // WaCallsMediaLeg), which use PeerMediaPlayout directly. One channel-tagged,
+  // length-prefixed frame format for this socket, so it has one binary parser.
   function handleMediaWsBinary(data){
     const bytes = new Uint8Array(data instanceof ArrayBuffer ? data : data.buffer || data);
     if (bytes.length < 5) return;
@@ -2452,10 +2888,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       // one, so copy into a fresh buffer rather than aliasing.
       const copy = payload.slice();
       const samples = new Int16Array(copy.buffer, 0, Math.floor(copy.length / 2));
-      WaRustPeerMedia.playPcm(samples);
+      PeerMediaPlayout.playPcm(samples);
     } else if (channel === 0x04) {
       // Peer H.264 access unit (Annex-B).
-      WaRustPeerMedia.pushH264(payload.slice().buffer);
+      PeerMediaPlayout.pushH264(payload.slice().buffer);
     } else if (channel === 0x06) {
       // This call's own outgoing audio, after RVC conversion - s16le mono.
       const copy = payload.slice();
@@ -2472,6 +2908,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     audioProcessor: null,
     micAudioCtx: null,
     active: false,
+    watching: false,
     voiceConversion: false,
     initWs(){
       if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;
@@ -2480,7 +2917,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       this.ws.onmessage = (e) => {
         // Binary frames are tagged, length-prefixed frames (see
         // handleMediaWsBinary): 0x03 = peer PCM audio, 0x04 = peer H.264
-        // access unit (both from the whatsapp-rust bridge's return media),
+        // access unit (peer media returned over this socket),
         // 0x06 = this call's own outgoing audio after RVC conversion. Text
         // frames are the JSON control/call_state messages as before.
         if (typeof e.data !== 'string') {
@@ -2493,8 +2930,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         } catch(err){}
       };
       this.ws.onclose = () => {
-        if (this.active) setTimeout(() => this.initWs(), 2000);
+        if (this.active || this.watching) setTimeout(() => this.initWs(), 2000);
       };
+    },
+    // Keeps the socket open even when no call is streaming. WaCalls delivers
+    // incoming calls as events on this socket, and there is no client SDK
+    // relaying them the way Green API has: a socket that only opens once a
+    // call starts would never see a call arrive. Enabled when the WaCalls
+    // engine reports a paired session (see fetchWaCallsStatus).
+    watchEvents(on){
+      this.watching = !!on;
+      if (this.watching) this.initWs();
+      else if (!this.active) { try { this.ws?.close(); } catch (e) {} this.ws = null; }
     },
     // JSON control channel on the same socket (start/stop conversion, status).
     sendControl(msg){
@@ -2507,6 +2954,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     },
     startStreaming(stream, micStream, options = {}){
       const voiceConversion = !!options.voiceConversion;
+      // WaCalls carries its own call media (see WaCallsMediaLeg): the avatar
+      // video goes out on WaCalls' data channel, not as 0x01 JPEG frames, and
+      // the call audio is this page's own "pcm" channel. This socket then has
+      // two jobs left for a WaCalls call: the event stream (call_state,
+      // wacalls_event) and the RVC round trip - raw mic up as 0x02, converted
+      // audio back as 0x06 (which the leg's sink puts on the call). So: no
+      // 0x01 video loop, and 0x02 always carries the RAW microphone (the
+      // converted audio must never be fed back into the converter).
+      const waCallsLeg = !!options.waCalls;
       this.voiceConversion = voiceConversion;
       this.active = true;
       this.initWs();
@@ -2518,6 +2974,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       const vid = activeSocialSource().getVideoElement() || $('socialRemoteVideo');
 
       clearInterval(this.frameTimer);
+      if (waCallsLeg) this.frameTimer = null;
+      else
       // 15 fps loop matching WhatsApp and PyTgCalls video specification
       this.frameTimer = setInterval(() => {
         if (!this.active || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
@@ -2543,7 +3001,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       // trip, so the original 2048-sample buffer (128ms at 16kHz) would add
       // that much latency before conversion even starts. With conversion off
       // the original buffer size is kept exactly as it was.
-      const audioStream = voiceConversion ? outgoingCallAudioStream() : micStream;
+      const audioStream = voiceConversion && !waCallsLeg ? outgoingCallAudioStream() : micStream;
       if (audioStream && audioStream.getAudioTracks().length) {
         try {
           const bufferSize = voiceConversion ? 512 : 2048;
@@ -2600,7 +3058,263 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
   }
 
+  // -------------------------------------------------------------
+  // Incoming WhatsApp call (WaCalls engine)
+  //
+  // There is no phone UI here: an incoming call arrives at this app, and the
+  // offer reaches the page through server.mjs's event bridge
+  // (`wacalls_event` kind "incoming", carrying media audio|video). This is the
+  // one place that can answer it, so it renders the offer and the two actions
+  // that exist: answer (which accepts on WaCalls and opens the media leg with
+  // the selected avatar as the outgoing video) and decline.
+  // -------------------------------------------------------------
+  let waCallsIncoming = null;
+
+  function showIncomingWaCallsCall(evt){
+    waCallsIncoming = { callId: evt.callId, peer: evt.peer || 'Unknown', media: evt.media || 'audio' };
+    const banner = $('socialIncomingBanner');
+    const title = $('socialIncomingTitle');
+    const subEl = $('socialIncomingSub');
+    if (title) title.textContent = `Incoming WhatsApp ${waCallsIncoming.media === 'video' ? 'video' : 'voice'} call`;
+    if (subEl) subEl.textContent = `${waCallsIncoming.peer} · answering sends your ${selectedCallSource === 'avatar' ? 'Anam avatar' : 'Lucy 2.5 avatar'}`;
+    if (banner) banner.style.display = 'block';
+    startRingback();
+  }
+
+  function hideIncomingWaCallsCall(){
+    waCallsIncoming = null;
+    const banner = $('socialIncomingBanner');
+    if (banner) banner.style.display = 'none';
+    stopRingback();
+  }
+
+  $('socialIncomingDeclineBtn')?.addEventListener('click', async () => {
+    const call = waCallsIncoming;
+    hideIncomingWaCallsCall();
+    if (!call) return;
+    try {
+      await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/wacalls/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callId: call.callId }),
+      });
+    } catch(e) { console.warn('[WaCalls] decline failed:', e.message); }
+  });
+
+  $('socialIncomingAcceptBtn')?.addEventListener('click', async () => {
+    const call = waCallsIncoming;
+    const btn = $('socialIncomingAcceptBtn');
+    if (!call) return;
+    btn.disabled = true;
+    btn.textContent = 'Answering…';
+    try {
+      await answerIncomingWaCallsCall(call);
+    } catch(e) {
+      console.error('[WaCalls] could not answer the call:', e.message);
+      showCallFailureAndEnd(e.message || 'Could not answer the call');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Answer';
+    }
+  });
+
+  // Accepts on WaCalls, then brings this page into the call exactly like an
+  // outgoing one: mic + selected avatar, the media leg, and the call screen.
+  async function answerIncomingWaCallsCall(call){
+    const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/wacalls/answer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callId: call.callId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) throw new Error(data.error || `WaCalls could not answer (HTTP ${res.status})`);
+
+    hideIncomingWaCallsCall();
+    currentSocialPlatform = 'whatsapp';
+    currentCallEngine = 'wacalls';
+    selectedSocialContact = { name: call.peer, target: call.peer };
+
+    if (!socialMicStream) {
+      socialMicStream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
+      if (!socialMicStream) throw new Error('Microphone permission required to answer a call');
+    }
+    await activeSocialSource().start({ forSocialCall: true });
+
+    const useVoiceConversion = selectedCallSource === 'lucy' && LucyVoice.enabled && LucyVoice.canEnable();
+    if (useVoiceConversion) {
+      await LucyVoice.startForCall('whatsapp');
+      // The playout is where the converted audio is assembled (it is fed by
+      // channel 0x06 below); its sink is what puts those samples on the call's
+      // "pcm" channel. Without it the leg would have nothing to send.
+      await VoiceConversionPlayout.start();
+    }
+
+    showSocialCallScreen({ name: call.peer, label: `WhatsApp · WaCalls`, status: 'Connected' });
+
+    // Same socket job as an outgoing call: events plus the RVC round trip
+    // (raw mic up as 0x02, converted audio back as 0x06). Without this the
+    // converter would never receive the caller's-side audio to convert.
+    SocialCallMediaAdapter.startStreaming(activeSocialSource().getStream(), socialMicStream, {
+      voiceConversion: useVoiceConversion,
+      waCalls: true,
+    });
+
+    await WaCallsMediaLeg.open({
+      callId: call.callId,
+      video: call.media === 'video',
+      source: selectedCallSource === 'avatar' ? 'anam' : 'lucy',
+      voiceConversion: useVoiceConversion,
+    });
+
+    // Our own video has to be signalled to WhatsApp for an incoming video call
+    // (the peer asked for video; a silent leg would answer in audio only).
+    if (call.media === 'video') {
+      try {
+        await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/wacalls/video/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ callId: call.callId }),
+        });
+        console.log(`[WaCalls] answered an incoming VIDEO call ${call.callId} - avatar video signalled`);
+      } catch(e) {
+        console.warn('[WaCalls] could not signal video for the answered call:', e.message);
+      }
+    }
+  }
+
+  // Brings the call screen up for a call that was not started from the prep
+  // screen (an answered incoming call). Shared by both directions so the
+  // layout reset and the timer behave identically.
+  function showSocialCallScreen({ name, label, status }){
+    $('callPrepModal').classList.remove('active');
+    const callScr = $('socialCallScreen');
+    callScr.classList.add('active');
+    callScr.dataset.layout = 'pip';
+    const remoteVid = $('socialRemoteVideo'), selfVid = $('socialSelfVideo');
+    if (remoteVid && selfVid) {
+      remoteVid.className = 'socialPipMain';
+      selfVid.className = 'socialPipThumb';
+      remoteVid.style.left = ''; remoteVid.style.top = ''; remoteVid.style.right = '';
+      selfVid.style.left = ''; selfVid.style.top = ''; selfVid.style.right = '16px';
+    }
+    const cleanName = String(name || '').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').trim();
+    $('socialCallTargetName').textContent = cleanName || name || 'Contact';
+    $('socialCallPlatformPill').innerHTML = `<span>${label || 'WhatsApp'}</span>`;
+    $('socialCallPlatformPill').className = 'pill whatsapp';
+    $('socialCallStatusLabel').textContent = status || 'Connected';
+    $('socialCallTimer').textContent = '00:00';
+    socialCallStartedAt = Date.now();
+    clearInterval(socialCallDurationTimer);
+    socialCallDurationTimer = setInterval(() => {
+      const sec = Math.floor((Date.now() - socialCallStartedAt) / 1000);
+      const m = String(Math.floor(sec / 60)).padStart(2, '0');
+      const s = String(sec % 60).padStart(2, '0');
+      $('socialCallTimer').textContent = `${m}:${s}`;
+    }, 1000);
+    syncAvatarSourceUi();
+  }
+
+  // -------------------------------------------------------------
+  // Avatar video source - the runtime switch (Anam | Lucy 2.5).
+  //
+  // Same two sources the prep screen offers (LiveSwapMediaSource = Lucy 2.5
+  // live face swap, SocialAnamSource = Anam's avatar); this one can be flipped
+  // DURING a call, which switches the pixels the media leg sends from the very
+  // next encoded frame. It also sets the default for the next call, and the
+  // server records the switch so it shows up in the call log.
+  // -------------------------------------------------------------
+  function syncAvatarSourceUi(){
+    const sel = $('socialSourceSelect'), lbl = $('socialSourceLabel');
+    if (sel) sel.value = selectedCallSource === 'avatar' ? 'anam' : 'lucy';
+    if (lbl) lbl.textContent = selectedCallSource === 'avatar' ? 'Anam' : 'Lucy 2.5';
+  }
+
+  async function setSocialCallAvatarSource(source){
+    const next = source === 'anam' ? 'anam' : 'lucy';
+    const previous = selectedCallSource;
+    selectedCallSource = next === 'anam' ? 'avatar' : 'lucy';
+    // Keep the prep screen's tabs in step - it is the same choice.
+    $('prepSourceLucyBtn')?.classList.toggle('active', selectedCallSource === 'lucy');
+    $('prepSourceAvatarBtn')?.classList.toggle('active', selectedCallSource === 'avatar');
+    const srcLabel = $('prepSourceLabel');
+    if (srcLabel) srcLabel.textContent = selectedCallSource === 'avatar' ? 'AI Avatar (Anam)' : 'Live Swap / Lucy 2.5';
+    syncAvatarSourceUi();
+    LucyVoice.renderVoiceUi?.();
+
+    if (previous !== selectedCallSource) {
+      WaCallsMediaLeg.setAvatarSource(selectedCallSource);
+      console.log(`[UI] avatar source switched to ${selectedCallSource === 'avatar' ? 'Anam' : 'Lucy 2.5'}`);
+      // Recorded server-side too, so a mid-call switch appears in the call log
+      // next to the call itself (best-effort - never blocks the switch).
+      if (currentCallEngine === 'wacalls') {
+        fetch(SOCIAL_CALL_API_BASE + '/api/social-call/wacalls/avatar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source: selectedCallSource === 'avatar' ? 'anam' : 'lucy' }),
+        }).catch(() => {});
+      }
+    }
+  }
+
+  $('socialSourceSelect')?.addEventListener('change', (e) => {
+    setSocialCallAvatarSource(e.target.value);
+  });
+
+  // Every WaCalls event (server/wacalls.mjs's normalised vocabulary) lands
+  // here. The call_state / wa_call_event mirrors the server also sends keep the
+  // generic UI working; this handler is for what is WaCalls-specific: the
+  // incoming-call offer, media ready/not ready, and the peer asking for video.
+  function handleWaCallsEvent(evt){
+    const lbl = $('socialCallStatusLabel');
+    switch (evt.kind) {
+      case 'incoming':
+        // Ignore an offer while this app is already on a call (WaCalls itself
+        // allows one active call per client id, so this is only about not
+        // throwing an answer UI at a user who is mid-call).
+        if ($('socialCallScreen')?.classList.contains('active')) {
+          console.log(`[WaCalls] incoming call ${evt.callId} ignored - a call is already up`);
+          return;
+        }
+        showIncomingWaCallsCall(evt);
+        return;
+      case 'media-ready':
+        if (lbl) lbl.textContent = 'Connected';
+        $('socialCallIdle') && ($('socialCallIdle').style.display = 'none');
+        stopRingback();
+        return;
+      case 'media-not-ready':
+        if (lbl && evt.subtype === 'held') lbl.textContent = 'On hold';
+        return;
+      case 'video-request': {
+        // The peer wants video on a call that is up. Ask first (never silently
+        // turn a camera on someone), then use the documented WaCalls path:
+        // renegotiate the same peer connection, then tell WaCalls to signal the
+        // upgrade to WhatsApp.
+        if (!WaCallsMediaLeg.active || WaCallsMediaLeg.video) return;
+        if (!confirm('The other side wants to switch this call to video. Send your avatar video?')) return;
+        WaCallsMediaLeg.upgradeToVideo()
+          .then(() => console.log('[WaCalls] call upgraded to video'))
+          .catch((e) => console.warn('[WaCalls] video upgrade failed:', e.message));
+        return;
+      }
+      case 'ended':
+        console.log(`[WaCalls] call ended (${evt.reason || 'ended'})`);
+        hideIncomingWaCallsCall();
+        if ($('socialCallScreen')?.classList.contains('active')) endSocialCall();
+        return;
+      case 'error':
+        console.warn(`[WaCalls] ${evt.error}`);
+        return;
+      default:
+        return;
+    }
+  }
+
   function handleMediaWsMessage(msg){
+    if (msg.type === 'wacalls_event') {
+      handleWaCallsEvent(msg);
+      return;
+    }
     if (msg.type === 'vc_status') {
       // Live conversion state for the call that is up right now.
       LucyVoice.applyStatus(msg);
@@ -2701,11 +3415,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   async function fetchConnectedStatus(){
     renderWaEngineUi();
     // Only the SELECTED engine is polled. The Green API route resolves the
-    // caller's own Green API credentials, which a whatsapp-rust user has no
-    // reason to be asked for; the whatsapp-rust bridge is a different session
-    // entirely. Switching engines re-polls, nothing switches on its own.
-    if (waEngine() === 'whatsapp-rust') {
-      await fetchWaRustStatus();
+    // caller's own Green API credentials, which a WaCalls user has no reason
+    // to be asked for; the WaCalls instance is a different session entirely.
+    // Switching engines re-polls, nothing switches on its own.
+    if (waEngine() === 'wacalls') {
+      await fetchWaCallsStatus();
     }
 
     try {
@@ -2713,8 +3427,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       if (!res.ok) return;
       const data = await res.json();
 
-      if (waEngine() !== 'whatsapp-rust') {
-        // WhatsApp status
+      if (waEngine() !== 'wacalls') {
+        // WhatsApp status (Green API)
         const wa = data.whatsapp || {};
         const waStatusEl = $('whatsappAccountStatus');
         const waBadgeEl = $('whatsappAccountBadge');
@@ -2788,12 +3502,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   // Profile -> WhatsApp
   // Fetches the pairing QR for whichever engine is selected, and paints it.
-  // Green API's route returns a ready-made data URL; the whatsapp-rust route
-  // renders the bridge's raw QR payload into one server-side (see server.mjs).
+  // Green API's route returns a ready-made data URL; the WaCalls route renders
+  // the raw QR payload WaCalls puts on its event stream into one server-side
+  // (see server.mjs). Same <img>, two engines.
   async function refreshWaQr(){
     const engine = waEngine();
-    const endpoint = engine === 'whatsapp-rust'
-      ? '/api/social-call/whatsapp-rust/qr'
+    const endpoint = engine === 'wacalls'
+      ? '/api/social-call/wacalls/qr'
       : '/api/social-call/whatsapp/qr';
     const load = $('waQrLoading'), img = $('waQrImg');
     if (load) { load.style.display = 'block'; load.textContent = 'Generating QR code…'; }
@@ -2843,8 +3558,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     // WhatsApp sessions, so unlinking one must not touch the other.
     const engine = waEngine();
     if (!confirm(`Disconnect WhatsApp from ${waEngineLabel(engine)}?`)) return;
-    const endpoint = engine === 'whatsapp-rust'
-      ? '/api/social-call/whatsapp-rust/logout'
+    const endpoint = engine === 'wacalls'
+      ? '/api/social-call/wacalls/logout'
       : '/api/social-call/whatsapp/disconnect';
     try {
       const r = await fetch(SOCIAL_CALL_API_BASE + endpoint, {
@@ -3091,15 +3806,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     const container = $('contactsListContainer');
     container.innerHTML = '<div style="text-align:center; padding:30px; color:var(--dim); font-size:13px;">Loading contacts…</div>';
 
-    // WhatsApp contacts come from whichever engine is selected: Green API's
-    // own getContacts, or the whatsapp-rust bridge's directory (numbers the
-    // user has added/called, each validated against WhatsApp for real when
-    // it is saved - see handle_contacts_post in whatsapp_rust_bridge).
+    // WhatsApp contacts come from the Green API directory. WaCalls has no
+    // contact directory of its own (its API is sessions, pairing and calls),
+    // so on the WaCalls engine this list is only populated when the user also
+    // has Green API credentials - and calling a typed number directly has
+    // always been supported regardless.
     const endpoint = platform === 'telegram'
       ? (SOCIAL_CALL_API_BASE + '/api/social-call/telegram/contacts')
-      : (SOCIAL_CALL_API_BASE + (waEngine() === 'whatsapp-rust'
-          ? '/api/social-call/whatsapp-rust/contacts'
-          : '/api/social-call/whatsapp/contacts'));
+      : (SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp/contacts');
     try {
       const res = await fetch(endpoint, { headers: { ...(await authHeader()) } });
       const data = await res.json();
@@ -3215,37 +3929,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       return;
     }
 
-    if (currentSocialPlatform === 'whatsapp' && waEngine() === 'whatsapp-rust') {
-      // Don't ring a number that isn't on WhatsApp: the bridge asks WhatsApp
-      // (Client::contacts().is_on_whatsapp) and returns the real answer.
-      const btn = $('callDirectBtn');
-      const originalText = btn.textContent;
-      btn.disabled = true;
-      btn.textContent = 'Checking…';
-      try {
-        const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp-rust/lookup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: typed }),
-        });
-        const data = await res.json();
-        if (!res.ok || data.error) throw new Error(data.error || 'WhatsApp lookup failed');
-        if (!data.exists) throw new Error(`${typed} is not registered on WhatsApp`);
-        const addRes = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp-rust/contacts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: data.phone, name: data.name }),
-        }).catch(() => null);
-        if (addRes) { allLoadedContacts = (await addRes.json().catch(() => null)) ? allLoadedContacts : allLoadedContacts; }
-        selectContactForCall({ name: data.name || typed, target: data.phone || typed });
-      } catch(e) {
-        alert(e.message);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = originalText;
-      }
+    if (currentSocialPlatform === 'whatsapp' && waEngine() === 'wacalls') {
+      // WaCalls has no registration-lookup endpoint, so there is nothing to
+      // check server-side here: the number is used as typed and WaCalls will
+      // report a real failure (or a real call) when the call is placed. Making
+      // the check up client-side would just be a claim we cannot back.
+      selectContactForCall({ name: typed, target: typed });
       return;
     }
+
 
     selectContactForCall({ name: typed, target: typed });
   });
@@ -3400,23 +4092,25 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   }
 
   // -------------------------------------------------------------
-  // whatsapp-rust engine UI - engine tabs, phone-number pair-code linking,
-  // and status. Everything goes through server.mjs's /whatsapp-rust/*
-  // routes; the Rust bridge keeps the WhatsApp session/identity keys on the
-  // server and only ever returns connection state, the linked number, a QR
-  // payload and a pairing code. No session material reaches this file.
+  // WaCalls engine UI - engine tabs, session state and pairing. Everything
+  // goes through server.mjs's /api/social-call/wacalls/* routes; the WaCalls
+  // API key and the WhatsApp session stay on the server side (WaCalls owns the
+  // session - this app only drives it). The page never sees a credential, only
+  // connection state, the linked number and a QR image.
   // -------------------------------------------------------------
   function renderWaEngineUi(){
     const engine = waEngine();
-    const green = $('waEngineGreenBtn'), rust = $('waEngineRustBtn');
+    const green = $('waEngineGreenBtn'), wc = $('waEngineWaCallsBtn');
     if (green) green.classList.toggle('active', engine === 'greenapi');
-    if (rust) rust.classList.toggle('active', engine === 'whatsapp-rust');
+    if (wc) wc.classList.toggle('active', engine === 'wacalls');
     const hint = $('waEngineHint');
     if (hint) hint.textContent = WA_ENGINES[engine].hint;
 
-    // The pair-code box belongs to whatsapp-rust only - Green API links by QR.
-    const pairBox = $('waPairCodeBox');
-    if (pairBox) pairBox.style.display = engine === 'whatsapp-rust' ? 'block' : 'none';
+    // The session box belongs to WaCalls only: WaCalls owns its WhatsApp
+    // session on its own machine, while Green API is a per-user REST account
+    // that links by QR with nothing of ours stored server-side.
+    const sessionBox = $('waSessionBox');
+    if (sessionBox) sessionBox.style.display = engine === 'wacalls' ? 'block' : 'none';
     const qrBox = $('waQrBox');
     if (qrBox) qrBox.style.display = 'block';
 
@@ -3427,8 +4121,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     if (val) val.textContent = waEngineLabel(engine);
     const prepHint = $('prepEngineHint');
     if (prepHint) {
-      prepHint.textContent = engine === 'whatsapp-rust'
-        ? 'Real WhatsApp call — outgoing video is your live avatar'
+      prepHint.textContent = engine === 'wacalls'
+        ? 'Real WhatsApp video call — outgoing video is the avatar selected below'
         : 'Audio-only call via the Green API calls SDK';
     }
   }
@@ -3447,37 +4141,76 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     refreshWaQr();
     fetchConnectedStatus();
   });
-  $('waEngineRustBtn')?.addEventListener('click', () => {
-    setWaEngine('whatsapp-rust');
+  $('waEngineWaCallsBtn')?.addEventListener('click', () => {
+    setWaEngine('wacalls');
     resetWaQrImage();
     refreshWaQr();
-    fetchWaRustStatus();
+    fetchWaCallsStatus();
   });
   $('prepEngineSwitchBtn')?.addEventListener('click', () => {
-    setWaEngine(waEngine() === 'greenapi' ? 'whatsapp-rust' : 'greenapi');
+    setWaEngine(waEngine() === 'greenapi' ? 'wacalls' : 'greenapi');
   });
 
-  // whatsapp-rust connection status. Separate from fetchConnectedStatus()
-  // so a user on Green API never triggers a request to a bridge they are not
-  // using (and so a missing bridge binary shows as its own honest error).
-  async function fetchWaRustStatus(){
+  // WaCalls connection status. Separate from fetchConnectedStatus() so a user
+  // on Green API never triggers a request to a WaCalls instance they are not
+  // using (and so an unconfigured or unreachable instance shows as its own
+  // honest error instead of "not connected" on an engine that is not in play).
+  //
+  // Everything shown here is real state from the instance: which session this
+  // app drives, whether that session is linked and as what number, and whether
+  // the instance can carry video at all (a cached capability probe - see
+  // probeVideoSupport() in server/wacalls.mjs). Nothing is inferred here.
+  // The capability probe is a round trip, so it is not repeated on every 3s
+  // poll: ask for it while the answer is still unknown (first load, or a
+  // rebuild that changed the instance), otherwise only on demand.
+  let waVideoStateKnown = null;
+  async function fetchWaCallsStatus({ probe = false } = {}){
+    const useProbe = probe || waVideoStateKnown === null || waVideoStateKnown === 'unknown';
     const detail = $('waDetailStatus'), sub = $('waDetailSub');
+    const renderSession = (status) => {
+      const idEl = $('waSessionId'), videoEl = $('waSessionVideo'), hintEl = $('waSessionHint');
+      if (idEl) idEl.textContent = status?.sessionId || '—';
+      if (videoEl) {
+        const state = status?.video?.state;
+        videoEl.textContent = state === 'video' ? 'supported'
+          : state === 'audio-only' ? 'audio-only build'
+          : state === 'unknown' ? 'not checked yet'
+          : '—';
+        videoEl.style.color = state === 'video' ? '#25D366' : (state === 'audio-only' ? '#ffb020' : '#fff');
+      }
+      if (hintEl) hintEl.textContent = status?.video?.detail || status?.error || '';
+      // The QR box is only meaningful while an unlinked session is waiting.
+      const qrBox = $('waQrBox');
+      if (qrBox) qrBox.style.display = (status?.configured && !status?.paired) ? 'block' : 'none';
+    };
+
+    const statusEl = $('whatsappAccountStatus');
+    const badgeEl = $('whatsappAccountBadge');
     try {
-      const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp-rust/status');
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `whatsapp-rust bridge unreachable (HTTP ${res.status})`);
+      const res = await fetch(SOCIAL_CALL_API_BASE + `/api/social-call/wacalls/status${useProbe ? '?probe=1' : ''}`);
+      const data = await res.json().catch(() => ({}));
+      waVideoStateKnown = data?.video?.state ?? waVideoStateKnown;
+      renderSession(data);
 
-      const statusEl = $('whatsappAccountStatus');
-      const badgeEl = $('whatsappAccountBadge');
+      // A paired WaCalls session means incoming WhatsApp calls can arrive at
+      // any moment, so keep the control socket open while this engine is the
+      // selected one.
+      SocialCallMediaAdapter.watchEvents(!!(data.configured && data.paired));
 
-      if (data.connected) {
-        const phone = data.user?.phone ? '+' + data.user.phone : (data.user?.name || 'WhatsApp');
-        if (statusEl) statusEl.textContent = `Connected as ${phone} (whatsapp-rust)`;
+      if (data.configured && data.paired) {
+        const phone = data.phone ? '+' + data.phone : (data.jid || 'WhatsApp');
+        if (statusEl) statusEl.textContent = `Connected as ${phone} (WaCalls)`;
         if (badgeEl) { badgeEl.textContent = 'Connected'; badgeEl.classList.add('connected'); }
         if (detail) detail.textContent = 'Connected';
-        if (sub) sub.textContent = `${phone} · whatsapp-rust · video calling available`;
-        $('waConnectedNumber').textContent = `${phone}${data.user?.name ? ' (' + data.user.name + ')' : ''}`;
-        $('waConnectedPushName').textContent = 'Ready for outgoing audio + video calls';
+        if (sub) {
+          sub.textContent = `${phone} · WaCalls · ${data.video?.state === 'audio-only'
+            ? 'audio-only build (no video routes)'
+            : 'audio + video calling'}`;
+        }
+        $('waConnectedNumber').textContent = phone;
+        $('waConnectedPushName').textContent = data.video?.state === 'audio-only'
+          ? 'Ready for outgoing audio calls (this instance cannot send video)'
+          : 'Ready for outgoing audio + video calls';
         $('waNotConnectedView').style.display = 'none';
         $('waConnectedView').style.display = 'block';
         const choiceSub = $('choiceWhatsAppSubtitle');
@@ -3485,69 +4218,63 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         return data;
       }
 
-      if (statusEl) statusEl.textContent = 'Not connected (whatsapp-rust)';
+      if (statusEl) statusEl.textContent = data.configured ? 'Not connected (WaCalls)' : 'WaCalls not configured';
       if (badgeEl) { badgeEl.textContent = 'Connect'; badgeEl.classList.remove('connected'); }
-      if (detail) detail.textContent = data.status === 'scan_qr' ? 'Waiting for a scan…'
-        : data.status === 'awaiting_pair' ? 'Waiting for the code…'
-        : data.status === 'reconnecting' ? 'Reconnecting…'
-        : data.status === 'logged_out' ? 'Unlinked from WhatsApp'
+      if (detail) detail.textContent = data.state === 'qr' ? 'Waiting for a scan…'
+        : data.state === 'open' ? 'Connected'
+        : data.state === 'unreachable' ? 'WaCalls unreachable'
+        : data.state === 'not_configured' ? 'Server not configured'
         : 'Disconnected';
-      if (sub) sub.textContent = data.error || 'Scan the QR, or link with a phone-number code below';
+      if (sub) sub.textContent = data.error || 'Link the WaCalls session with the QR below (or press “Start pairing”).';
       $('waNotConnectedView').style.display = 'block';
       $('waConnectedView').style.display = 'none';
-
-      if (data.pairingCode) showWaPairCode(data.pairingCode);
-      if (data.error) {
-        const hint = $('waPairCodeHint');
-        if (hint) hint.textContent = data.error;
-      }
+      const choiceSub = $('choiceWhatsAppSubtitle');
+      if (choiceSub && data.configured) choiceSub.textContent = 'WaCalls — not linked yet';
       return data;
     } catch(e){
-      if (detail) detail.textContent = 'whatsapp-rust unavailable';
+      if (detail) detail.textContent = 'WaCalls unavailable';
       if (sub) sub.textContent = e.message;
+      renderSession(null);
       return null;
     }
   }
 
-  function showWaPairCode(code){
-    const display = $('waPairCodeDisplay');
-    if (!display) return;
-    // WhatsApp's own 8-character code, formatted the way the phone shows it.
-    display.textContent = code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code;
-    display.style.display = 'block';
-    const hint = $('waPairCodeHint');
-    if (hint) hint.textContent = 'Enter this on your phone: WhatsApp > Linked Devices > Link a Device > Link with phone number instead';
-  }
-
-  $('waPairCodeBtn')?.addEventListener('click', async () => {
-    const btn = $('waPairCodeBtn');
-    const phone = ($('waPairPhoneInput')?.value || '').replace(/[^\d]/g, '');
-    const hint = $('waPairCodeHint');
-    if (phone.length < 7) {
-      if (hint) hint.textContent = 'Enter your full WhatsApp number with country code, digits only.';
-      return;
-    }
+  // WaCalls session controls. Pairing is driven server-side (the API key stays
+  // there); the QR arrives over WaCalls' event stream and is rendered by
+  // /wacalls/qr, so the same box the Green API QR uses shows it.
+  $('waSessionPairBtn')?.addEventListener('click', async () => {
+    const hint = $('waSessionHint');
+    const btn = $('waSessionPairBtn');
     btn.disabled = true;
-    btn.textContent = 'Requesting…';
-    if (hint) hint.textContent = '';
+    btn.textContent = 'Starting…';
     try {
-      // Real pair-code linking: whatsapp-rust's Client::pair_with_code, via
-      // server.mjs. The code returned is WhatsApp's own - nothing is invented
-      // client-side, and a rejection is shown verbatim.
-      const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp-rust/pair-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.code) throw new Error(data.error || 'Pair code request failed');
-      showWaPairCode(data.code);
+      const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/wacalls/pair', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+      if (hint) hint.textContent = 'Pairing started — the QR appears below. Scan it in WhatsApp > Linked Devices.';
+      setTimeout(() => refreshWaQr(), 1500);
+      setTimeout(() => fetchWaCallsStatus({ probe: true }), 5000);
     } catch(e){
       if (hint) hint.textContent = e.message;
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Get my 8-digit code';
+      btn.textContent = 'Start pairing (show QR)';
     }
+  });
+
+  $('waSessionLogoutBtn')?.addEventListener('click', async () => {
+    const hint = $('waSessionHint');
+    if (!confirm('Unlink this WhatsApp account from the WaCalls session?')) return;
+    try {
+      const res = await fetch(SOCIAL_CALL_API_BASE + '/api/social-call/wacalls/logout', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+      if (hint) hint.textContent = 'Session unlinked. Press “Start pairing” to link a number again.';
+      resetWaQrImage();
+    } catch(e){
+      if (hint) hint.textContent = e.message;
+    }
+    await fetchWaCallsStatus();
   });
 
   async function placeSocialCall(){
@@ -3621,50 +4348,34 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         // for WhatsApp (see server.mjs's call route comments).
         await startGreenApiCall(selectedSocialContact.target, { voiceConversion: useVoiceConversion });
       }
-      // On whatsapp-rust the REAL call was already placed server-side by the
-      // Rust bridge (offer + relay + E2E media). Nothing to dial here: the
-      // media WebSocket that starts below is what feeds the avatar into it.
-
-      // Transition to Active Call UI
-      $('callPrepModal').classList.remove('active');
-      const callScr = $('socialCallScreen');
-      callScr.classList.add('active');
-
-      // Reset layout to defaults for this call: PIP mode, remote as big
-      // view, self-view back in its default corner (undoes any drag/swap
-      // left over from a previous call).
-      callScr.dataset.layout = 'pip';
-      const remoteVid = $('socialRemoteVideo'), selfVid = $('socialSelfVideo');
-      if (remoteVid && selfVid) {
-        remoteVid.className = 'socialPipMain';
-        selfVid.className = 'socialPipThumb';
-        remoteVid.style.left = ''; remoteVid.style.top = ''; remoteVid.style.right = '';
-        selfVid.style.left = ''; selfVid.style.top = ''; selfVid.style.right = '16px';
+      if (currentSocialPlatform === 'whatsapp' && currentCallEngine === 'wacalls') {
+        // The REAL call was already placed by WaCalls (offer + relay + E2E
+        // media on its side). What remains is this browser's own media leg to
+        // the WaCalls server: data channels up (avatar video + call audio) and
+        // down (the peer's audio/video). Opening it is what makes the call an
+        // actual video call - the offer carries the "vp8" channel.
+        await WaCallsMediaLeg.open({
+          callId: data.call.callId,
+          video: data.call.videoRequested !== false,
+          source: selectedCallSource === 'avatar' ? 'anam' : 'lucy',
+          voiceConversion: useVoiceConversion,
+        });
+        console.log(`[WaCalls] outgoing call ${data.call.callId} ready (avatar=${selectedCallSource === 'avatar' ? 'Anam' : 'Lucy 2.5'})`);
       }
 
-      // Strip emoji from the displayed name here specifically (contact
-      // names often have decorative emoji saved on the phone itself -
-      // e.g. a heart - which read oddly stacked right above the
-      // "Ringing... · 00:00" status line on this screen).
-      const rawName = selectedSocialContact.name || selectedSocialContact.target;
-      const cleanName = rawName.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').trim();
-      $('socialCallTargetName').textContent = cleanName || rawName;
+      // Transition to Active Call UI (shared with the answered-incoming path,
+      // so layout reset, name handling and the timer behave identically for
+      // both directions). The name is stripped of emoji: contact names often
+      // carry decorative ones saved on the phone itself, which read oddly
+      // stacked above the "Ringing… · 00:00" line.
       const platformLabel = currentSocialPlatform === 'whatsapp'
-        ? `WhatsApp${currentCallEngine === 'whatsapp-rust' ? ' · rust' : ''}`
+        ? `WhatsApp${currentCallEngine === 'wacalls' ? ' · WaCalls' : ''}`
         : 'Telegram';
-      $('socialCallPlatformPill').innerHTML = `<span>${platformLabel}</span>`;
-      $('socialCallPlatformPill').className = `pill ${currentSocialPlatform}`;
-      $('socialCallStatusLabel').textContent = 'Ringing…';
-      $('socialCallTimer').textContent = '00:00';
-
-      socialCallStartedAt = Date.now();
-      clearInterval(socialCallDurationTimer);
-      socialCallDurationTimer = setInterval(() => {
-        const sec = Math.floor((Date.now() - socialCallStartedAt) / 1000);
-        const m = String(Math.floor(sec / 60)).padStart(2, '0');
-        const s = String(sec % 60).padStart(2, '0');
-        $('socialCallTimer').textContent = `${m}:${s}`;
-      }, 1000);
+      showSocialCallScreen({
+        name: selectedSocialContact.name || selectedSocialContact.target,
+        label: platformLabel,
+        status: 'Ringing…',
+      });
 
       // Start streaming outgoing video frames & live audio through adapter.
       // With conversion on, that audio is fed through RVC on the server: for
@@ -3673,6 +4384,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       // audio track.
       SocialCallMediaAdapter.startStreaming(activeSocialSource().getStream(), socialMicStream, {
         voiceConversion: useVoiceConversion,
+        // WaCalls has its own media plane (see WaCallsMediaLeg); this socket
+        // stays for the event stream and the RVC return path only.
+        waCalls: currentCallEngine === 'wacalls',
       });
 
     } catch(err) {
@@ -3690,17 +4404,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     if (socialMicStream) {
       socialMicStream.getAudioTracks().forEach(t => t.enabled = !socialMuted);
     }
-    // On whatsapp-rust, muting is also announced to the peer: the bridge calls
-    // CallHandle::set_muted, which switches the encoder to DTX comfort noise
-    // and sends WhatsApp's <mute_v2>, so the other phone shows the mute too.
-    // Fire-and-forget: the local track is already muted either way, and a
-    // failed announcement must not leave the button looking wrong.
-    if (currentCallEngine === 'whatsapp-rust') {
-      fetch(SOCIAL_CALL_API_BASE + '/api/social-call/whatsapp-rust/mute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ muted: socialMuted }),
-      }).catch(() => {});
+    // On WaCalls the outgoing audio is this page's own data channel, so mute
+    // is applied here: the leg keeps sending (digital silence) so the peer's
+    // stream does not break up, but nothing from the room goes out. Green API
+    // mutes its own outgoing track above, unchanged.
+    if (currentCallEngine === 'wacalls') {
+      WaCallsMediaLeg.setMuted(socialMuted);
     }
     $('socialMuteBtn').classList.toggle('muted', socialMuted);
     $('socialMuteBtn').innerHTML = socialMuted
@@ -3792,9 +4501,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   async function endSocialCall(){
     clearInterval(socialCallDurationTimer);
     stopRingback();
-    // Only the engine that carried THIS call is torn down: Green API's
-    // browser client hangs up client-side, whatsapp-rust hangs up server-side
-    // through /api/social-call/hangup further down.
+    // Only the engine that carried THIS call is torn down: Green API's browser
+    // client hangs up client-side, WaCalls ends the call server-side through
+    // /api/social-call/hangup further down (which deletes it on WaCalls).
     if (currentSocialPlatform === 'whatsapp' && currentCallEngine === 'greenapi') endGreenApiCall();
     $('socialCallScreen').classList.remove('active');
 
@@ -3804,11 +4513,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     // must not outlive the call it was started for.
     LucyVoice.stopForCall();
     VoiceConversionPlayout.stop();
-    // Tear down media pipelines
+    // Tear down media pipelines. The WaCalls leg goes first: it owns the data
+    // channels that carry this call's media, and closing it stops the encoder
+    // before the avatar sources below are stopped underneath it.
+    WaCallsMediaLeg.close();
+    hideIncomingWaCallsCall();
     SocialCallMediaAdapter.stop();
     LiveSwapMediaSource.stop();
     SocialAnamSource.stop();
-    WaRustPeerMedia.stop();
+    PeerMediaPlayout.stop();
     currentCallEngine = null;
 
     if (socialMicStream) {
@@ -3824,7 +4537,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     renderRecent();
   }
 
-  // Initial fetch of connected account statuses
+  // Initial fetch of connected account statuses, and make both avatar-source
+  // selectors agree with the stored/default choice before anything is shown.
+  syncAvatarSourceUi();
   fetchConnectedStatus();
 
   // ---------- auth ----------

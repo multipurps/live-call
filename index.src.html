@@ -513,17 +513,18 @@
       <div class="subScreenBody">
         <!-- WhatsApp ENGINE selection. Two independent backends, chosen
              explicitly and never switched silently:
-               Green API    - the original integration (REST + their browser
-                              calls SDK). Audio only.
-               whatsapp-rust- server/whatsapp_rust_bridge, a real WhatsApp
-                              client that places 1:1 audio AND video calls and
-                              takes the live Lucy 2.5 / Anam avatar output as
-                              its video source.
+               Green API - the original integration (REST + their browser
+                           calls SDK). Audio only.
+               WaCalls   - an external WaCalls instance (server/wacalls.mjs
+                           proxies it), a real WhatsApp client that places 1:1
+                           AUDIO AND VIDEO calls and takes the live Anam /
+                           Lucy 2.5 avatar output as its outgoing video.
              They keep separate sessions; picking one does not log the other
-             out or read its credentials. -->
+             out or read its credentials, and the WaCalls API key never
+             reaches this page (server-side only). -->
         <div class="connectTabs" style="margin-bottom:10px;">
           <button class="connectTabBtn active" id="waEngineGreenBtn">Green API</button>
-          <button class="connectTabBtn" id="waEngineRustBtn">whatsapp-rust</button>
+          <button class="connectTabBtn" id="waEngineWaCallsBtn">WaCalls</button>
         </div>
         <p class="hint" id="waEngineHint" style="margin:0 0 16px; text-align:left;"></p>
 
@@ -549,19 +550,22 @@
             <button class="saveKeyBtn" id="waRefreshQrBtn" style="margin-top:14px; width:auto; padding:8px 20px; font-size:13px;">Refresh QR Code</button>
           </div>
 
-          <!-- Phone-number pair-code linking. Only shown on the whatsapp-rust
-               engine: it calls whatsapp-rust's real Client::pair_with_code
-               through server.mjs, which returns WhatsApp's own 8-character
-               code (or WhatsApp's own rejection, shown verbatim). QR stays
-               available at the same time - whichever the user completes
-               first wins. Nothing is generated client-side. -->
-          <div id="waPairCodeBox" class="connectBox" style="display:none; margin-top:14px; padding:20px 16px; background:var(--coffee-light); border:1px solid var(--line); border-radius:16px; text-align:center;">
-            <div style="font-size:14px; font-weight:600; margin-bottom:6px;">Or link with a phone-number code</div>
-            <p style="font-size:12.5px; color:var(--dim); margin-bottom:12px;">On your phone: WhatsApp &gt; Settings &gt; Linked Devices &gt; Link a Device &gt; <b>Link with phone number instead</b></p>
-            <input class="plainInput" id="waPairPhoneInput" type="tel" autocomplete="tel" placeholder="Your WhatsApp number, e.g. 15551234567" />
-            <button class="saveKeyBtn" id="waPairCodeBtn" style="width:100%; margin:12px 0 0;">Get my 8-digit code</button>
-            <div id="waPairCodeDisplay" style="display:none; margin-top:16px; font-size:28px; font-weight:800; letter-spacing:5px; color:#fff; font-variant-numeric:tabular-nums;">--------</div>
-            <p class="hint" id="waPairCodeHint" style="margin-top:10px;"></p>
+          <!-- WaCalls session controls. WaCalls owns the WhatsApp session
+               (its own SQLite/Postgres store, on its machine) - this app only
+               drives it, so what lives here is: which session it is driving,
+               the real connection state, and the two actions that make sense
+               (start/re-start pairing, unlink). The QR itself arrives over
+               WaCalls' event stream and is rendered server-side; the box
+               above shows it, exactly as it does for Green API. -->
+          <div id="waSessionBox" class="connectBox" style="display:none; margin-top:14px; padding:20px 16px; background:var(--coffee-light); border:1px solid var(--line); border-radius:16px; text-align:left;">
+            <div style="font-size:14px; font-weight:600; margin-bottom:6px;">WaCalls session</div>
+            <p style="font-size:12.5px; color:var(--dim); margin-bottom:10px;" id="waSessionHint">Checking the WaCalls instance…</p>
+            <div style="font-size:12px; color:var(--dim); margin-bottom:12px;">
+              <div>Session: <span id="waSessionId" style="color:#fff; font-weight:600;">—</span></div>
+              <div>Video: <span id="waSessionVideo" style="color:#fff; font-weight:600;">—</span></div>
+            </div>
+            <button class="saveKeyBtn" id="waSessionPairBtn" style="width:100%; margin:0;">Start pairing (show QR)</button>
+            <button class="saveKeyBtn" id="waSessionLogoutBtn" style="width:100%; margin:10px 0 0; background:#dc3545; color:#fff;">Unlink this session</button>
           </div>
         </div>
 
@@ -947,13 +951,15 @@
   <video id="socialRemoteVideo" class="socialPipMain" autoplay playsinline></video>
   <video id="socialSelfVideo" class="socialPipThumb" autoplay playsinline muted></video>
 
-  <!-- Inbound video from a whatsapp-rust call: the peer's H.264 access units
-       arrive over the media WebSocket and are decoded with WebCodecs onto
-       this canvas. Stays hidden until real frames decode, so an audio-only
-       call (or a browser without WebCodecs) shows exactly what it did before.
-       pointer-events:none keeps it out of the existing tap-to-swap / drag
-       layout handling on the two video elements above. -->
+  <!-- Inbound video from the peer. On WaCalls their H.264 access units arrive
+       on this page's own "vp8" data channel, are decoded with WebCodecs and are
+       drawn here; the media-socket peer channels (0x03/0x04) land here too for
+       engines whose media stays server-side. Stays hidden until real frames
+       decode, so an audio-only call (or a browser without WebCodecs) shows
+       exactly what it did before. pointer-events:none keeps it out of the
+       existing tap-to-swap / drag layout handling on the two elements above. -->
   <canvas id="socialPeerCanvas" width="180" height="240" style="display:none; position:absolute; right:16px; bottom:calc(env(safe-area-inset-bottom, 0px) + 118px); width:120px; border-radius:12px; border:1px solid rgba(255,255,255,0.28); box-shadow:0 8px 24px rgba(0,0,0,0.45); z-index:3; pointer-events:none;"></canvas>
+
 
   <div id="socialCallTop">
     <div id="socialCallHeaderInfo" style="text-align:left;">
@@ -980,13 +986,25 @@
       <img src="logo.png" alt="" />
     </div>
     <div id="socialCallIdleStatus" style="font-size:15px; font-weight:600; color:#fff;">Connecting social call…</div>
-    <div id="socialCallIdleSub" style="font-size:12.5px; color:var(--dim); margin-top:4px;">Setting up Lucy 2.5 video stream</div>
+    <div id="socialCallIdleSub" style="font-size:12.5px; color:var(--dim); margin-top:4px;">Setting up the avatar video stream</div>
   </div>
 
   <div id="socialCallBottom">
     <button class="roundBtn" id="socialLayoutToggleBtn" aria-label="Change call layout">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="13" y="13" width="6" height="6" rx="1" fill="white" stroke="none"/></svg>
     </button>
+    <!-- Outgoing avatar video source, switchable DURING the call: whatever is
+         selected here is the video WaCalls sends to the peer (Anam's own
+         synthesised avatar, or Lucy 2.5's live face swap). Same two sources the
+         Call Preparation screen already offers - this is the runtime switch for
+         the call that is up, and it also sets the default for the next one. -->
+    <label style="display:flex; align-items:center; gap:6px; background:rgba(255,255,255,0.14); border:1px solid rgba(255,255,255,0.22); border-radius:12px; padding:6px 10px; font-size:11.5px; font-weight:600; color:#fff;">
+      <span id="socialSourceLabel">Lucy 2.5</span>
+      <select id="socialSourceSelect" aria-label="Avatar video source" style="background:transparent; border:0; color:#fff; font-size:11.5px; font-weight:700; outline:none;">
+        <option value="lucy" style="color:#000;">Lucy 2.5</option>
+        <option value="anam" style="color:#000;">Anam</option>
+      </select>
+    </label>
     <button class="roundBtn" id="socialMuteBtn" aria-label="Mute">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4"/></svg>
     </button>
@@ -995,6 +1013,25 @@
     </button>
   </div>
 </div>
+
+  <!-- Incoming WhatsApp call (WaCalls engine). WaCalls reports the offer over
+         its event stream; this banner is the "answer / decline" control pair the
+         web app cannot provide any other way (there is no phone UI here - the
+         call arrives at this screen). Hidden unless a real offer is pending, so
+         it adds nothing to calls that started from this app. -->
+    <div id="socialIncomingBanner" style="display:none; position:fixed; left:12px; right:12px; top:calc(env(safe-area-inset-top, 0px) + 74px); z-index:70; background:rgba(18,18,20,0.92); border:1px solid rgba(255,255,255,0.18); border-radius:16px; padding:14px 16px; box-shadow:0 12px 32px rgba(0,0,0,0.5);">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <div style="min-width:0;">
+          <div id="socialIncomingTitle" style="font-size:13.5px; font-weight:700; color:#fff;">Incoming WhatsApp call</div>
+          <div id="socialIncomingSub" style="font-size:11.5px; color:var(--dim); margin-top:2px;">—</div>
+        </div>
+        <div style="display:flex; gap:8px; flex-shrink:0;">
+          <button id="socialIncomingDeclineBtn" class="miniActionBtn" style="background:#dc3545; color:#fff;">Decline</button>
+          <button id="socialIncomingAcceptBtn" class="miniActionBtn" style="background:#25D366; color:#fff;">Answer</button>
+        </div>
+      </div>
+    </div>
+
 
 </div><!-- /deviceFrame -->
 
