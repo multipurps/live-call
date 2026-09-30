@@ -18,6 +18,35 @@ npm run minify
 `.src.` change without rebuilding will leave the live site running the old
 code.
 
+## WhatsApp video calls (WaCalls engine)
+
+WhatsApp calling has two selectable engines in Profile → WhatsApp:
+
+* **Green API** — the existing integration, audio-only, untouched. Still the
+  default and still builds. Calls are placed client-side by its calls SDK.
+* **WaCalls** — an external WaCalls instance that carries **real 1:1 WhatsApp
+  audio and video calls**, including *incoming* ones. The outgoing video is the
+  live avatar selected in the call screen (**Anam** or **Lucy 2.5**), so the
+  same AI pipeline (LLM + STT + TTS + avatar) drives a real WhatsApp video call.
+
+WaCalls is reached over HTTP/SSE as a remote service (nothing is built or
+spawned locally) with `X-API-Key` held server-side, and the Rust WhatsApp
+bridge that used to do this is gone.
+
+```bash
+export WACALLS_URL="http://192.168.1.50:8080"   # video-capable WaCalls build
+export WACALLS_API_KEY="the-key-set-on-that-instance"
+npm start
+```
+
+Then Profile → WhatsApp → **WaCalls** → Start pairing, and scan the QR.
+
+Configuration (instance flags, env vars, which files/routes handle incoming
+calls, outgoing calls, avatar switching, the data-channel media path and how to
+run the integration test): **[server/wacalls.md](server/wacalls.md)**.
+
+---
+
 ## Realtime voice conversion (Lucy 2.5 calls)
 
 Lucy 2.5 (`decart/lucy-2-5/realtime`) is a video-to-video model: it supplies
